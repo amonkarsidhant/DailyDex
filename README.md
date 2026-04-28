@@ -177,6 +177,80 @@ AI-Intelligence-Hub/
 └── data/                     # runtime cache, digests, and DB
 ```
 
+## System Flow
+
+GitHub should render the Mermaid diagram below directly in the README. The editable source also lives in `docs/diagrams/dashboard-flow.mmd`.
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','primaryColor':'#dbeafe','primaryTextColor':'#0f172a','primaryBorderColor':'#3b82f6','lineColor':'#94a3b8','secondaryColor':'#eff6ff','tertiaryColor':'#fff7ed','fontFamily':'Inter, Arial, sans-serif'}}}%%
+flowchart LR
+    subgraph SRC[Collection Sources]
+        direction TB
+        GH[GitHub Trending]
+        HF[Hugging Face]
+        YT[YouTube Channels]
+        BL[Blogs and News Feeds]
+        AX[arXiv AI Papers]
+    end
+
+    subgraph PIPE[Intelligence Pipeline]
+        direction TB
+        FETCH[fetch_news.py]
+        RAW[data/data.json]
+        SCORE[scoring_engine.py]
+        SCORED[data/data_scored.json]
+        HEALTH[(source health)]
+    end
+
+    subgraph APP[Dashboard App]
+        direction TB
+        FLASK[dashboard_new.py]
+        STATE[(saved items and tracked topics)]
+        UI[dashboard.html + app.css + app.js]
+    end
+
+    subgraph LOOP[Live Update Loop]
+        direction TB
+        META[/api/dashboard-meta/]
+        REFRESH[POST /api/refresh]
+        LIVE[Hot-swap rendered UI]
+    end
+
+    GH --> FETCH
+    HF --> FETCH
+    YT --> FETCH
+    BL --> FETCH
+    AX --> FETCH
+
+    FETCH --> RAW
+    FETCH --> HEALTH
+    RAW --> SCORE
+    SCORE --> SCORED
+
+    BROWSER[Browser Session] --> FLASK
+    FLASK --> SCORED
+    FLASK --> STATE
+    FLASK --> UI
+    UI --> BROWSER
+
+    BROWSER --> META
+    META --> LIVE
+    BROWSER --> REFRESH
+    REFRESH --> FETCH
+
+    classDef source fill:#eff6ff,stroke:#3b82f6,color:#1e3a8a,stroke-width:1.5px;
+    classDef pipeline fill:#f8fafc,stroke:#94a3b8,color:#0f172a,stroke-width:1.5px;
+    classDef app fill:#eef2ff,stroke:#6366f1,color:#312e81,stroke-width:1.5px;
+    classDef loop fill:#fff7ed,stroke:#f59e0b,color:#9a3412,stroke-width:1.5px;
+    classDef user fill:#ecfdf5,stroke:#10b981,color:#065f46,stroke-width:1.5px;
+
+    class GH,HF,YT,BL,AX source;
+    class FETCH,RAW,SCORE,SCORED,HEALTH pipeline;
+    class FLASK,STATE,UI app;
+    class META,REFRESH,LIVE loop;
+    class BROWSER user;
+```
+
 ## API Surface
 
 - `GET /` - dashboard UI
@@ -224,6 +298,7 @@ python3 fetch_news.py
 - `CONTRIBUTING.md`
 - `SECURITY.md`
 - `CHANGELOG.md`
+- `docs/diagrams/dashboard-flow.mmd`
 - `docs/ui_review_checklist.md`
 - `docs/screenshots/README.md`
 

@@ -10,12 +10,6 @@ Suggested assets:
 - `trends.png`
 - `mobile-overview.png`
 - `demo-walkthrough.gif`
-- `how-it-works.svg`
-- `how-it-works.png`
-
-Recommended GitHub/social preview candidate:
-
-- `how-it-works.png`
 
 Recommended capture width:
 
