@@ -18,6 +18,17 @@ window.onerror = function(msg, url, line, col, error) {
     return false;
 };
 
+document.addEventListener('click', function(e) {
+    const btn = e.target.closest('.nav-btn[data-tab]');
+    if (btn) {
+        const tabId = btn.getAttribute('data-tab');
+        console.log('Tab clicked:', tabId);
+        showTab(tabId, btn);
+        e.preventDefault();
+        e.stopPropagation();
+    }
+});
+
 async function switchVariant(variantKey) {
     try {
         const res = await fetch('/api/variant', {
@@ -1088,11 +1099,30 @@ window.addEventListener('resize', debounce(() => {
 
 // Original functions
 function showTab(tabId, btn, updateHash = true) {
-    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    console.log('showTab called:', tabId);
+    if (!tabId) return;
+    
+    const section = document.getElementById(tabId);
+    if (!section) {
+        console.error('Section not found:', tabId);
+        return;
+    }
+    
+    document.querySelectorAll('.section').forEach(s => {
+        s.classList.remove('active');
+        s.style.display = 'none';
+    });
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(tabId).classList.add('active');
+    
+    section.classList.add('active');
+    section.style.display = 'block';
     if (btn) btn.classList.add('active');
-    document.getElementById('page-title').textContent = document.querySelector('#' + tabId + ' .section-title')?.textContent || tabId;
+    
+    const titleEl = document.getElementById('page-title');
+    if (titleEl) {
+        const sectionTitle = section.querySelector('.section-title');
+        titleEl.textContent = sectionTitle ? sectionTitle.textContent : tabId;
+    }
 
     if (tabId === 'trends') {
         requestAnimationFrame(() => initTrendsCharts());
