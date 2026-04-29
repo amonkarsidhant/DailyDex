@@ -1309,14 +1309,19 @@ function showTab(tabId, btn, updateHash) {
 }
 
 function toggleTheme() {
-    const body = document.body;
-    const current = body.getAttribute('data-theme');
-    const next = current === 'dark' ? 'light' : 'dark';
+    var body = document.body;
+    var current = body.getAttribute('data-theme');
+    var next = current === 'dark' ? 'light' : 'dark';
     body.setAttribute('data-theme', next);
     localStorage.setItem('theme', next);
+    
+    var btn = document.querySelector('.theme-toggle-btn');
+    if (btn) {
+        btn.textContent = next === 'dark' ? '🌙' : '☀️';
+    }
 }
 
-function toggleView(tab, view, btn) {
+async function exportSaved(format) {
     applyViewState(tab, view);
     localStorage.setItem(`dashboard:view:${tab}`, view);
 }
