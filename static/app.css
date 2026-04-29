@@ -1625,7 +1625,7 @@ body {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 480px) {
   .app-shell {
     flex-direction: column;
   }
