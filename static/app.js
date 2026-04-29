@@ -156,15 +156,6 @@ document.addEventListener('click', function(e) {
         }
     }
 });
-    const btn = e.target.closest('.nav-btn[data-tab]');
-    if (btn) {
-        const tabId = btn.getAttribute('data-tab');
-        console.log('Tab clicked:', tabId);
-        showTab(tabId, btn);
-        e.preventDefault();
-        e.stopPropagation();
-    }
-});
 
 // Attach direct click handlers
 const tabs = ['overview', 'feed', 'github', 'models', 'research', 'videos', 'news', 'local', 'saved', 'trends', 'settings'];
