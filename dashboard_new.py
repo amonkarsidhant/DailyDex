@@ -566,13 +566,24 @@ def build_dashboard_context():
 
     saved_items = []
     ignored_urls = set()
+    new_items = []
     if intel_db:
         try:
             saved_items = intel_db.get_saved_items()
             ignored_urls = {item.get("url") for item in intel_db.get_ignored_items() if item.get("url")}
-        except Exception:
+            
+            all_items_for_seen = []
+            for source_type, items in scored_data.items():
+                if isinstance(items, list):
+                    for item in items:
+                        all_items_for_seen.append({**item, "source_type": source_type})
+            
+            new_items = intel_db.get_new_items(all_items_for_seen)
+            intel_db.mark_seen_items(all_items_for_seen)
+        except Exception as e:
             saved_items = []
             ignored_urls = set()
+            new_items = []
 
     saved_urls = {item.get("url") for item in saved_items if item.get("url")}
     for key, _label in SOURCE_META:
@@ -631,6 +642,7 @@ def build_dashboard_context():
         "weekend_items": weekend_items,
         "saved_groups": saved_groups,
         "saved_urls": saved_urls,
+        "new_items": new_items,
         "digest_dir": DIGEST_DIR,
         "today_date": datetime.now().strftime("%Y-%m-%d"),
         "has_any_data": has_any_data,

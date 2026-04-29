@@ -142,6 +142,30 @@
                             </div>
                         </div>
 
+                        {% if new_items %}
+                        <div class="overview-section full-width">
+                            <h2 class="section-title">What's New</h2>
+                            <div class="new-items-grid">
+                                {% for item in new_items[:6] %}
+                                <div class="card new-item-card">
+                                    <div class="card-header">
+                                        <span class="badge-new">NEW</span>
+                                        <span class="badge-source source-{{ item.source_type }}">{{ item.source_type }}</span>
+                                    </div>
+                                    <div class="card-title">{{ item.title }}</div>
+                                    <div class="card-footer">
+                                        <button class="btn btn-small" onclick='saveItem({{ {"url": item.url, "title": item.title, "source": item.source, "source_type": item.source_type, "category": item.categories[0] if item.categories else "", "signal_score": item.signal_score}|tojson }}, this)'>Save</button>
+                                        <a href="{{ item.url }}" target="_blank" class="btn btn-small">Open</a>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% if new_items|length > 6 %}
+                            <p class="text-muted">+ {{ new_items|length - 6 }} more new items</p>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
                         <div class="overview-main-grid">
                             <div class="overview-section">
                                 <h2 class="section-title">Today's Top 5</h2>

@@ -529,6 +529,16 @@ body {
   gap: var(--spacing-md);
 }
 
+.new-items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.new-item-card {
+  border-left: 3px solid var(--success);
+}
+
 /* Item Cards */
 .card {
   background: var(--surface);
@@ -594,6 +604,21 @@ body {
 .badge-score.hot { background: var(--danger); color: white; }
 .badge-score.watch { background: var(--warning); color: white; }
 .badge-score.interesting { background: var(--info); color: white; }
+
+.badge-new {
+  background: var(--success);
+  color: white;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
 
 .badge-source {
   font-size: 0.65rem;

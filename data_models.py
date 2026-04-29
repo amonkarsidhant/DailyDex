@@ -4,7 +4,7 @@
 import sqlite3
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -110,6 +110,21 @@ class IntelligenceDB:
                 last_attempt TEXT
             )
         """)
+
+        # Seen items table (for tracking what's new since last check)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS seen_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT NOT NULL UNIQUE,
+                title TEXT,
+                source_type TEXT,
+                first_seen TEXT DEFAULT CURRENT_TIMESTAMP,
+                last_seen TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Unique index on seen_items.url
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_seen_items_url ON seen_items(url)")
         
         # Unique index on saved_items.url for deduplication
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_items_url ON saved_items(url)")
@@ -405,6 +420,64 @@ class IntelligenceDB:
         rows = cursor.fetchall()
         conn.close()
         return [dict(row) for row in rows]
+
+    # ===== Seen Items (What's New) =====
+    def mark_seen_items(self, items: List[Dict]) -> None:
+        """Mark items as seen, update last_seen for existing items"""
+        if not items:
+            return
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        
+        for item in items:
+            url = item.get("url")
+            if not url:
+                continue
+            cursor.execute("""
+                INSERT INTO seen_items (url, title, source_type, last_seen)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(url) DO UPDATE SET
+                    title = excluded.title,
+                    source_type = excluded.source_type,
+                    last_seen = excluded.last_seen
+            """, (url, item.get("title", ""), item.get("source_type", ""), now))
+        
+        conn.commit()
+        conn.close()
+    
+    def get_new_items(self, items: List[Dict]) -> List[Dict]:
+        """Return items that are new today (first_seen today)"""
+        if not items:
+            return []
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        today = datetime.now().strftime('%Y-%m-%d')
+        new_today_urls = set()
+        
+        cursor.execute("SELECT url FROM seen_items WHERE first_seen LIKE ?", (f'{today}%',))
+        for row in cursor.fetchall():
+            new_today_urls.add(row[0])
+        
+        new_items = []
+        for item in items:
+            url = item.get("url")
+            if url in new_today_urls:
+                new_items.append(item)
+        
+        conn.close()
+        return new_items
+    
+    def get_new_item_count(self) -> int:
+        """Get count of new items seen today"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        today = datetime.now().strftime('%Y-%m-%d')
+        cursor.execute("SELECT COUNT(*) FROM seen_items WHERE first_seen LIKE ?", (f'{today}%',))
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
 
 
 class IntelligenceJSON:
