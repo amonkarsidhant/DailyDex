@@ -44,10 +44,38 @@ class IntelligenceDB:
                 tags TEXT,
                 status TEXT DEFAULT 'to_read',
                 signal_score INTEGER,
+                creator_score INTEGER,
+                pipeline_type TEXT DEFAULT 'intel',
+                working_title TEXT,
+                hook TEXT,
+                format TEXT,
+                outline TEXT,
+                sources TEXT,
+                thumbnail_text TEXT,
+                priority TEXT,
+                published_url TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        cursor.execute("PRAGMA table_info(saved_items)")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+        creator_columns = {
+            "creator_score": "INTEGER",
+            "pipeline_type": "TEXT DEFAULT 'intel'",
+            "working_title": "TEXT",
+            "hook": "TEXT",
+            "format": "TEXT",
+            "outline": "TEXT",
+            "sources": "TEXT",
+            "thumbnail_text": "TEXT",
+            "priority": "TEXT",
+            "published_url": "TEXT",
+        }
+        for column, definition in creator_columns.items():
+            if column not in existing_columns:
+                cursor.execute(f"ALTER TABLE saved_items ADD COLUMN {column} {definition}")
         
         # Trend history table
         cursor.execute("""
@@ -131,6 +159,24 @@ class IntelligenceDB:
         
         conn.commit()
         conn.close()
+
+    def _serialize_value(self, key: str, value):
+        """Serialize structured values for SQLite storage."""
+        if key in {"tags", "sources", "outline"}:
+            if value is None:
+                return json.dumps([])
+            if isinstance(value, str):
+                return value
+            return json.dumps(value)
+        return value
+
+    def _default_pipeline_type(self, item: Dict) -> str:
+        status = item.get("status", "")
+        if item.get("pipeline_type"):
+            return item.get("pipeline_type")
+        if status in {"idea", "researching", "script_ready", "recording", "published", "archived"}:
+            return "creator"
+        return "intel"
     
     def save_item(self, item: Dict) -> int:
         """Save an item to the database - updates if URL already exists"""
@@ -138,6 +184,10 @@ class IntelligenceDB:
         cursor = conn.cursor()
         
         url = item.get("url")
+        pipeline_type = self._default_pipeline_type(item)
+        tags = self._serialize_value("tags", item.get("tags", []))
+        sources = self._serialize_value("sources", item.get("sources", []))
+        outline = self._serialize_value("outline", item.get("outline", []))
         
         # Check if item with this URL already exists
         if url:
@@ -148,7 +198,9 @@ class IntelligenceDB:
                 cursor.execute("""
                     UPDATE saved_items SET 
                         title = ?, source = ?, source_type = ?, category = ?,
-                        notes = ?, tags = ?, status = ?, signal_score = ?,
+                        notes = ?, tags = ?, status = ?, signal_score = ?, creator_score = ?,
+                        pipeline_type = ?, working_title = ?, hook = ?, format = ?,
+                        outline = ?, sources = ?, thumbnail_text = ?, priority = ?, published_url = ?,
                         updated_at = ?
                     WHERE url = ?
                 """, (
@@ -157,9 +209,19 @@ class IntelligenceDB:
                     item.get("source_type"),
                     item.get("category"),
                     item.get("notes", ""),
-                    json.dumps(item.get("tags", [])),
+                    tags,
                     item.get("status", "to_read"),
                     item.get("signal_score"),
+                    item.get("creator_score"),
+                    pipeline_type,
+                    item.get("working_title"),
+                    item.get("hook"),
+                    item.get("format"),
+                    outline,
+                    sources,
+                    item.get("thumbnail_text"),
+                    item.get("priority"),
+                    item.get("published_url"),
                     datetime.now().isoformat(),
                     url
                 ))
@@ -168,8 +230,12 @@ class IntelligenceDB:
                 return existing[0]
         
         cursor.execute("""
-            INSERT INTO saved_items (title, url, source, source_type, category, notes, tags, status, signal_score)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO saved_items (
+                title, url, source, source_type, category, notes, tags, status, signal_score,
+                creator_score, pipeline_type, working_title, hook, format, outline, sources,
+                thumbnail_text, priority, published_url
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             item.get("title"),
             url,
@@ -177,9 +243,19 @@ class IntelligenceDB:
             item.get("source_type"),
             item.get("category"),
             item.get("notes", ""),
-            json.dumps(item.get("tags", [])),
+            tags,
             item.get("status", "to_read"),
-            item.get("signal_score")
+            item.get("signal_score"),
+            item.get("creator_score"),
+            pipeline_type,
+            item.get("working_title"),
+            item.get("hook"),
+            item.get("format"),
+            outline,
+            sources,
+            item.get("thumbnail_text"),
+            item.get("priority"),
+            item.get("published_url")
         ))
         
         item_id = cursor.lastrowid
@@ -195,10 +271,14 @@ class IntelligenceDB:
         set_clauses = []
         values = []
         
-        for key in ["notes", "tags", "status"]:
+        for key in [
+            "notes", "tags", "status", "pipeline_type", "creator_score",
+            "working_title", "hook", "format", "outline", "sources",
+            "thumbnail_text", "priority", "published_url",
+        ]:
             if key in updates:
                 set_clauses.append(f"{key} = ?")
-                values.append(json.dumps(updates[key]) if key == "tags" else updates[key])
+                values.append(self._serialize_value(key, updates[key]))
         
         if set_clauses:
             set_clauses.append("updated_at = ?")
@@ -236,25 +316,28 @@ class IntelligenceDB:
     
     def update_notes(self, item_id: int, notes: str, tags: List[str]) -> bool:
         """Update notes and tags of a saved item"""
-        import json
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("UPDATE saved_items SET notes = ?, tags = ?, updated_at = ? WHERE id = ?", 
-                      (notes, json.dumps(tags), datetime.now().isoformat(), item_id))
-        conn.commit()
-        conn.close()
-        return True
+        return self.update_item(item_id, {"notes": notes, "tags": tags})
     
-    def get_saved_items(self, status: Optional[str] = None) -> List[Dict]:
+    def get_saved_items(self, status: Optional[str] = None, pipeline_type: Optional[str] = None) -> List[Dict]:
         """Get all saved items, optionally filtered by status"""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
+
+        conditions = []
+        values = []
         if status:
-            cursor.execute("SELECT * FROM saved_items WHERE status = ? ORDER BY created_at DESC", (status,))
-        else:
-            cursor.execute("SELECT * FROM saved_items ORDER BY created_at DESC")
+            conditions.append("status = ?")
+            values.append(status)
+        if pipeline_type:
+            conditions.append("pipeline_type = ?")
+            values.append(pipeline_type)
+
+        query = "SELECT * FROM saved_items"
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY created_at DESC"
+        cursor.execute(query, tuple(values))
         
         rows = cursor.fetchall()
         conn.close()
@@ -264,6 +347,22 @@ class IntelligenceDB:
             item = dict(row)
             if item.get("tags"):
                 item["tags"] = json.loads(item["tags"])
+            else:
+                item["tags"] = []
+            if item.get("sources"):
+                try:
+                    item["sources"] = json.loads(item["sources"])
+                except Exception:
+                    item["sources"] = [item["sources"]]
+            else:
+                item["sources"] = []
+            if item.get("outline"):
+                try:
+                    item["outline"] = json.loads(item["outline"])
+                except Exception:
+                    item["outline"] = [item["outline"]]
+            else:
+                item["outline"] = []
             items.append(item)
         
         return items

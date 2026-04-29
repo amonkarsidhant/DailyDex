@@ -35,9 +35,12 @@ function toggleTheme() {
     }
 }
 
-async function exportSaved(format) {
+async function exportSaved(format, pipelineType = '') {
     try {
         var url = '/api/saved/export?format=' + format;
+        if (pipelineType) {
+            url += '&pipeline_type=' + encodeURIComponent(pipelineType);
+        }
         var res = await fetch(url);
         if (format === 'markdown') {
             var text = await res.text();
@@ -1354,9 +1357,14 @@ function refreshNow(button) {
     });
 }
 
-function openDigest() {
-    fetch('/api/digest').then(r => r.json()).then(d => {
+function openDigest(mode = 'default') {
+    const endpoint = mode === 'creator' ? '/api/creator-digest' : '/api/digest';
+    fetch(endpoint).then(r => r.json()).then(d => {
         if (d.error) { alert(d.error); return; }
+        const titleNode = document.querySelector('.digest-title');
+        if (titleNode) {
+            titleNode.textContent = mode === 'creator' ? 'Creator Digest' : "Today's Digest";
+        }
         document.getElementById('digest-content').textContent = d.digest || '';
         document.getElementById('digest-modal').classList.add('open');
     });
@@ -1392,6 +1400,44 @@ function saveItem(item, btn) {
         } else {
             setButtonLoading(btn, false);
             showToast('Error', d.message || 'Failed to save item.', 'error');
+        }
+    }).catch(() => {
+        setButtonLoading(btn, false);
+        showToast('Error', 'Network error. Please try again.', 'error');
+    });
+}
+
+function saveCreatorItem(item, status, btn) {
+    const payload = {
+        ...item,
+        pipeline_type: 'creator',
+        status: status,
+        working_title: item.suggested_titles ? (item.suggested_titles.practical || item.title) : item.title,
+        hook: item.hook || item.opening_hook,
+        format: item.best_format || item.recommended_content_format,
+        outline: item.three_key_points || [],
+        sources: item.source_evidence || [],
+        thumbnail_text: item.thumbnail_text || [],
+        notes: item.creator_reason || '',
+        priority: item.creator_score >= 80 ? 'high' : item.creator_score >= 60 ? 'medium' : 'low',
+        creator_score: item.creator_score,
+    };
+    saveItem(payload, btn);
+}
+
+function buildResearchPack(item, btn) {
+    setButtonLoading(btn, true);
+    fetch('/api/research-pack', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(item),
+    }).then(r => r.json()).then(d => {
+        if (d.success) {
+            setButtonLoading(btn, false, 'Built');
+            showToast('Research pack', d.message || 'Research pack generated.', 'success');
+        } else {
+            setButtonLoading(btn, false);
+            showToast('Error', d.error || 'Failed to build research pack.', 'error');
         }
     }).catch(() => {
         setButtonLoading(btn, false);
@@ -1493,6 +1539,40 @@ function updateNotes(id, notes, tags) {
         } else {
             setButtonLoading(btn, false);
             showToast('Error', d.message || 'Failed to update notes.', 'error');
+        }
+    }).catch(() => {
+        setButtonLoading(btn, false);
+        showToast('Error', 'Network error. Please try again.', 'error');
+    });
+}
+
+function updateCreatorItem(id, card) {
+    const btn = event.target;
+    setButtonLoading(btn, true);
+    const payload = {
+        notes: card.querySelector('.creator-notes-input')?.value || '',
+        tags: [],
+        working_title: card.querySelector('.creator-title-input')?.value || '',
+        hook: card.querySelector('.creator-hook-input')?.value || '',
+        format: card.querySelector('.creator-format-input')?.value || '',
+        outline: (card.querySelector('.creator-outline-input')?.value || '').split('\n').map(line => line.trim()).filter(Boolean),
+        thumbnail_text: card.querySelector('.creator-thumb-input')?.value || '',
+        priority: card.querySelector('.creator-priority-input')?.value || '',
+        published_url: card.querySelector('.creator-published-input')?.value || '',
+        pipeline_type: 'creator',
+    };
+
+    fetch('/api/saved/' + id + '/notes', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+    }).then(r => r.json()).then(d => {
+        if (d.success) {
+            setButtonLoading(btn, false, 'Saved');
+            showToast('Saved', 'Creator pipeline item updated.', 'success');
+        } else {
+            setButtonLoading(btn, false);
+            showToast('Error', d.message || 'Failed to update creator item.', 'error');
         }
     }).catch(() => {
         setButtonLoading(btn, false);

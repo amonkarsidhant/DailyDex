@@ -174,7 +174,7 @@ def _sample_scored_data(now_iso: str):
     }
 
 
-def _load_app_env(tmp_path, monkeypatch, raw_data, scored_data):
+def _load_app_env(tmp_path, monkeypatch, raw_data, scored_data, selected_variant="default"):
     data_dir = tmp_path / "data"
     cache_dir = data_dir / "cache"
     digest_dir = data_dir / "digests"
@@ -182,13 +182,18 @@ def _load_app_env(tmp_path, monkeypatch, raw_data, scored_data):
     cache_dir.mkdir()
     digest_dir.mkdir()
 
+    config_path = tmp_path / "config.json"
+    config_data = json.loads((REPO_DIR / "config.json").read_text(encoding="utf-8"))
+    config_data["variant"] = selected_variant
+    config_path.write_text(json.dumps(config_data, indent=2), encoding="utf-8")
+
     monkeypatch.setenv("DATA_DIR", str(data_dir))
     monkeypatch.setenv("DB_PATH", str(data_dir / "intelligence.db"))
     monkeypatch.setenv("CACHE_DIR", str(cache_dir))
     monkeypatch.setenv("DIGEST_DIR", str(digest_dir))
     monkeypatch.setenv("DATA_FILE", str(data_dir / "data.json"))
     monkeypatch.setenv("SCORED_DATA_FILE", str(data_dir / "data_scored.json"))
-    monkeypatch.setenv("CONFIG_FILE", str(REPO_DIR / "config.json"))
+    monkeypatch.setenv("CONFIG_FILE", str(config_path))
     monkeypatch.setenv("CONFIG_PATH", str(REPO_DIR / "config" / "topics.json"))
 
     (data_dir / "data.json").write_text(json.dumps(raw_data, indent=2), encoding="utf-8")
@@ -213,6 +218,12 @@ def _load_app_env(tmp_path, monkeypatch, raw_data, scored_data):
 def app_env(tmp_path, monkeypatch):
     now_iso = datetime.now().isoformat()
     return _load_app_env(tmp_path, monkeypatch, _sample_raw_data(now_iso), _sample_scored_data(now_iso))
+
+
+@pytest.fixture
+def creator_app_env(tmp_path, monkeypatch):
+    now_iso = datetime.now().isoformat()
+    return _load_app_env(tmp_path, monkeypatch, _sample_raw_data(now_iso), _sample_scored_data(now_iso), selected_variant="creator")
 
 
 @pytest.fixture
@@ -242,6 +253,11 @@ def empty_app_env(tmp_path, monkeypatch):
 @pytest.fixture
 def client(app_env):
     return app_env["module"].app.test_client()
+
+
+@pytest.fixture
+def creator_client(creator_app_env):
+    return creator_app_env["module"].app.test_client()
 
 
 @pytest.fixture

@@ -21,43 +21,51 @@ Manual checklist for validating the DailyDex 0.9 release.
 - [ ] 6. Confirm sidebar navigation works
 - [ ] 7. Confirm top search is visible
 
+### Creator Mode
+- [ ] 8. Switch variant to DailyDex Creator
+- [ ] 9. Confirm Creator Brief loads first
+- [ ] 10. Confirm Video Ideas, Shorts, Clusters, Research Packs, and Content Pipeline tabs are visible
+- [ ] 11. Confirm creator cards show hooks, formats, titles, and thumbnail text
+- [ ] 12. Confirm Build research pack creates a Markdown file
+- [ ] 13. Confirm Creator Digest renders and saves successfully
+
 ### Theme
-- [ ] 8. Toggle light/dark theme
+- [ ] 14. Toggle light/dark theme
 
 ### Data Operations
-- [ ] 9. Click Refresh Now
-- [ ] 10. Confirm source health updates
-- [ ] 11. Save one item
-- [ ] 12. Confirm toast appears
+- [ ] 15. Click Refresh Now
+- [ ] 16. Confirm source health updates
+- [ ] 17. Save one item
+- [ ] 18. Confirm toast appears
 
 ### Saved Board
-- [ ] 13. Open Saved board
-- [ ] 14. Change saved item status
-- [ ] 15. Add notes/tags
-- [ ] 16. Export JSON and Markdown
-- [ ] 17. Test bulk actions
+- [ ] 19. Open Saved board
+- [ ] 20. Change saved item status
+- [ ] 21. Add notes/tags
+- [ ] 22. Export JSON and Markdown
+- [ ] 23. Test bulk actions
 
 ### Digest
-- [ ] 18. Open Daily Digest
-- [ ] 19. Generate/copy digest
+- [ ] 24. Open Daily Digest
+- [ ] 25. Generate/copy digest
 
 ### View Modes
-- [ ] 20. Switch card/table views in GitHub
-- [ ] 21. Switch card/table views in Models
-- [ ] 22. Switch card/table views in Research
+- [ ] 26. Switch card/table views in GitHub
+- [ ] 27. Switch card/table views in Models
+- [ ] 28. Switch card/table views in Research
 
 ### Trends
-- [ ] 23. Open Trends page
-- [ ] 24. Confirm charts render or degrade gracefully
+- [ ] 29. Open Trends page
+- [ ] 30. Confirm charts render or degrade gracefully
 
 ### Responsive
-- [ ] 25. Resize browser to tablet width
-- [ ] 26. Resize browser to mobile width
-- [ ] 27. Confirm no horizontal overflow
+- [ ] 31. Resize browser to tablet width
+- [ ] 32. Resize browser to mobile width
+- [ ] 33. Confirm no horizontal overflow
 
 ### Documentation
-- [ ] 28. Confirm README screenshots still match the actual UI
-- [ ] 29. Confirm Docker image name and container name use dailydex
+- [ ] 34. Confirm README screenshots still match the actual UI
+- [ ] 35. Confirm Docker image name and container name use dailydex
 
 ## Release Fields
 

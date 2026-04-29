@@ -2,6 +2,9 @@
 
 ## v0.9
 
+- added DailyDex Creator as a dedicated creator-intelligence variant
+- introduced creator potential scoring, content opportunities, content clusters, research packs, and creator digest flows
+- extended saved items to support a creator production pipeline from idea to published
 - cleaned up the dashboard layout and restored a stable desktop sidebar
 - simplified conflicting CSS and JS created during iterative UI fixes
 - kept the multi-variant workflow, saved-item export, bulk actions, and theme controls in the current release

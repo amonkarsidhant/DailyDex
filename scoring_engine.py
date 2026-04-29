@@ -6,6 +6,8 @@ import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 
+from creator_intelligence import enrich_scored_data_with_creator_fields
+
 # Focus areas configuration
 DEFAULT_FOCUS_AREAS = [
     "agentic AI", "coding agents", "open-source LLMs", "local LLMs", 
@@ -556,8 +558,8 @@ class SignalScorer:
         
         if "papers" in data:
             scored_data["papers"] = [self.score_paper(paper) for paper in data["papers"]]
-        
-        return scored_data
+
+        return enrich_scored_data_with_creator_fields(scored_data)
     
     def generate_executive_brief(self, scored_data: Dict) -> Dict:
         """Generate the daily executive brief"""

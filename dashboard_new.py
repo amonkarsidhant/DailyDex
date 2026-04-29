@@ -9,6 +9,17 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify
 
+from creator_intelligence import (
+    CREATOR_STATUS_ORDER,
+    build_content_opportunities,
+    build_creator_brief,
+    build_creator_digest,
+    build_creator_saved_groups,
+    build_research_pack,
+    build_topic_clusters,
+    enrich_scored_data_with_creator_fields,
+)
+
 # Add current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -21,6 +32,7 @@ DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
 DB_PATH = os.environ.get("DB_PATH", os.path.join(DATA_DIR, "intelligence.db"))
 CACHE_DIR = os.environ.get("CACHE_DIR", os.path.join(DATA_DIR, "cache"))
 DIGEST_DIR = os.environ.get("DIGEST_DIR", os.path.join(DATA_DIR, "digests"))
+RESEARCH_PACK_DIR = os.environ.get("RESEARCH_PACK_DIR", os.path.join(DATA_DIR, "research_packs"))
 DATA_FILE = os.environ.get("DATA_FILE", os.path.join(DATA_DIR, "data.json"))
 CONFIG_FILE = os.environ.get("CONFIG_FILE", os.path.join(BASE_DIR, "config.json"))
 SCORED_DATA_FILE = os.environ.get("SCORED_DATA_FILE", os.path.join(DATA_DIR, "data_scored.json"))
@@ -178,8 +190,8 @@ def load_scored_data(force: bool = False):
             with open(SCORED_DATA_FILE, encoding="utf-8") as f:
                 scored = json.load(f)
             if scored.get("last_updated") == raw_data.get("last_updated"):
-                return scored
-        return generate_scored_data(raw_data)
+                return enrich_scored_data_with_creator_fields(scored)
+        return enrich_scored_data_with_creator_fields(generate_scored_data(raw_data))
     except Exception as e:
         print(f"Error generating scored data: {e}")
         return raw_data
@@ -504,6 +516,47 @@ def build_saved_groups(saved_items):
     return groups
 
 
+def build_creator_pipeline_groups(saved_items):
+    """Group creator items into a production board."""
+    groups = []
+    for group in build_creator_saved_groups(saved_items):
+        entries = []
+        for item in group.get("group_entries", []):
+            entries.append({
+                **item,
+                "created_display": format_timestamp(item.get("created_at")),
+            })
+        groups.append({**group, "group_entries": entries})
+    return groups
+
+
+def list_research_packs(limit: int = 12):
+    """Load recent research packs for Creator Mode."""
+    if not os.path.isdir(RESEARCH_PACK_DIR):
+        return []
+    packs = []
+    for filename in sorted(os.listdir(RESEARCH_PACK_DIR), reverse=True):
+        if not filename.endswith(".md"):
+            continue
+        path = os.path.join(RESEARCH_PACK_DIR, filename)
+        try:
+            with open(path, encoding="utf-8") as handle:
+                content = handle.read().strip()
+            lines = [line.strip() for line in content.splitlines() if line.strip()]
+            packs.append({
+                "filename": filename,
+                "path": path,
+                "title": lines[0].lstrip("# ") if lines else filename,
+                "excerpt": lines[1][:180] if len(lines) > 1 else "",
+                "updated_at": format_timestamp(datetime.fromtimestamp(os.path.getmtime(path)).isoformat()),
+            })
+        except Exception:
+            continue
+        if len(packs) >= limit:
+            break
+    return packs
+
+
 def build_source_health_response():
     """Return normalized source health cards and a dashboard summary."""
     raw_source_health = []
@@ -680,6 +733,8 @@ def build_dashboard_state(scored_data, daily_summary, source_status_cards, saved
 def build_dashboard_context():
     """Build the full dashboard context once for HTML and live metadata."""
     scored_data = load_scored_data()
+    variant_info = get_variant_info()
+    creator_mode = variant_info.get("key") == "creator"
 
     saved_items = []
     ignored_urls = set()
@@ -738,8 +793,12 @@ def build_dashboard_context():
     weekend_items = build_try_this_weekend(scored_data)
     correlations = find_correlations(scored_data)
     topic_heatmap = build_topic_heatmap(scored_data)
-    variant_info = get_variant_info()
     saved_groups = build_saved_groups(saved_items)
+    creator_clusters = build_topic_clusters(scored_data)
+    creator_opportunities = build_content_opportunities(scored_data, creator_clusters)
+    creator_brief = build_creator_brief(creator_opportunities, creator_clusters, saved_items)
+    creator_saved_groups = build_creator_pipeline_groups(saved_items)
+    research_packs = list_research_packs()
     has_any_data = any(scored_data.get(key) for key, _label in SOURCE_META)
     dashboard_state = build_dashboard_state(
         scored_data,
@@ -769,13 +828,20 @@ def build_dashboard_context():
         "top_items": top_items,
         "weekend_items": weekend_items,
         "saved_groups": saved_groups,
+        "creator_saved_groups": creator_saved_groups,
         "saved_urls": saved_urls,
         "new_items": new_items,
         "digest_dir": DIGEST_DIR,
+        "research_pack_dir": RESEARCH_PACK_DIR,
         "today_date": datetime.now().strftime("%Y-%m-%d"),
         "has_any_data": has_any_data,
         "dashboard_state": dashboard_state,
         "variant_info": variant_info,
+        "creator_mode": creator_mode,
+        "creator_clusters": creator_clusters,
+        "creator_opportunities": creator_opportunities,
+        "creator_brief": creator_brief,
+        "research_packs": research_packs,
     }
 
 
@@ -845,7 +911,20 @@ def api_save():
         "source": data.get("source", ""),
         "source_type": data.get("source_type", ""),
         "category": data.get("category", ""),
-        "signal_score": data.get("signal_score", 0)
+        "signal_score": data.get("signal_score", 0),
+        "creator_score": data.get("creator_score"),
+        "pipeline_type": data.get("pipeline_type"),
+        "status": data.get("status", "to_read"),
+        "working_title": data.get("working_title"),
+        "hook": data.get("hook"),
+        "format": data.get("format") or data.get("recommended_content_format") or data.get("best_format"),
+        "outline": data.get("outline") or data.get("three_key_points") or [],
+        "sources": data.get("sources") or data.get("source_evidence") or [],
+        "thumbnail_text": ", ".join(data.get("thumbnail_text", [])) if isinstance(data.get("thumbnail_text"), list) else data.get("thumbnail_text"),
+        "notes": data.get("notes", ""),
+        "tags": data.get("tags", []),
+        "priority": data.get("priority"),
+        "published_url": data.get("published_url"),
     })
     created = existing is None
     return jsonify({
@@ -885,9 +964,14 @@ def api_update_notes(item_id):
         return jsonify({"success": False, "error": "Database not available"})
     
     data = request.json
-    notes = data.get("notes", "")
-    tags = data.get("tags", [])
-    intel_db.update_notes(item_id, notes, tags)
+    updates = {}
+    for key, default in [("notes", ""), ("tags", [])]:
+        if key in data:
+            updates[key] = data.get(key, default)
+    for key in ["working_title", "hook", "format", "outline", "sources", "thumbnail_text", "priority", "published_url", "pipeline_type"]:
+        if key in data:
+            updates[key] = data.get(key)
+    intel_db.update_item(item_id, updates)
     return jsonify({"success": True, "message": "Notes and tags updated."})
 
 
@@ -898,7 +982,8 @@ def api_get_saved():
         return jsonify({"items": []})
     
     status_filter = request.args.get("status")
-    items = intel_db.get_saved_items()
+    pipeline_type = request.args.get("pipeline_type")
+    items = intel_db.get_saved_items(pipeline_type=pipeline_type)
     
     if status_filter and status_filter != "all":
         items = [i for i in items if i.get("status") == status_filter]
@@ -914,7 +999,8 @@ def api_export_saved():
     
     fmt = request.args.get("format", "json")
     status_filter = request.args.get("status")
-    items = intel_db.get_saved_items()
+    pipeline_type = request.args.get("pipeline_type")
+    items = intel_db.get_saved_items(pipeline_type=pipeline_type)
     
     if status_filter and status_filter != "all":
         items = [i for i in items if i.get("status") == status_filter]
@@ -934,6 +1020,25 @@ def api_export_saved():
         return md, 200, {"Content-Type": "text/markdown"}
     
     return jsonify({"items": items})
+
+
+@app.route("/api/research-pack", methods=["POST"])
+def api_build_research_pack():
+    """Build and save a creator research pack."""
+    payload = request.get_json() or {}
+    path, content = build_research_pack(payload, RESEARCH_PACK_DIR)
+    return jsonify({
+        "success": True,
+        "path": path,
+        "content": content,
+        "message": f"Research pack saved to {path}.",
+    })
+
+
+@app.route("/api/research-packs")
+def api_list_research_packs():
+    """List saved research packs."""
+    return jsonify({"packs": list_research_packs()})
 
 
 @app.route("/api/ignore", methods=["POST"])
@@ -1100,6 +1205,9 @@ def api_digest():
     if not HAS_SCORE_ENGINE:
         return jsonify({"error": "Scoring engine not available"}), 500
 
+    if request.args.get("mode") == "creator" or get_variant_info().get("key") == "creator":
+        return api_creator_digest()
+
     try:
         from digest_generator import DailyDigestGenerator
 
@@ -1111,6 +1219,25 @@ def api_digest():
             "digest": digest,
             "path": digest_path,
             "message": f"Digest saved to {digest_path}.",
+        })
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/creator-digest")
+def api_creator_digest():
+    """Generate and return a creator-focused digest."""
+    try:
+        context = build_dashboard_context()
+        digest = build_creator_digest(context["creator_brief"], context["saved_items"], context["today_date"])
+        digest_path = os.path.join(DIGEST_DIR, f"creator-{datetime.now().strftime('%Y-%m-%d')}.md")
+        ensure_parent_dir(digest_path)
+        with open(digest_path, "w", encoding="utf-8") as handle:
+            handle.write(digest)
+        return jsonify({
+            "digest": digest,
+            "path": digest_path,
+            "message": f"Creator digest saved to {digest_path}.",
         })
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500

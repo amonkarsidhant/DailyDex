@@ -578,6 +578,241 @@ body {
   border-radius: 4px;
 }
 
+.section-kicker {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.creator-brief-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.creator-hero {
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--bg-secondary) 100%);
+}
+
+.creator-hero-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+}
+
+.creator-hero-title {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 1.8rem;
+  line-height: 1.1;
+}
+
+.creator-hero-copy {
+  margin: 0;
+  max-width: 720px;
+  color: var(--text-muted);
+}
+
+.creator-hero-meta {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.creator-stat {
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-elevated);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.creator-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.creator-best-card,
+.creator-opportunity-card,
+.creator-cluster-card,
+.creator-mini-card,
+.creator-research-card {
+  border: 1px solid var(--border);
+}
+
+.creator-best-head,
+.creator-opportunity-head,
+.creator-cluster-head,
+.creator-mini-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+.creator-best-head h3,
+.creator-opportunity-card h3,
+.creator-mini-card h3,
+.creator-cluster-card h3,
+.creator-research-card h3 {
+  margin: 0.4rem 0 0;
+  font-size: 1.05rem;
+}
+
+.creator-score-stack,
+.creator-score-pair {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.creator-score-stack {
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.creator-score-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.creator-hook {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0.85rem 0;
+}
+
+.creator-insight-grid,
+.creator-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-md);
+}
+
+.creator-insight-grid h4,
+.creator-card-grid h4,
+.creator-outline-block h4,
+.creator-evidence-block h4,
+.creator-script-block h4,
+.creator-title-options h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.creator-insight-grid p,
+.creator-card-grid p,
+.creator-outline-block p,
+.creator-evidence-block p,
+.creator-script-block p,
+.creator-title-options li,
+.creator-research-card p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.creator-outline-block ol,
+.creator-script-block ol,
+.creator-title-options ul,
+.creator-evidence-block ul,
+.creator-related-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.creator-actions-row {
+  flex-wrap: wrap;
+  margin-top: var(--spacing-md);
+}
+
+.creator-opportunity-grid,
+.creator-cluster-grid,
+.creator-research-grid,
+.creator-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.creator-action-card {
+  gap: var(--spacing-md);
+}
+
+.creator-topic-pill,
+.creator-effort {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  margin-left: 0.35rem;
+}
+
+.creator-effort-low {
+  background: rgba(16, 185, 129, 0.12);
+  color: #0f8a63;
+}
+
+.creator-effort-medium {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b4690e;
+}
+
+.creator-effort-high {
+  background: rgba(239, 68, 68, 0.12);
+  color: #c73d3d;
+}
+
+.creator-inline-tags,
+.creator-outline-inline,
+.creator-cluster-meta,
+.creator-research-meta,
+.creator-mini-meta {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.creator-research-meta,
+.creator-mini-meta {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.creator-script-block.compact p,
+.creator-script-block.compact li {
+  font-size: 0.86rem;
+}
+
+.creator-editor {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.creator-title-input,
+.creator-hook-input,
+.creator-format-input,
+.creator-thumb-input,
+.creator-priority-input,
+.creator-published-input,
+.creator-outline-input,
+.creator-notes-input {
+  width: 100%;
+}
+
 /* Overview Page */
 .overview-grid {
   display: flex;

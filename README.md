@@ -16,6 +16,8 @@ Most AI feeds are noisy.
 
 DailyDex helps builders identify what matters, what is worth saving, what is worth testing, and whether source data is fresh.
 
+It now also includes **DailyDex Creator Mode**, a creator-intelligence layer for turning AI signals into concrete content decisions.
+
 ## Highlights
 
 - **Modern dashboard UI** with sidebar navigation and a clean overview page
@@ -24,6 +26,7 @@ DailyDex helps builders identify what matters, what is worth saving, what is wor
 - **Top 5 daily signals** for fast triage
 - **Try This Weekend** section for hands-on projects
 - **Saved intelligence board** with workflow states
+- **Creator Mode** for video ideas, content clusters, research packs, and script starters
 - **Trends view** with charts and radar
 - **Digest generation** in Markdown
 - **Flask + SQLite + JSON + vanilla JS** with no heavy frontend framework
@@ -55,6 +58,18 @@ DailyDex helps builders identify what matters, what is worth saving, what is wor
 #### Mobile Overview
 
 ![Mobile Overview](docs/screenshots/mobile-overview.png)
+
+#### Creator Brief
+
+![Creator Brief](docs/screenshots/creator-brief.png)
+
+#### Content Opportunities
+
+![Content Opportunities](docs/screenshots/content-opportunities.png)
+
+#### Creator Pipeline
+
+![Creator Pipeline](docs/screenshots/creator-pipeline.png)
 
 ## Quick Start
 
@@ -96,6 +111,14 @@ python3 dashboard_new.py
 3. Review **Today's Top 5**
 4. Save anything worth revisiting
 
+### Creator workflow
+
+1. Switch to **DailyDex Creator**
+2. Open **Creator Brief**
+3. Pick the best video idea, a shorts idea, or a quick win
+4. Generate a research pack
+5. Move the idea through the content pipeline
+
 ### Saved intelligence workflow
 
 1. Save items from Feed, GitHub, Models, or Research
@@ -120,6 +143,7 @@ python3 dashboard_new.py
 ```text
 DailyDex/
 ├── dashboard_new.py          # Flask app and routes
+├── creator_intelligence.py   # creator scoring, briefs, clusters, and research packs
 ├── fetch_news.py             # external source fetch pipeline
 ├── scoring_engine.py         # scoring and ranking logic
 ├── data_models.py            # SQLite state and source health
@@ -127,7 +151,7 @@ DailyDex/
 ├── templates/dashboard.html  # main server-rendered UI
 ├── static/app.css            # design system and layout
 ├── static/app.js             # live updates and interactions
-├── config.json               # runtime source configuration
+├── config.json               # runtime source configuration and variants
 └── data/                     # runtime cache, digests, and DB
 ```
 
@@ -216,6 +240,9 @@ flowchart LR
 - `POST /api/refresh` - trigger external fetch and refresh
 - `POST /api/save` - save an item
 - `GET /api/saved` - list saved items
+- `POST /api/research-pack` - generate a creator research pack
+- `GET /api/research-packs` - list saved research packs
+- `GET /api/creator-digest` - build the creator daily brief
 - `PUT /api/saved/<id>/status` - update saved status
 - `PUT /api/saved/<id>/notes` - update notes and tags
 - `DELETE /api/saved/<id>` - remove saved item
@@ -240,6 +267,105 @@ python3 -m pytest -q
 python3 -m py_compile dashboard_new.py data_models.py fetch_news.py
 node --check static/app.js
 ```
+
+## DailyDex Creator Mode
+
+DailyDex Creator Mode is a separate variant focused on helping content creators answer one question fast: **what should I make today?**
+
+Switch to **DailyDex Creator** from the variant picker to get:
+
+- **Creator Brief** with the strongest video idea today
+- **Content Opportunities** that turn AI items into actionable story cards
+- **Shorts Ideas** with hooks, 30-second scripts, and visual suggestions
+- **Content Clusters** showing stories appearing across multiple source families
+- **Research Packs** saved as Markdown under `data/research_packs/`
+- **Creator Digest** for daily planning
+- **Creator Saved Pipeline** with statuses from `idea` to `published`
+
+## Creator Potential Score
+
+Every high-signal item can also receive a **Creator Potential Score** from 0 to 100.
+
+The score is separate from Signal Score and weighs:
+
+- novelty
+- audience interest
+- story tension
+- practical demo value
+- visual potential
+- credibility
+- shelf life
+- production effort
+- niche fit
+- differentiation
+
+## Content Opportunities
+
+Creator opportunity cards include:
+
+- topic and creator score
+- recommended content format
+- hook
+- title options
+- thumbnail text options
+- source evidence
+- production effort
+- demo idea
+- caveats
+- script starter fields
+
+## Content Clusters
+
+Creator Mode groups related signals from GitHub, Hugging Face, arXiv, YouTube, and blogs/news into reusable story clusters.
+
+Each cluster includes:
+
+- topic
+- source count
+- related items
+- average signal score
+- creator score
+- recommended angle
+- best content format
+
+## Research Packs
+
+Research packs are saved as Markdown under:
+
+```text
+data/research_packs/YYYY-MM-DD-topic.md
+```
+
+Each pack includes:
+
+- source links
+- key facts
+- counterpoints
+- demo idea
+- script outline
+- title ideas
+- thumbnail ideas
+
+## Creator Digest
+
+Creator Mode adds a dedicated digest format:
+
+```text
+# DailyDex Creator Brief - YYYY-MM-DD
+```
+
+It includes the best video idea, shorts ideas, long-form candidates, content clusters, quick wins, and the saved creator pipeline.
+
+## Creator Saved Pipeline
+
+Creator pipeline statuses:
+
+- `idea`
+- `researching`
+- `script_ready`
+- `recording`
+- `published`
+- `archived`
 
 ### Manual fetch
 
@@ -267,6 +393,11 @@ See [docs/release_validation_v0.9.md](docs/release_validation_v0.9.md) for manua
 - richer saved-item workflow operations
 - deeper trend analytics with accessible chart fallbacks
 - more source families and better source filtering
+- LLM-assisted script generation
+- YouTube API integration
+- publishing calendar
+- competitor channel tracking
+- trend-to-video automation
 
 ## Project Status
 

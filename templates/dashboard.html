@@ -29,6 +29,36 @@
             </div>
             
             <nav class="sidebar-nav">
+                {% if creator_mode %}
+                <button class="nav-btn active" data-tab="overview" id="nav-overview">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    Creator Brief
+                </button>
+                <button class="nav-btn" data-tab="video-ideas" id="nav-video-ideas">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                    Video Ideas
+                </button>
+                <button class="nav-btn" data-tab="shorts" id="nav-shorts">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h8"></path><path d="M6 12h12"></path><path d="M10 18h4"></path></svg>
+                    Shorts
+                </button>
+                <button class="nav-btn" data-tab="clusters" id="nav-clusters">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="2"></circle><circle cx="19" cy="6" r="2"></circle><circle cx="12" cy="18" r="2"></circle><path d="M7 7.5 10.5 16"></path><path d="M17 7.5 13.5 16"></path></svg>
+                    Clusters
+                </button>
+                <button class="nav-btn" data-tab="research-packs" id="nav-research-packs">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                    Research Packs
+                </button>
+                <button class="nav-btn" data-tab="content-pipeline" id="nav-content-pipeline">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M7 12h10"></path><path d="M10 18h4"></path></svg>
+                    Content Pipeline
+                </button>
+                <button class="nav-btn" data-tab="settings" id="nav-settings">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    Settings
+                </button>
+                {% else %}
                 <button class="nav-btn active" data-tab="overview" id="nav-overview">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
                     Overview
@@ -73,6 +103,7 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                     Settings
                 </button>
+                {% endif %}
             </nav>
 
             <div class="sidebar-footer">
@@ -90,20 +121,20 @@
         <div class="main-container">
             <header class="top-header">
                 <div class="header-left">
-                    <h1 id="page-title">Overview</h1>
+                    <h1 id="page-title">{{ 'Creator Brief' if creator_mode else 'Overview' }}</h1>
                 </div>
                 <div class="header-right">
                     <div class="search-container">
                         <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                        <input type="text" id="global-search" class="search-input" placeholder="Search intelligence..." onkeyup="searchCards(this.value)">
+                        <input type="text" id="global-search" class="search-input" placeholder="{{ 'Search creator ideas...' if creator_mode else 'Search intelligence...' }}" onkeyup="searchCards(this.value)">
                     </div>
                     <button class="btn btn-primary" onclick="refreshNow(this)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
                         Refresh Now
                     </button>
-                    <button class="btn" onclick="openDigest()">
+                    <button class="btn" onclick="openDigest('{{ 'creator' if creator_mode else 'default' }}')">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-                        DailyDex Digest
+                        {{ 'Creator Digest' if creator_mode else 'DailyDex Digest' }}
                     </button>
                     <button class="live-status" id="live-status" data-live-state="live" type="button" onclick="applyPendingLiveRefresh()" aria-live="polite">
                         <span class="live-dot"></span>
@@ -118,7 +149,166 @@
 
             <main class="main-content">
                 <!-- Overview Page -->
-                <div id="overview" class="section active" data-title="Overview">
+                <div id="overview" class="section active" data-title="{{ 'Creator Brief' if creator_mode else 'Overview' }}">
+                    {% if creator_mode %}
+                    <div class="creator-brief-grid">
+                        <div class="creator-hero card">
+                            <div class="creator-hero-head">
+                                <div>
+                                    <div class="section-kicker">Creator Brief</div>
+                                    <h2 class="creator-hero-title">What should I make today?</h2>
+                                    <p class="creator-hero-copy">DailyDex Creator turns AI signals into concrete content decisions with hooks, formats, evidence, and script starters.</p>
+                                </div>
+                                <div class="creator-hero-meta">
+                                    <span class="creator-stat">{{ creator_opportunities|length }} ideas</span>
+                                    <span class="creator-stat">{{ creator_brief.pipeline_count }} in pipeline</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="creator-section full-width">
+                            <h2 class="section-title">Best Video Idea Today</h2>
+                            {% set best = creator_brief.best_video_idea %}
+                            {% if best %}
+                            <div class="card creator-best-card search-target" data-search="{{ (best.title ~ ' ' ~ best.topic ~ ' ' ~ best.hook)|lower }}">
+                                <div class="creator-best-head">
+                                    <div>
+                                        <div class="badge-source source-{{ best.source_type }}">{{ best.best_format }}</div>
+                                        <h3>{{ best.suggested_titles.curiosity or best.title }}</h3>
+                                    </div>
+                                    <div class="creator-score-stack">
+                                        <span class="badge-score hot">{{ best.creator_score }}</span>
+                                        <span class="creator-score-label">Creator</span>
+                                    </div>
+                                </div>
+                                <p class="creator-hook">{{ best.hook }}</p>
+                                <div class="creator-insight-grid">
+                                    <div>
+                                        <h4>Why viewers care</h4>
+                                        <p>{{ best.why_viewers_care }}</p>
+                                    </div>
+                                    <div>
+                                        <h4>Why now</h4>
+                                        <p>{{ best.creator_reason }}</p>
+                                    </div>
+                                    <div>
+                                        <h4>Production effort</h4>
+                                        <p>{{ best.production_effort|title }}</p>
+                                    </div>
+                                    <div>
+                                        <h4>Thumbnail text</h4>
+                                        <p>{{ best.thumbnail_text|join(' / ') }}</p>
+                                    </div>
+                                </div>
+                                <div class="creator-outline-block">
+                                    <h4>Suggested outline</h4>
+                                    <ol>
+                                        {% for point in best.three_key_points %}
+                                        <li>{{ point }}</li>
+                                        {% endfor %}
+                                    </ol>
+                                </div>
+                                <div class="creator-evidence-block">
+                                    <h4>Source evidence</h4>
+                                    <ul>
+                                        {% for evidence in best.source_evidence[:4] %}
+                                        <li><a href="{{ evidence.url }}" target="_blank">{{ evidence.source_label }}: {{ evidence.title }}</a></li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                                <div class="card-actions creator-actions-row">
+                                    <button class="btn btn-small" onclick='saveCreatorItem({{ best|tojson }}, "idea", this)'>Save as idea</button>
+                                    <button class="btn btn-small" onclick='buildResearchPack({{ best|tojson }}, this)'>Build research pack</button>
+                                    <button class="btn btn-small btn-primary" onclick='saveCreatorItem({{ best|tojson }}, "script_ready", this)'>Draft script</button>
+                                    <a href="{{ best.url }}" target="_blank" class="btn btn-small">Open Source</a>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="card"><p>No creator-ready ideas yet. Refresh data and check again.</p></div>
+                            {% endif %}
+                        </div>
+
+                        <div class="creator-section">
+                            <h2 class="section-title">Shorts Ideas</h2>
+                            <div class="creator-mini-grid">
+                                {% for item in creator_brief.shorts_ideas %}
+                                <div class="card creator-mini-card search-target" data-search="{{ (item.topic ~ ' ' ~ item.hook_line)|lower }}">
+                                    <div class="creator-mini-top">
+                                        <span class="badge-source source-{{ item.source_type }}">Short</span>
+                                        <span class="badge-score interesting">{{ item.creator_score }}</span>
+                                    </div>
+                                    <h3>{{ item.hook_line }}</h3>
+                                    <p>{{ item.short_script }}</p>
+                                    <div class="creator-mini-meta">
+                                        <span>Visual: {{ item.visual_idea }}</span>
+                                        <span>CTA: {{ item.cta }}</span>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="creator-section">
+                            <h2 class="section-title">Quick Wins</h2>
+                            <div class="creator-mini-grid">
+                                {% for item in creator_brief.quick_wins %}
+                                <div class="card creator-mini-card search-target" data-search="{{ (item.title ~ ' ' ~ item.topic)|lower }}">
+                                    <div class="creator-mini-top">
+                                        <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
+                                        <span class="creator-effort creator-effort-{{ item.production_effort }}">{{ item.production_effort }}</span>
+                                    </div>
+                                    <h3>{{ item.suggested_titles.practical or item.title }}</h3>
+                                    <p>{{ item.why_viewers_care }}</p>
+                                    <div class="card-actions">
+                                        <button class="btn btn-small" onclick='saveCreatorItem({{ item|tojson }}, "idea", this)'>Save</button>
+                                        <button class="btn btn-small" onclick='buildResearchPack({{ item|tojson }}, this)'>Research pack</button>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="creator-section full-width">
+                            <h2 class="section-title">Long-form Candidates</h2>
+                            <div class="creator-opportunity-grid">
+                                {% for item in creator_brief.long_form_candidates %}
+                                <div class="card creator-opportunity-card search-target" data-search="{{ (item.title ~ ' ' ~ item.topic ~ ' ' ~ item.hook)|lower }}">
+                                    <div class="creator-opportunity-head">
+                                        <span class="badge-score {% if item.creator_score >= 80 %}hot{% elif item.creator_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.creator_score }}</span>
+                                        <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
+                                    </div>
+                                    <h3>{{ item.suggested_titles.curiosity or item.title }}</h3>
+                                    <p class="creator-hook">{{ item.hook }}</p>
+                                    <p>{{ item.why_viewers_care }}</p>
+                                    <div class="creator-outline-inline">
+                                        {% for point in item.three_key_points %}<span class="tag">{{ point }}</span>{% endfor %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="creator-section full-width">
+                            <h2 class="section-title">Content Clusters</h2>
+                            <div class="creator-cluster-grid">
+                                {% for cluster in creator_brief.content_clusters %}
+                                <div class="card creator-cluster-card search-target" data-search="{{ (cluster.topic ~ ' ' ~ cluster.recommended_angle)|lower }}">
+                                    <div class="creator-cluster-head">
+                                        <h3>{{ cluster.topic }}</h3>
+                                        <span class="badge-score watch">{{ cluster.creator_score|round|int }}</span>
+                                    </div>
+                                    <p>{{ cluster.why_this_is_a_story }}</p>
+                                    <p><strong>Angle:</strong> {{ cluster.recommended_angle }}</p>
+                                    <div class="creator-cluster-meta">
+                                        <span>{{ cluster.source_count }} sources</span>
+                                        <span>{{ cluster.best_content_format }}</span>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
                     <div class="overview-grid">
                         {% if status_warning %}
                         <div class="inline-alert inline-alert-warning" id="overview-status-warning">
@@ -274,7 +464,215 @@
                             </div>
                         </div>
                     </div>
+                    {% endif %}
                 </div>
+
+                {% if creator_mode %}
+                <div id="video-ideas" class="section" data-title="Video Ideas">
+                    <div class="section-header">
+                        <h2 class="section-title">Content Opportunity Cards</h2>
+                    </div>
+                    <div class="creator-opportunity-grid">
+                        {% for item in creator_opportunities %}
+                        <div class="card creator-opportunity-card creator-action-card search-target" data-search="{{ (item.title ~ ' ' ~ item.topic ~ ' ' ~ item.hook ~ ' ' ~ item.best_format)|lower }}">
+                            <div class="creator-opportunity-head">
+                                <div>
+                                    <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
+                                    <span class="creator-topic-pill">{{ item.topic }}</span>
+                                </div>
+                                <div class="creator-score-pair">
+                                    <span class="badge-score {% if item.creator_score >= 80 %}hot{% elif item.creator_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.creator_score }}</span>
+                                    <span class="badge-score {% if item.signal_score >= 80 %}hot{% elif item.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.signal_score }}</span>
+                                </div>
+                            </div>
+                            <h3>{{ item.suggested_titles.practical or item.title }}</h3>
+                            <p class="creator-hook">{{ item.hook }}</p>
+                            <div class="creator-card-grid">
+                                <div>
+                                    <h4>Why viewers care</h4>
+                                    <p>{{ item.why_viewers_care }}</p>
+                                </div>
+                                <div>
+                                    <h4>Recommended action</h4>
+                                    <p>{{ item.recommended_action }}</p>
+                                </div>
+                                <div>
+                                    <h4>Demo idea</h4>
+                                    <p>{{ item.demo_idea }}</p>
+                                </div>
+                                <div>
+                                    <h4>Risks</h4>
+                                    <p>{{ item.risks_or_caveats }}</p>
+                                </div>
+                            </div>
+                            <div class="creator-title-options">
+                                <h4>Title ideas</h4>
+                                <ul>
+                                    <li>{{ item.suggested_titles.curiosity }}</li>
+                                    <li>{{ item.suggested_titles.practical }}</li>
+                                    <li>{{ item.suggested_titles.contrarian }}</li>
+                                    <li>{{ item.suggested_titles.tutorial }}</li>
+                                </ul>
+                            </div>
+                            <div class="creator-evidence-block">
+                                <h4>Source evidence</h4>
+                                <ul>
+                                    {% for evidence in item.source_evidence[:4] %}
+                                    <li><a href="{{ evidence.url }}" target="_blank">{{ evidence.source_label }}: {{ evidence.title }}</a></li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            <div class="creator-script-block">
+                                <h4>Script starter</h4>
+                                <p><strong>Opening:</strong> {{ item.opening_hook }}</p>
+                                <p><strong>Context:</strong> {{ item.intro_context }}</p>
+                                <p><strong>Demo:</strong> {{ item.demo_segment }}</p>
+                                <p><strong>CTA:</strong> {{ item.call_to_action }}</p>
+                            </div>
+                            <div class="creator-inline-tags">
+                                {% for text in item.thumbnail_text %}<span class="tag">{{ text }}</span>{% endfor %}
+                            </div>
+                            <div class="card-actions creator-actions-row">
+                                <button class="btn btn-small" onclick='saveCreatorItem({{ item|tojson }}, "idea", this)'>Save as idea</button>
+                                <button class="btn btn-small" onclick='buildResearchPack({{ item|tojson }}, this)'>Build research pack</button>
+                                <button class="btn btn-small" onclick='saveCreatorItem({{ item|tojson }}, "script_ready", this)'>Draft script</button>
+                                <button class="btn btn-small action-ignore" onclick='ignoreItem({{ {"url": item.url, "title": item.title, "source_type": item.source_type}|tojson }}, this)'>Ignore</button>
+                                <button class="btn btn-small" onclick='trackItem({{ {"topic": item.topic, "reason": "creator topic: " + item.title}|tojson }}, this)'>Track topic</button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div id="shorts" class="section" data-title="Shorts">
+                    <div class="section-header">
+                        <h2 class="section-title">Shorts Ideas</h2>
+                    </div>
+                    <div class="creator-mini-grid">
+                        {% for item in creator_brief.shorts_ideas %}
+                        <div class="card creator-mini-card search-target" data-search="{{ (item.title ~ ' ' ~ item.hook_line)|lower }}">
+                            <div class="creator-mini-top">
+                                <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
+                                <span class="badge-score interesting">{{ item.creator_score }}</span>
+                            </div>
+                            <h3>{{ item.hook_line }}</h3>
+                            <div class="creator-script-block compact">
+                                <p><strong>3-beat structure:</strong></p>
+                                <ol>
+                                    {% for beat in item.three_beat_structure %}
+                                    <li>{{ beat }}</li>
+                                    {% endfor %}
+                                </ol>
+                                <p><strong>30-second script:</strong> {{ item.short_script }}</p>
+                                <p><strong>Visual:</strong> {{ item.visual_idea }}</p>
+                                <p><strong>CTA:</strong> {{ item.cta }}</p>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div id="clusters" class="section" data-title="Clusters">
+                    <div class="section-header">
+                        <h2 class="section-title">Content Clusters</h2>
+                    </div>
+                    <div class="creator-cluster-grid">
+                        {% for cluster in creator_clusters %}
+                        <div class="card creator-cluster-card search-target" data-search="{{ (cluster.topic ~ ' ' ~ cluster.recommended_angle)|lower }}">
+                            <div class="creator-cluster-head">
+                                <h3>{{ cluster.topic }}</h3>
+                                <span class="badge-score watch">{{ cluster.creator_score|round|int }}</span>
+                            </div>
+                            <p>{{ cluster.why_this_is_a_story }}</p>
+                            <p><strong>Recommended angle:</strong> {{ cluster.recommended_angle }}</p>
+                            <p><strong>Best format:</strong> {{ cluster.best_content_format }}</p>
+                            <div class="creator-cluster-meta">
+                                {% for source in cluster.sources %}<span class="tag">{{ source }}</span>{% endfor %}
+                            </div>
+                            <ul class="creator-related-list">
+                                {% for evidence in cluster.related_items[:4] %}
+                                <li><a href="{{ evidence.url }}" target="_blank">{{ evidence.title }}</a></li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div id="research-packs" class="section" data-title="Research Packs">
+                    <div class="section-header">
+                        <h2 class="section-title">Research Packs</h2>
+                    </div>
+                    <div class="creator-research-grid">
+                        {% for pack in research_packs %}
+                        <div class="card creator-research-card">
+                            <h3>{{ pack.title }}</h3>
+                            <p>{{ pack.excerpt }}</p>
+                            <div class="creator-research-meta">
+                                <span>{{ pack.updated_at }}</span>
+                                <span>{{ pack.filename }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% if not research_packs %}
+                        <div class="card creator-research-card empty-pack-card">
+                            <h3>No research packs yet</h3>
+                            <p>Use "Build research pack" on any creator opportunity card to generate one.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div id="content-pipeline" class="section" data-title="Content Pipeline">
+                    <div class="section-header">
+                        <h2 class="section-title">Creator Saved Pipeline</h2>
+                    </div>
+                    <div class="kanban-board creator-pipeline-board">
+                        {% for group in creator_saved_groups %}
+                        <div class="kanban-column" data-status="{{ group.key }}">
+                            <div class="kanban-header">
+                                <span class="kanban-title">{{ group.label }}</span>
+                                <span class="kanban-count">{{ group.group_entries|length }}</span>
+                            </div>
+                            <div class="kanban-cards">
+                                {% for item in group.group_entries %}
+                                <div class="card saved-card creator-saved-card" data-id="{{ item.id }}" data-status="{{ item.status }}">
+                                    <div class="saved-header">
+                                        <span class="badge-source">{{ item.format or 'Creator Item' }}</span>
+                                        <span class="status-pill status-{{ item.status }}">{{ item.status }}</span>
+                                    </div>
+                                    <div class="saved-title">{{ item.working_title or item.title }}</div>
+                                    {% if item.hook %}<div class="saved-notes">{{ item.hook }}</div>{% endif %}
+                                    <div class="saved-editor creator-editor">
+                                        <select class="status-select" onchange="updateStatus({{ item.id }}, this.value)">
+                                            <option value="idea" {% if item.status == 'idea' %}selected{% endif %}>idea</option>
+                                            <option value="researching" {% if item.status == 'researching' %}selected{% endif %}>researching</option>
+                                            <option value="script_ready" {% if item.status == 'script_ready' %}selected{% endif %}>script_ready</option>
+                                            <option value="recording" {% if item.status == 'recording' %}selected{% endif %}>recording</option>
+                                            <option value="published" {% if item.status == 'published' %}selected{% endif %}>published</option>
+                                            <option value="archived" {% if item.status == 'archived' %}selected{% endif %}>archived</option>
+                                        </select>
+                                        <input class="saved-input creator-title-input" type="text" placeholder="Working title" value="{{ item.working_title or '' }}">
+                                        <input class="saved-input creator-hook-input" type="text" placeholder="Hook" value="{{ item.hook or '' }}">
+                                        <input class="saved-input creator-format-input" type="text" placeholder="Format" value="{{ item.format or '' }}">
+                                        <textarea class="saved-textarea creator-outline-input" placeholder="Outline">{{ item.outline|join('\n') if item.outline else '' }}</textarea>
+                                        <input class="saved-input creator-thumb-input" type="text" placeholder="Thumbnail text" value="{{ item.thumbnail_text or '' }}">
+                                        <input class="saved-input creator-priority-input" type="text" placeholder="Priority" value="{{ item.priority or '' }}">
+                                        <input class="saved-input creator-published-input" type="text" placeholder="Published URL" value="{{ item.published_url or '' }}">
+                                        <textarea class="saved-textarea creator-notes-input" placeholder="Notes">{{ item.notes }}</textarea>
+                                    </div>
+                                    <div class="saved-actions">
+                                        <button class="btn btn-small" onclick="updateCreatorItem({{ item.id }}, this.closest('.creator-saved-card'))">Save</button>
+                                        <button class="btn btn-small action-ignore" onclick="deleteItem({{ item.id }}, this)">Remove</button>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
 
                 <!-- Feed Tab -->
                 <div id="feed" class="section">

@@ -65,6 +65,23 @@
         "dev"
       ],
       "description": "AI tools, agents, and developer utilities"
+    },
+    "creator": {
+      "name": "DailyDex Creator",
+      "title": "Creator Intelligence",
+      "focus_keywords": [
+        "agent",
+        "local",
+        "open source",
+        "coding",
+        "benchmark",
+        "demo",
+        "launch",
+        "model",
+        "tool",
+        "workflow"
+      ],
+      "description": "Decide what AI content to make today"
     }
   },
   "arxiv": {
