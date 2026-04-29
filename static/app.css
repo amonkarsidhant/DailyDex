@@ -124,6 +124,41 @@ body {
   font-size: 0.8rem;
 }
 
+.help-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+.shortcuts-list {
+  display: grid;
+  gap: 8px;
+}
+
+.shortcut {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.shortcut kbd {
+  background: var(--bg-secondary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: monospace;
+  min-width: 30px;
+  text-align: center;
+}
+
 .main-container {
   display: flex;
   flex-direction: column;
@@ -949,6 +984,20 @@ body {
   display: flex;
   gap: 0.4rem;
   flex-wrap: wrap;
+}
+
+.tab-search-bar {
+  margin-bottom: var(--spacing-sm);
+}
+
+.tab-search-input {
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text);
+  font-size: 0.85rem;
+  width: 200px;
 }
 
 .filter-btn {

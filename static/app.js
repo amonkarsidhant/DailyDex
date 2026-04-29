@@ -1116,18 +1116,20 @@ function toggleView(tab, view, btn) {
 }
 
 function searchCards(query) {
-    const q = query.toLowerCase().trim();
+    const q = query.toLowerCase();
     document.querySelectorAll('.search-target').forEach(card => {
         const text = (card.dataset.search || card.textContent || '').toLowerCase();
-        const shouldShow = !q || text.includes(q);
-        
-        if (shouldShow) {
-            card.style.display = 'block';
-            card.style.opacity = '0';
-            setTimeout(() => card.style.opacity = '1', 10);
-        } else {
-            card.style.display = 'none';
-        }
+        card.style.display = text.includes(q) ? 'block' : 'none';
+    });
+}
+
+function searchTabCards(tabId, query) {
+    const q = query.toLowerCase();
+    document.querySelectorAll(`#${tabId} .search-target`).forEach(card => {
+        const text = (card.dataset.search || card.textContent || '').toLowerCase();
+        card.style.display = q === '' || text.includes(q) ? 'block' : 'none';
+    });
+}
     });
 }
 
@@ -1139,6 +1141,32 @@ function setCardFilter(mode, btn) {
     cards.forEach(card => {
         const label = (card.dataset.scoreLabel || '').toLowerCase();
         const shouldShow = mode === 'all' || label.includes(mode);
+        
+        if (shouldShow) {
+            card.style.display = 'block';
+            card.style.opacity = '0';
+            setTimeout(() => card.style.opacity = '1', 10);
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+let currentScoreFilter = 'all';
+function setScoreFilter(range, btn) {
+    currentScoreFilter = range;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    
+    const cards = document.querySelectorAll('#feed .search-target');
+    cards.forEach(card => {
+        const breakdown = card.dataset.breakdown ? JSON.parse(card.dataset.breakdown) : {};
+        const score = breakdown.total || breakdown.signal_score || 0;
+        let shouldShow = range === 'all';
+        
+        if (range === '80+') shouldShow = score >= 80;
+        else if (range === '60-79') shouldShow = score >= 60 && score < 80;
+        else if (range === '<60') shouldShow = score < 60;
         
         if (shouldShow) {
             card.style.display = 'block';
@@ -1358,6 +1386,12 @@ document.addEventListener('keydown', function(e) {
         document.getElementById('global-search').focus();
     }
     
+    // '?' - Show shortcuts
+    if (e.key === '?') {
+        e.preventDefault();
+        showShortcuts();
+    }
+    
     // 's' - Go to Saved tab
     if (e.key === 's' || e.key === 'S') {
         e.preventDefault();
@@ -1378,5 +1412,37 @@ document.addEventListener('keydown', function(e) {
         if (digestModal && digestModal.classList.contains('open')) {
             closeDigest();
         }
+        const shortcutsModal = document.getElementById('shortcuts-modal');
+        if (shortcutsModal) shortcutsModal.style.display = 'none';
     }
 });
+
+function showShortcuts() {
+    let modal = document.getElementById('shortcuts-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'shortcuts-modal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Keyboard Shortcuts</h3>
+                    <button class="modal-close" onclick="this.closest('#shortcuts-modal').style.display='none'">&times;</button>
+                </div>
+                <div class="shortcuts-list">
+                    <div class="shortcut"><kbd>/</kbd> Focus search</div>
+                    <div class="shortcut"><kbd>s</kbd> Go to Saved</div>
+                    <div class="shortcut"><kbd>f</kbd> Go to Feed</div>
+                    <div class="shortcut"><kbd>g</kbd> then <kbd>h</kbd> Go to GitHub</div>
+                    <div class="shortcut"><kbd>g</kbd> then <kbd>m</kbd> Go to Models</div>
+                    <div class="shortcut"><kbd>g</kbd> then <kbd>r</kbd> Go to Research</div>
+                    <div class="shortcut"><kbd>g</kbd> then <kbd>v</kbd> Go to Videos</div>
+                    <div class="shortcut"><kbd>Esc</kbd> Close modal</div>
+                    <div class="shortcut"><kbd>?</kbd> Show this help</div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    modal.style.display = 'flex';
+}

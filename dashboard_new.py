@@ -714,7 +714,13 @@ def build_dashboard_context():
         if source_type in [name for name, _label in SOURCE_META]:
             for item in items:
                 if item.get("signal_score", 0) >= 40:
-                    feed_items.append({**item, "source_type": source_type})
+                    feed_items.append({
+                        **item,
+                        "source_type": source_type,
+                        "score_breakdown": item.get("score_breakdown", {}),
+                        "why": item.get("why", ""),
+                        "score_label": item.get("score_label", "Interesting")
+                    })
     feed_items.sort(key=lambda x: x.get("signal_score", 0), reverse=True)
 
     local_items = [r for r in scored_data.get("github", []) if r.get("pi_suitability") in ["yes", "partial"]]

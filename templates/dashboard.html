@@ -20,6 +20,7 @@
                     {% endfor %}
                 </select>
             </div>
+            <button class="help-btn" onclick="showShortcuts()">?</button>
             
             <nav class="sidebar-nav">
                 <button class="nav-btn active" onclick="showTab('overview', this)">
@@ -277,10 +278,17 @@
                 <div id="feed" class="section">
                     <div class="section-header">
                         <h2 class="section-title">High Signal Feed</h2>
+                        <div class="tab-search-bar">
+                            <input type="text" class="tab-search-input" placeholder="Search feed..." oninput="searchTabCards('feed', this.value)">
+                        </div>
                         <div class="filter-bar">
-                            <button class="filter-btn active" onclick="setCardFilter('all', this)">All</button>
+                            <button class="filter-btn" onclick="setScoreFilter('all', this)">All</button>
+                            <button class="filter-btn" onclick="setScoreFilter('80+', this)">80+ Hot</button>
+                            <button class="filter-btn" onclick="setScoreFilter('60-79', this)">60-79</button>
+                            <button class="filter-btn" onclick="setScoreFilter('<60', this)">&lt;60</button>
+                            <button class="filter-btn active" onclick="setCardFilter('all', this)" style="margin-left:auto">Type:</button>
                             <button class="filter-btn" onclick="setCardFilter('hot', this)">Hot</button>
-                            <button class="filter-btn" onclick="setCardFilter('pi', this)">Pi Compatible</button>
+                            <button class="filter-btn" onclick="setCardFilter('pi', this)">Pi</button>
                             <button class="filter-btn" onclick="setCardFilter('agentic', this)">Agentic</button>
                         </div>
                     </div>

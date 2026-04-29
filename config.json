@@ -1,5 +1,5 @@
 {
-  "variant": "local",
+  "variant": "default",
   "variants": {
     "default": {
       "name": "DailyDex",
