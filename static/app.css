@@ -539,6 +539,62 @@ body {
   border-left: 3px solid var(--success);
 }
 
+.correlations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.correlation-card {
+  border-left: 3px solid var(--warning);
+}
+
+.correlation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+}
+
+.correlation-topic {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.correlation-sources {
+  display: flex;
+  gap: 4px;
+}
+
+.correlation-items {
+  font-size: 0.8rem;
+}
+
+.correlation-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.correlation-item:last-child {
+  border-bottom: none;
+}
+
+.correlation-item a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.correlation-item a:hover {
+  text-decoration: underline;
+}
+
+.correlation-score {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 /* Item Cards */
 .card {
   background: var(--surface);

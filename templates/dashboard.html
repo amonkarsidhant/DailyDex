@@ -167,6 +167,32 @@
                         </div>
                         {% endif %}
 
+                        {% if correlations %}
+                        <div class="overview-section full-width">
+                            <h2 class="section-title">Correlation Signals</h2>
+                            <div class="correlations-grid">
+                                {% for c in correlations %}
+                                <div class="card correlation-card">
+                                    <div class="correlation-header">
+                                        <span class="correlation-topic">{{ c.topic }}</span>
+                                        <span class="correlation-sources">
+                                            {% for src in c.sources %}<span class="badge-source source-{{ src }}">{{ src }}</span>{% endfor %}
+                                        </span>
+                                    </div>
+                                    <div class="correlation-items">
+                                        {% for item in c.item_list[:2] %}
+                                        <div class="correlation-item">
+                                            <a href="{{ item.url }}" target="_blank">{{ item.title[:50] }}...</a>
+                                            <span class="correlation-score">{{ item.signal_score }}</span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+
                         <div class="overview-main-grid">
                             <div class="overview-section">
                                 <h2 class="section-title">Today's Top 5</h2>

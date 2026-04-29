@@ -332,6 +332,50 @@ def build_top_items(scored_data):
     return result
 
 
+def find_correlations(scored_data):
+    """Find topics that appear across multiple sources."""
+    topic_sources = {}
+    
+    keywords_to_track = [
+        "agent", "claude", "gpt", "ollama", "llama", "mcp", "cursor", "windsurf",
+        "GPT", "AI", "ML", "machine learning", "model", "local", "raspberry", "pi",
+        "rag", "embedding", "vector", "fine-tuning", "benchmark", "open weights",
+        "reasoning", " Chain", "Function calling", "tool", "computer use", "computer use",
+        "multi-modal", "vision", "voice", "speech", "code", "coding", "dev",
+        "security", "jailbreak", "safety", "alignment", " RL",
+    ]
+    
+    for source_type, items in scored_data.items():
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            title = (item.get("title", "") + " " + item.get("description", "")).lower()
+            categories = item.get("categories", [])
+            for keyword in keywords_to_track:
+                if keyword.lower() in title or keyword.lower() in str(categories).lower():
+                    if keyword not in topic_sources:
+                        topic_sources[keyword] = []
+                    topic_sources[keyword].append({
+                        "source": source_type,
+                        "title": item.get("title", ""),
+                        "url": item.get("url", ""),
+                        "signal_score": item.get("signal_score", 0)
+                    })
+    
+    correlations = []
+    for topic, items in topic_sources.items():
+        unique_sources = set(i["source"] for i in items)
+        if len(unique_sources) >= 2:
+            correlations.append({
+                "topic": topic,
+                "sources": list(unique_sources),
+                "item_list": sorted(items, key=lambda x: x.get("signal_score", 0), reverse=True)[:3]
+            })
+    
+    correlations.sort(key=lambda x: (len(x["sources"]), max(i["signal_score"] for i in x["item_list"])), reverse=True)
+    return correlations[:8]
+
+
 def build_try_this_weekend(scored_data):
     """Pick a small list of practical experiments."""
     candidates = []
@@ -613,6 +657,7 @@ def build_dashboard_context():
     last_updated = format_timestamp(scored_data.get("last_updated")) if scored_data.get("last_updated") else "Unknown"
     top_items = build_top_items(scored_data)
     weekend_items = build_try_this_weekend(scored_data)
+    correlations = find_correlations(scored_data)
     saved_groups = build_saved_groups(saved_items)
     has_any_data = any(scored_data.get(key) for key, _label in SOURCE_META)
     dashboard_state = build_dashboard_state(
@@ -630,6 +675,7 @@ def build_dashboard_context():
         "youtube": scored_data.get("youtube", []),
         "blogs": scored_data.get("blogs", []),
         "papers": scored_data.get("papers", []),
+        "correlations": correlations,
         "feed_items": feed_items[:30],
         "local_items": local_items[:6],
         "saved_items": saved_items,
