@@ -270,9 +270,20 @@ See [docs/release_validation_v0.7.md](docs/release_validation_v0.7.md) for manua
 
 ## Project Status
 
-v0.7.0-rc1 DailyDex Product Experience Release Candidate
+v0.7.0-rc2 DailyDex Product Experience Release Candidate
 
 This repo is actively evolving. Expect rapid iteration on data quality, workflow UX, and presentation.
+
+## What's New (v0.7.0-rc2)
+
+- Multi-variant support: switch between DailyDex (default), DailyDex Local, DailyDex Research, and DailyDex Tools
+- Score filters: filter feed by 80+ Hot, 60-79, <60
+- Tab search: search within each tab
+- Keyboard shortcuts help: press `?` or click help button
+- Correlation Signals: topics appearing across 2+ sources
+- Topic Heatmap: frequency grid by source
+
+## Architecture
 
 ## Contributing and Feedback
 
