@@ -13,6 +13,22 @@ const LIVE_POLL_VISIBLE_MS = 60000;
 const LIVE_POLL_HIDDEN_MS = 180000;
 const VIEW_TABS = ['github', 'models', 'research'];
 
+async function switchVariant(variantKey) {
+    try {
+        const res = await fetch('/api/variant', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({variant: variantKey})
+        });
+        const data = await res.json();
+        if (data.success) {
+            location.reload();
+        }
+    } catch (e) {
+        console.error('Failed to switch variant:', e);
+    }
+}
+
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
     readDashboardState();

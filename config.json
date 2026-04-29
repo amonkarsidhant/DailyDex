@@ -1,4 +1,72 @@
 {
+  "variant": "local",
+  "variants": {
+    "default": {
+      "name": "DailyDex",
+      "title": "AI Signal Cockpit",
+      "focus_keywords": [
+        "agent",
+        "claude",
+        "gpt",
+        "ollama",
+        "llama",
+        "mcp",
+        "cursor",
+        "model",
+        "AI",
+        "ML"
+      ],
+      "description": "General AI news and updates"
+    },
+    "local": {
+      "name": "DailyDex Local",
+      "title": "Local AI Projects",
+      "focus_keywords": [
+        "ollama",
+        "llama",
+        "local",
+        "raspberry",
+        "pi",
+        "lm-studio",
+        "lmstudio",
+        "llamafile",
+        "gpt4all",
+        "local model"
+      ],
+      "description": "Run AI locally on your machine"
+    },
+    "research": {
+      "name": "DailyDex Research",
+      "title": "AI Research Papers",
+      "focus_keywords": [
+        "paper",
+        "arxiv",
+        "research",
+        "model",
+        "benchmark",
+        "training",
+        "fine-tuning",
+        "embedding"
+      ],
+      "description": "Latest AI research and papers"
+    },
+    "tools": {
+      "name": "DailyDex Tools",
+      "title": "AI Tools & Agents",
+      "focus_keywords": [
+        "agent",
+        "cursor",
+        "windsurf",
+        "claude",
+        "gpt",
+        "tool",
+        "mcp",
+        "computer use",
+        "dev"
+      ],
+      "description": "AI tools, agents, and developer utilities"
+    }
+  },
   "arxiv": {
     "limit": 15
   },

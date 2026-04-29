@@ -90,11 +90,38 @@ body {
   color: var(--primary);
   margin-bottom: var(--spacing-md);
   letter-spacing: -0.02em;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
 .logo span {
   color: var(--text-muted);
   font-weight: 500;
+}
+
+.variant-badge {
+  font-size: 0.7rem;
+  background: var(--primary-subtle);
+  color: var(--primary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.variant-switcher {
+  margin-bottom: var(--spacing-md);
+}
+
+.variant-switcher select {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text);
+  font-size: 0.8rem;
 }
 
 .main-container {

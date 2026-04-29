@@ -12,7 +12,14 @@
 <body>
     <div class="app-shell">
         <aside class="sidebar">
-            <div class="logo">DailyDex</div>
+            <div class="logo">DailyDex <span class="variant-badge" id="current-variant">{{ variant_info.name }}</span></div>
+            <div class="variant-switcher">
+                <select id="variant-select" onchange="switchVariant(this.value)">
+                    {% for v in variant_info.available_variants %}
+                    <option value="{{ v }}" {% if v == variant_info.key %}selected{% endif %}>{{ v|title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             
             <nav class="sidebar-nav">
                 <button class="nav-btn active" onclick="showTab('overview', this)">

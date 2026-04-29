@@ -72,6 +72,36 @@ def load_data():
         return {"github": [], "huggingface": [], "youtube": [], "blogs": [], "papers": []}
 
 
+def load_config():
+    """Load configuration including variant settings"""
+    try:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return {}
+
+
+def get_variant_info():
+    """Get current variant info from config"""
+    config = load_config()
+    variant_key = config.get("variant", "default")
+    variants = config.get("variants", {})
+    variant = variants.get(variant_key, variants.get("default", {
+        "name": "DailyDex",
+        "title": "AI Signal Cockpit",
+        "focus_keywords": ["agent", "claude", "gpt", "ollama", "llama", "mcp"],
+        "description": "General AI news"
+    }))
+    return {
+        "key": variant_key,
+        "name": variant.get("name", "DailyDex"),
+        "title": variant.get("title", "AI Signal Cockpit"),
+        "focus_keywords": variant.get("focus_keywords", []),
+        "description": variant.get("description", ""),
+        "available_variants": list(variants.keys())
+    }
+
+
 def ensure_parent_dir(path: str) -> None:
     """Create a parent directory for a file path when needed."""
     parent = os.path.dirname(path)
@@ -127,7 +157,8 @@ def generate_scored_data(raw_data=None):
         return load_data()
 
     data = raw_data or load_data()
-    scorer = SignalScorer()
+    variant_info = get_variant_info()
+    scorer = SignalScorer(variant_info=variant_info)
     scored_data = scorer.score_all_items(data)
     scored_data["executive_brief"] = scorer.generate_executive_brief(scored_data)
     ensure_parent_dir(SCORED_DATA_FILE)
@@ -701,6 +732,7 @@ def build_dashboard_context():
     weekend_items = build_try_this_weekend(scored_data)
     correlations = find_correlations(scored_data)
     topic_heatmap = build_topic_heatmap(scored_data)
+    variant_info = get_variant_info()
     saved_groups = build_saved_groups(saved_items)
     has_any_data = any(scored_data.get(key) for key, _label in SOURCE_META)
     dashboard_state = build_dashboard_state(
@@ -737,7 +769,31 @@ def build_dashboard_context():
         "today_date": datetime.now().strftime("%Y-%m-%d"),
         "has_any_data": has_any_data,
         "dashboard_state": dashboard_state,
+        "variant_info": variant_info,
     }
+
+
+@app.route("/api/variant", methods=["GET", "POST"])
+def api_variant():
+    """Get or set the current variant"""
+    config = load_config()
+    variants = config.get("variants", {})
+    
+    if request.method == "POST":
+        data = request.get_json()
+        variant_key = data.get("variant")
+        if variant_key in variants:
+            config["variant"] = variant_key
+            with open(CONFIG_FILE, "w") as f:
+                json.dump(config, f, indent=2)
+            return jsonify({"success": True, "variant": variant_key})
+        return jsonify({"success": False, "error": "Invalid variant"}), 400
+    
+    current = config.get("variant", "default")
+    return jsonify({
+        "current": current,
+        "variants": [{"key": k, "name": v.get("name"), "description": v.get("description")} for k, v in variants.items()]
+    })
 
 
 

@@ -50,9 +50,16 @@ SCORING_WEIGHTS = {
 
 
 class SignalScorer:
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[Dict] = None, variant_info: Optional[Dict] = None):
         self.config = config or {}
-        self.focus_areas = self.config.get("focus_areas", DEFAULT_FOCUS_AREAS)
+        self.variant_info = variant_info or {}
+        
+        variant_keywords = self.variant_info.get("focus_keywords", [])
+        if variant_keywords:
+            self.focus_areas = variant_keywords
+        else:
+            self.focus_areas = self.config.get("focus_areas", DEFAULT_FOCUS_AREAS)
+        
         self.blocked_keywords = self.config.get("blocked_keywords", BLOCKED_KEYWORDS)
         self.scoring_weights = self.config.get("scoring_weights", SCORING_WEIGHTS)
         
