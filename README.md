@@ -1,6 +1,6 @@
 # DailyDex
 
-![Version](https://img.shields.io/badge/version-v0.7.0--rc1-blue)
+![Version](https://img.shields.io/badge/version-v0.9-blue)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![Flask](https://img.shields.io/badge/flask-dashboard-111827?logo=flask&logoColor=white)
 ![Status](https://img.shields.io/badge/status-release%20candidate-f59e0b)
@@ -249,7 +249,7 @@ python3 fetch_news.py
 
 ## Release Validation
 
-See [docs/release_validation_v0.7.md](docs/release_validation_v0.7.md) for manual validation checklist.
+See [docs/release_validation_v0.9.md](docs/release_validation_v0.9.md) for manual validation checklist.
 
 ## Repository Docs
 
@@ -257,7 +257,7 @@ See [docs/release_validation_v0.7.md](docs/release_validation_v0.7.md) for manua
 - `SECURITY.md`
 - `CHANGELOG.md`
 - `docs/diagrams/dashboard-flow.mmd`
-- `docs/release_validation_v0.7.md`
+- `docs/release_validation_v0.9.md`
 - `docs/screenshots/README.md`
 
 ## Roadmap
@@ -270,11 +270,11 @@ See [docs/release_validation_v0.7.md](docs/release_validation_v0.7.md) for manua
 
 ## Project Status
 
-v0.7.0-rc2 DailyDex Product Experience Release Candidate
+v0.9 DailyDex UI and Workflow Release
 
 This repo is actively evolving. Expect rapid iteration on data quality, workflow UX, and presentation.
 
-## What's New (v0.7.0-rc2)
+## What's New (v0.9)
 
 - Multi-variant support: switch between DailyDex (default), DailyDex Local, DailyDex Research, and DailyDex Tools
 - Score filters: filter feed by 80+ Hot, 60-79, <60
@@ -282,6 +282,9 @@ This repo is actively evolving. Expect rapid iteration on data quality, workflow
 - Keyboard shortcuts help: press `?` or click help button
 - Correlation Signals: topics appearing across 2+ sources
 - Topic Heatmap: frequency grid by source
+- Sidebar and desktop layout cleanup with verified navigation rendering
+- Mobile drawer behavior limited to phone-sized screens
+- Saved-item export and bulk actions
 
 ## Architecture
 

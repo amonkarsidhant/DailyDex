@@ -13,31 +13,6 @@ const LIVE_POLL_VISIBLE_MS = 60000;
 const LIVE_POLL_HIDDEN_MS = 180000;
 const VIEW_TABS = ['github', 'models', 'research'];
 
-window.onerror = function(msg, url, line, col, error) {
-    console.error('JS Error:', msg, 'line:', line);
-    return false;
-};
-
-// Check for click-blocking elements
-function checkBlockers() {
-    var navBtn = document.getElementById('nav-feed');
-    if (!navBtn) return;
-    
-    var rect = navBtn.getBoundingClientRect();
-    console.log('nav-feed rect:', rect);
-    console.log('nav-feed offsetParent:', navBtn.offsetParent);
-    console.log('nav-feed parent:', navBtn.parentElement);
-    
-    var el = document.elementFromPoint(rect.left + 10, rect.top + 10);
-    console.log('element at nav-feed:', el);
-    if (el) {
-        console.log('element tag:', el.tagName, 'class:', el.className);
-    }
-}
-
-// Run on load
-setTimeout(checkBlockers, 1000);
-
 function toggleSidebar() {
     var sidebar = document.querySelector('.sidebar');
     var toggle = document.querySelector('.sidebar-toggle');
@@ -143,7 +118,6 @@ document.addEventListener('click', function(e) {
     const btn = e.target.closest('.nav-btn[data-tab]');
     if (btn) {
         const tabId = btn.getAttribute('data-tab');
-        console.log('Tab clicked:', tabId);
         showTab(tabId, btn);
         e.preventDefault();
         e.stopPropagation();
@@ -154,18 +128,6 @@ document.addEventListener('click', function(e) {
             var toggle = document.querySelector('.sidebar-toggle');
             if (toggle) toggle.classList.remove('open');
         }
-    }
-});
-
-// Attach direct click handlers
-const tabs = ['overview', 'feed', 'github', 'models', 'research', 'videos', 'news', 'local', 'saved', 'trends', 'settings'];
-tabs.forEach(function(tab) {
-    var btn = document.getElementById('nav-' + tab);
-    if (btn) {
-        btn.onclick = function(e) {
-            console.log('Direct click on:', tab);
-            showTab(tab, btn);
-        };
     }
 });
 
@@ -196,18 +158,6 @@ async function switchVariant(variantKey) {
         console.error('Failed to switch variant:', e);
     }
 }
-
-// Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
-    readDashboardState();
-    restoreViewPreferences();
-    restoreTabFromLocation();
-    initCharts();
-    initProgressiveLoading();
-    initEmptyStates();
-    restoreSearchFromLocation();
-    startLiveUpdates();
-});
 
 function readDashboardState() {
     const stateNode = document.getElementById('dashboard-state');
@@ -794,7 +744,7 @@ function destroyCharts() {
 }
 
 function getNavButton(tabId) {
-    return document.querySelector(`.nav-btn[onclick*="showTab('${tabId}'"]`);
+    return document.getElementById(`nav-${tabId}`);
 }
 
 function captureUIState() {
@@ -1252,7 +1202,6 @@ window.addEventListener('resize', debounce(() => {
 // Original functions
 function showTab(tabId, btn, updateHash) {
     try {
-        console.log('showTab called:', tabId);
         if (!tabId) return;
         
         var section = document.getElementById(tabId);
@@ -1275,8 +1224,8 @@ function showTab(tabId, btn, updateHash) {
         
         var titleEl = document.getElementById('page-title');
         if (titleEl) {
-            var sectionTitle = section.querySelector('.section-title');
-            titleEl.textContent = sectionTitle ? sectionTitle.textContent : tabId;
+            var sectionTitle = section.dataset.title || section.querySelector('.section-title')?.textContent || tabId;
+            titleEl.textContent = sectionTitle;
         }
 
         if (tabId === 'trends') {
@@ -1297,24 +1246,6 @@ function showTab(tabId, btn, updateHash) {
     } catch (e) {
         console.error('showTab error:', e);
     }
-}
-
-function toggleTheme() {
-    var body = document.body;
-    var current = body.getAttribute('data-theme');
-    var next = current === 'dark' ? 'light' : 'dark';
-    body.setAttribute('data-theme', next);
-    localStorage.setItem('theme', next);
-    
-    var btn = document.querySelector('.theme-toggle-btn');
-    if (btn) {
-        btn.textContent = next === 'dark' ? '🌙' : '☀️';
-    }
-}
-
-async function exportSaved(format) {
-    applyViewState(tab, view);
-    localStorage.setItem(`dashboard:view:${tab}`, view);
 }
 
 function searchCards(query) {
@@ -1572,6 +1503,10 @@ function updateNotes(id, notes, tags) {
 // Init theme
 const savedTheme = localStorage.getItem('theme') || 'light';
 document.body.setAttribute('data-theme', savedTheme);
+const themeToggleBtn = document.querySelector('.theme-toggle-btn');
+if (themeToggleBtn) {
+    themeToggleBtn.textContent = savedTheme === 'dark' ? '🌙' : '☀️';
+}
 
 // Keyboard shortcuts
 document.addEventListener('keydown', function(e) {
@@ -1595,14 +1530,14 @@ document.addEventListener('keydown', function(e) {
     // 's' - Go to Saved tab
     if (e.key === 's' || e.key === 'S') {
         e.preventDefault();
-        const savedBtn = document.querySelector('.nav-btn[onclick*="saved"]');
+        const savedBtn = document.getElementById('nav-saved');
         if (savedBtn) savedBtn.click();
     }
     
     // 'f' - Go to Feed tab
     if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
-        const feedBtn = document.querySelector('.nav-btn[onclick*="feed"]');
+        const feedBtn = document.getElementById('nav-feed');
         if (feedBtn) feedBtn.click();
     }
     
@@ -1633,10 +1568,6 @@ function showShortcuts() {
                     <div class="shortcut"><kbd>/</kbd> Focus search</div>
                     <div class="shortcut"><kbd>s</kbd> Go to Saved</div>
                     <div class="shortcut"><kbd>f</kbd> Go to Feed</div>
-                    <div class="shortcut"><kbd>g</kbd> then <kbd>h</kbd> Go to GitHub</div>
-                    <div class="shortcut"><kbd>g</kbd> then <kbd>m</kbd> Go to Models</div>
-                    <div class="shortcut"><kbd>g</kbd> then <kbd>r</kbd> Go to Research</div>
-                    <div class="shortcut"><kbd>g</kbd> then <kbd>v</kbd> Go to Videos</div>
                     <div class="shortcut"><kbd>Esc</kbd> Close modal</div>
                     <div class="shortcut"><kbd>?</kbd> Show this help</div>
                 </div>

@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.9
+
+- cleaned up the dashboard layout and restored a stable desktop sidebar
+- simplified conflicting CSS and JS created during iterative UI fixes
+- kept the multi-variant workflow, saved-item export, bulk actions, and theme controls in the current release
+- verified the rendered UI in a browser before release
+
 ## v0.7.0-rc1 — DailyDex Product Experience Release Candidate
 
 - renamed and productized the project as DailyDex
