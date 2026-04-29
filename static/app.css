@@ -73,11 +73,18 @@ body {
 }
 
 .sidebar {
-  background-color: var(--surface);
-  border-right: 1px solid var(--border);
+  background-color: #f8fafc;
+  border-right: 1px solid #e2e8f0;
   width: 240px;
   min-width: 240px;
   flex-shrink: 0;
+  padding: 16px 12px !important;
+}
+
+.sidebar-nav {
+  display: flex !important;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .main-container {
@@ -404,26 +411,33 @@ body {
 }
 
 .nav-btn {
-  display: flex;
+  display: flex !important;
   align-items: center;
-  gap: var(--spacing-sm);
+  gap: 8px;
   width: 100%;
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: 10px 12px;
   border: none;
-  background: transparent !important;
-  color: var(--text-muted);
+  background: #f1f5f9 !important;
+  color: #1e293b !important;
   font-size: 0.9rem;
+  font-weight: 500;
   cursor: pointer !important;
-  border-radius: var(--radius);
-  transition: all 0.15s ease;
+  border-radius: 4px;
+  margin: 2px 0;
   text-align: left;
-  position: relative;
   z-index: 9999 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
 .nav-btn:hover {
-  background: var(--bg-secondary) !important;
-  color: var(--text);
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+.nav-btn.active {
+  background: #3b82f6 !important;
+  color: white !important;
 }
 
 .nav-btn.active {
