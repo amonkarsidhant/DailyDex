@@ -73,12 +73,26 @@ body {
 }
 
 .sidebar {
-  background-color: #f8fafc;
-  border-right: 1px solid #e2e8f0;
-  width: 240px;
-  min-width: 240px;
-  flex-shrink: 0;
-  padding: 16px 12px !important;
+  background-color: #f8fafc !important;
+  border-right: 1px solid #e2e8f0 !important;
+  width: 240px !important;
+  min-width: 240px !important;
+  flex-shrink: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  flex: none !important;
+  position: relative !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.sidebar-nav {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px;
+  width: 100%;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 .sidebar-nav {
@@ -418,22 +432,20 @@ body {
   width: 100%;
   padding: 10px 12px;
   border: none;
-  background: #f1f5f9 !important;
+  background: #e2e8f0 !important;
   color: #1e293b !important;
-  font-size: 0.9rem;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer !important;
   border-radius: 4px;
   margin: 2px 0;
   text-align: left;
-  z-index: 9999 !important;
-  opacity: 1 !important;
   visibility: visible !important;
+  opacity: 1 !important;
 }
 
 .nav-btn:hover {
-  background: #e2e8f0 !important;
-  color: #0f172a !important;
+  background: #cbd5e1 !important;
 }
 
 .nav-btn.active {
