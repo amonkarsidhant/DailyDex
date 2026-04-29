@@ -416,6 +416,48 @@ def build_try_this_weekend(scored_data):
     return weekend
 
 
+def build_topic_heatmap(scored_data):
+    """Build topic frequency heatmap by source."""
+    topic_sources = {}
+    source_list = ["github", "huggingface", "youtube", "blogs", "papers"]
+    
+    keywords = [
+        "agent", "claude", "gpt", "ollama", "llama", "mcp", "cursor", "windsurf",
+        "model", "AI", "ML", "local", "rag", "embedding", "vector",
+        "fine-tuning", "benchmark", "reasoning", "function", "tool",
+        "computer use", "multi-modal", "vision", "code", "coding",
+        "dev", "security", "safety", "alignment", " RL",
+    ]
+    
+    for source_type in source_list:
+        source_items = scored_data.get(source_type, [])
+        if not isinstance(source_items, list):
+            continue
+        for keyword in keywords:
+            count = 0
+            for item in source_items:
+                title = (item.get("title", "") + " " + item.get("description", "")).lower()
+                if keyword.lower() in title:
+                    count += 1
+            if count > 0:
+                if keyword not in topic_sources:
+                    topic_sources[keyword] = {src: 0 for src in source_list}
+                topic_sources[keyword][source_type] = count
+    
+    heatmap_data = []
+    for topic, counts in topic_sources.items():
+        total = sum(counts.values())
+        if total >= 2:
+            heatmap_data.append({
+                "topic": topic,
+                "counts": counts,
+                "total": total
+            })
+
+    heatmap_data.sort(key=lambda x: x["total"], reverse=True)
+    return heatmap_data[:12]
+
+
 def build_saved_groups(saved_items):
     """Group saved items into a small action board."""
     groups = []
@@ -658,6 +700,7 @@ def build_dashboard_context():
     top_items = build_top_items(scored_data)
     weekend_items = build_try_this_weekend(scored_data)
     correlations = find_correlations(scored_data)
+    topic_heatmap = build_topic_heatmap(scored_data)
     saved_groups = build_saved_groups(saved_items)
     has_any_data = any(scored_data.get(key) for key, _label in SOURCE_META)
     dashboard_state = build_dashboard_state(
@@ -676,6 +719,7 @@ def build_dashboard_context():
         "blogs": scored_data.get("blogs", []),
         "papers": scored_data.get("papers", []),
         "correlations": correlations,
+        "topic_heatmap": topic_heatmap,
         "feed_items": feed_items[:30],
         "local_items": local_items[:6],
         "saved_items": saved_items,

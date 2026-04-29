@@ -686,6 +686,41 @@
                             </div>
                         </div>
                     </div>
+
+                    {% if topic_heatmap %}
+                    <div class="overview-section full-width">
+                        <h2 class="section-title">Topic Heatmap</h2>
+                        <div class="heatmap-grid">
+                            <table class="heatmap-table">
+                                <thead>
+                                    <tr>
+                                        <th>Topic</th>
+                                        <th>GitHub</th>
+                                        <th>HuggingFace</th>
+                                        <th>YouTube</th>
+                                        <th>Blogs</th>
+                                        <th>Papers</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in topic_heatmap %}
+                                    <tr>
+                                        <td class="heatmap-topic">{{ row.topic }}</td>
+                                        <td class="heatmap-cell" style="background: rgba(59,130,246,{{ row.counts.github / 10 }})">{{ row.counts.github }}</td>
+                                        <td class="heatmap-cell" style="background: rgba(245,158,11,{{ row.counts.huggingface / 10 }})">{{ row.counts.huggingface }}</td>
+                                        <td class="heatmap-cell" style="background: rgba(239,68,68,{{ row.counts.youtube / 10 }})">{{ row.counts.youtube }}</td>
+                                        <td class="heatmap-cell" style="background: rgba(16,185,129,{{ row.counts.blogs / 10 }})">{{ row.counts.blogs }}</td>
+                                        <td class="heatmap-cell" style="background: rgba(139,92,246,{{ row.counts.papers / 10 }})">{{ row.counts.papers }}</td>
+                                        <td class="heatmap-total">{{ row.total }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <div class="trends-charts-grid">
                         <div class="card chart-card">
                             <h3>Source Signal Radar</h3>

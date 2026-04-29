@@ -595,6 +595,43 @@ body {
   color: var(--text-muted);
 }
 
+.heatmap-grid {
+  overflow-x: auto;
+}
+
+.heatmap-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.heatmap-table th,
+.heatmap-table td {
+  padding: 8px 12px;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+
+.heatmap-table th {
+  background: var(--surface);
+  font-weight: 600;
+}
+
+.heatmap-topic {
+  text-align: left;
+  font-weight: 500;
+}
+
+.heatmap-cell {
+  min-width: 50px;
+}
+
+.heatmap-total {
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+}
+
 /* Item Cards */
 .card {
   background: var(--surface);
