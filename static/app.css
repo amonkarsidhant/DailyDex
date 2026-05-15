@@ -1132,16 +1132,72 @@ body {
   border-radius: 0 4px 4px 0;
 }
 
-.card-hook {
-  background: rgba(245, 158, 11, 0.08);
-  border-left: 2px solid var(--warning);
-  padding: 0.6rem 0.8rem;
-  margin: 0.6rem 0;
-  font-size: 0.85rem;
-  font-style: italic;
-  line-height: 1.4;
+.production-forge-area {
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-darker);
+  overflow: hidden;
+}
+
+.forge-label {
+  padding: 0.5rem 0.75rem;
+  background: var(--surface);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--primary-light);
+  border-bottom: 1px solid var(--border);
+}
+
+.forge-tabs {
+  display: flex;
+  background: var(--surface-light);
+  border-bottom: 1px solid var(--border);
+}
+
+.forge-tab-btn {
+  flex: 1;
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.forge-tab-btn:hover {
+  background: rgba(var(--primary-rgb), 0.05);
   color: var(--text);
-  border-radius: 0 4px 4px 0;
+}
+
+.forge-tab-btn.active {
+  background: var(--bg);
+  color: var(--primary-light);
+  font-weight: 600;
+}
+
+.forge-content-area {
+  padding: 0.75rem;
+  min-height: 100px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.forge-pane {
+  display: none;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: var(--text-bright);
+}
+
+.forge-pane.active {
+  display: block;
 }
 
 .card-why-matters, .card-why-me, .card-why-worth {

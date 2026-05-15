@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Agentic Researcher for DailyDex - Recursive Research Edition.
-Uses Gemini CLI to perform multi-stage, deep-dive technical investigations.
+Agentic Researcher for DailyDex - Recursive Research & Production Forge Edition.
+Uses Gemini CLI to perform multi-stage investigations and forge multi-format content.
 """
 
 import os
@@ -46,8 +46,7 @@ class AgenticResearcher:
         print(f"\n[🚀] Launching Recursive Dive: {topic}")
         
         # Stage 1: Lead Extraction & Technical Core
-        # We use the Gemini CLI's built-in research capabilities here
-        print("[1/3] Extracting Technical Leads...")
+        print("[1/4] Extracting Technical Leads...")
         leads_prompt = f"""Perform initial research on '{topic}'. 
 Identify the 'Recursive Leads': 
 1. The primary technical framework/repo.
@@ -58,7 +57,7 @@ Output a summary of these leads."""
         leads = llm_summary.query_llm(leads_prompt, "You are a PhD-level Research Lead. Be technical and concise.")
         
         # Stage 2: Deep Synthesis & Content Strategy
-        print("[2/3] Performing Deep Synthesis via Gemini CLI...")
+        print("[2/4] Performing Deep Synthesis via Gemini CLI...")
         synthesis_prompt = f"""Based on these research leads for '{topic}':
 {leads}
 
@@ -79,25 +78,28 @@ Output MUST be valid JSON."""
 
         brief_json_raw = llm_summary.query_llm(synthesis_prompt, "You are a Senior AI Content Strategist.")
         
-        # Stage 3: Persistence (Research Pack & DB)
-        print("[3/3] Finalizing Research Pack...")
+        # Stage 3: Production Forge (Multi-Format Assets)
+        print("[3/4] Forging Multi-Format Production Assets...")
         if brief_json_raw:
             try:
                 if "{" in brief_json_raw and "}" in brief_json_raw:
                     json_str = brief_json_raw[brief_json_raw.find("{"):brief_json_raw.rfind("}")+1]
                     brief = json.loads(json_str)
                     
-                    # Save Research Pack (Markdown)
-                    self._save_research_pack(topic, leads, brief)
+                    # Forge the assets
+                    research_context = f"LEADS:\n{leads}\n\nSTRATEGIC BRIEF:\n{json.dumps(brief)}"
+                    assets = llm_summary.generate_production_assets(research_context)
                     
-                    # Save Brief to Pipeline (DB)
-                    self._save_brief_to_pipeline(topic, brief)
-                    print(f"[✅] Recursive Dive Complete for {topic}")
+                    # Stage 4: Persistence
+                    print("[4/4] Finalizing Research Pack & Pipeline...")
+                    self._save_research_pack(topic, leads, brief, assets)
+                    self._save_brief_to_pipeline(topic, brief, assets)
+                    print(f"[✅] Recursive Dive & Forge Complete for {topic}")
             except Exception as e:
                 print(f"[!] Recursive Dive Failed for {topic}: {e}")
 
-    def _save_research_pack(self, topic: str, leads: str, brief: Dict):
-        """Save a persistent Markdown research pack."""
+    def _save_research_pack(self, topic: str, leads: str, brief: Dict, assets: Optional[Dict] = None):
+        """Save a persistent Markdown research pack including forged assets."""
         date_slug = datetime.now().strftime("%Y-%m-%d")
         file_slug = topic.lower().replace(" ", "-")
         filename = f"{date_slug}-{file_slug}.md"
@@ -105,7 +107,7 @@ Output MUST be valid JSON."""
         
         content = f"""# Research Pack: {topic}
 **Date:** {datetime.now().strftime('%Y-%m-%d %H:%M')}
-**Status:** Recursive Synthesis Complete
+**Status:** Recursive Synthesis & Forge Complete
 
 ## 🔍 Initial Leads (Stage 1)
 {leads}
@@ -133,11 +135,32 @@ Output MUST be valid JSON."""
 **Thumbnail Concepts:**
 - {chr(10).join(brief.get('thumbnail_visuals', []))}
 """
+        if assets:
+            content += f"""
+## 🛠️ Production Forge (Multi-Format)
+
+### 📹 YouTube Shorts Script
+{assets.get('shorts_script')}
+
+### 🎙️ Podcast Script (Technical Dialogue)
+{assets.get('podcast_script')}
+
+### 🔗 LinkedIn Post
+{assets.get('linkedin_post')}
+
+### ✍️ Technical Blog Outline
+{assets.get('blog_outline')}
+
+### 💻 The Demo Guide
+{assets.get('demo_guide')}
+"""
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
 
-    def _save_brief_to_pipeline(self, topic: str, brief: Dict):
-        """Inject the synthesized brief into the creator pipeline."""
+    def _save_brief_to_pipeline(self, topic: str, brief: Dict, assets: Optional[Dict] = None):
+        """Inject the synthesized brief and assets into the creator pipeline."""
+        notes = f"SHIFT: {brief.get('shift')} | INVERSION: {brief.get('inversion')}"
+        
         item = {
             "title": brief.get("strategic_title", f"Recursive Dive: {topic}"),
             "url": f"https://dailydex.internal/research/{topic.lower().replace(' ', '-')}",
@@ -153,10 +176,19 @@ Output MUST be valid JSON."""
             "format": "Deep Dive Video",
             "outline": json.dumps(brief.get("narrative_beats", [])),
             "thumbnail_text": ", ".join(brief.get("thumbnail_visuals", [])),
-            "notes": f"SHIFT: {brief.get('shift')} | INVERSION: {brief.get('inversion')}",
+            "notes": notes,
             "tags": json.dumps(["recursive", topic.lower()]),
+            "production_assets": json.dumps(assets) if assets else None,
             "created_at": datetime.now().isoformat()
         }
+        
+        if assets:
+            item["short_script"] = assets.get("shorts_script")
+            item["demo_segment"] = assets.get("demo_guide")
+            # We'll prepend some asset previews to notes
+            item["notes"] += f"\n\n[LINKEDIN PREVIEW]: {assets.get('linkedin_post')[:150]}..."
+            item["notes"] += f"\n\n[BLOG OUTLINE]: {assets.get('blog_outline')[:150]}..."
+            
         self.db.save_item(item)
 
 if __name__ == "__main__":

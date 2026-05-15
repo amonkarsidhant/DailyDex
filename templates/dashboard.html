@@ -689,6 +689,26 @@
                                         <input class="saved-input creator-priority-input" type="text" placeholder="Priority" value="{{ item.priority or '' }}">
                                         <input class="saved-input creator-published-input" type="text" placeholder="Published URL" value="{{ item.published_url or '' }}">
                                         <textarea class="saved-textarea creator-notes-input" placeholder="Notes">{{ item.notes }}</textarea>
+                                        
+                                        {% if item.production_assets %}
+                                        <div class="production-forge-area">
+                                            <div class="forge-label">🛠️ Production Forge</div>
+                                            <div class="forge-tabs">
+                                                <button class="forge-tab-btn active" onclick="switchForgeTab(this, 'shorts')">Shorts</button>
+                                                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'podcast')">Podcast</button>
+                                                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'linkedin')">LinkedIn</button>
+                                                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'blog')">Blog</button>
+                                                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'demo')">Demo</button>
+                                            </div>
+                                            <div class="forge-content-area">
+                                                <div class="forge-pane shorts active">{{ item.production_assets.shorts_script }}</div>
+                                                <div class="forge-pane podcast">{{ item.production_assets.podcast_script }}</div>
+                                                <div class="forge-pane linkedin">{{ item.production_assets.linkedin_post }}</div>
+                                                <div class="forge-pane blog">{{ item.production_assets.blog_outline }}</div>
+                                                <div class="forge-pane demo">{{ item.production_assets.demo_guide }}</div>
+                                            </div>
+                                        </div>
+                                        {% endif %}
                                     </div>
                                     <div class="saved-actions">
                                         <button class="btn btn-small" onclick="updateCreatorItem({{ item.id }}, this.closest('.creator-saved-card'))">Save</button>

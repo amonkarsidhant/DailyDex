@@ -1657,3 +1657,16 @@ function showShortcuts() {
     }
     modal.style.display = 'flex';
 }
+
+function switchForgeTab(btn, type) {
+    const card = btn.closest('.production-forge-area');
+    const tabs = card.querySelectorAll('.forge-tab-btn');
+    const panes = card.querySelectorAll('.forge-pane');
+    
+    tabs.forEach(t => t.classList.remove('active'));
+    panes.forEach(p => p.classList.remove('active'));
+    
+    btn.classList.add('active');
+    const activePane = card.querySelector('.forge-pane.' + type);
+    if (activePane) activePane.classList.add('active');
+}

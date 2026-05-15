@@ -372,6 +372,22 @@ class IntelligenceDB:
                     item["outline"] = [item["outline"]]
             else:
                 item["outline"] = []
+
+            if item.get("production_assets"):
+                try:
+                    item["production_assets"] = json.loads(item["production_assets"])
+                except Exception:
+                    item["production_assets"] = {}
+            else:
+                item["production_assets"] = {}
+                
+            if item.get("three_beat_structure"):
+                try:
+                    item["three_beat_structure"] = json.loads(item["three_beat_structure"])
+                except Exception:
+                    item["three_beat_structure"] = [item["three_beat_structure"]]
+            else:
+                item["three_beat_structure"] = []
             items.append(item)
         
         return items
