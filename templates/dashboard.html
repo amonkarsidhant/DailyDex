@@ -54,6 +54,10 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M7 12h10"></path><path d="M10 18h4"></path></svg>
                     Content Pipeline
                 </button>
+                <button class="nav-btn" data-tab="forge-studio" id="nav-forge-studio">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+                    Forge Studio
+                </button>
                 <button class="nav-btn" data-tab="settings" id="nav-settings">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                     Settings
@@ -700,7 +704,10 @@
                                         
                                         {% if item.production_assets %}
                                         <div class="production-forge-area">
-                                            <div class="forge-label">🛠️ Production Forge</div>
+                                            <div class="forge-label">
+                                                🛠️ Production Forge
+                                                <button class="btn btn-tiny btn-primary" style="float: right; font-size: 0.6rem; padding: 2px 4px;" onclick="openItemInStudio({{ item.id }})">Open in Studio</button>
+                                            </div>
                                             <div class="forge-tabs">
                                                 <button class="forge-tab-btn active" onclick="switchForgeTab(this, 'shorts')">Shorts</button>
                                                 <button class="forge-tab-btn" onclick="switchForgeTab(this, 'podcast')">Podcast</button>
@@ -1229,6 +1236,72 @@
                 </div>
 
                 <!-- Settings Tab -->
+                <!-- Forge Studio Tab -->
+                <div id="forge-studio" class="section" data-title="Forge Studio">
+                    <div class="section-header">
+                        <h2 class="section-title">🛠️ Forge Studio</h2>
+                        <div class="section-tools">
+                            <button class="btn btn-small" onclick="refreshForgeStudio()">Refresh</button>
+                        </div>
+                    </div>
+                    
+                    <div class="forge-studio-container">
+                        <div class="forge-sidebar">
+                            <h3 class="forge-sidebar-title">Research Pipeline</h3>
+                            <div class="forge-item-list" id="forge-item-list">
+                                <!-- Populated by JS -->
+                                <div class="empty-state">No forged items ready.</div>
+                            </div>
+                        </div>
+                        
+                        <div class="forge-main" id="forge-main-empty">
+                            <div class="forge-empty-state">
+                                <div class="forge-empty-icon">⚒️</div>
+                                <h3>Select an item to enter the Studio</h3>
+                                <p>Items promoted to 'Script Ready' with forged assets will appear here.</p>
+                            </div>
+                        </div>
+
+                        <div class="forge-main" id="forge-main-content" style="display: none;">
+                            <div class="forge-workspace-header">
+                                <div class="forge-active-title" id="forge-active-title">Strategic Synthesis</div>
+                                <div class="forge-active-meta" id="forge-active-meta">Recursive Dive • May 2026</div>
+                            </div>
+
+                            <div class="forge-workspace-layout">
+                                <div class="forge-asset-selector">
+                                    <button class="forge-asset-btn active" onclick="switchStudioAsset('shorts')">📹 YouTube Shorts</button>
+                                    <button class="forge-asset-btn" onclick="switchStudioAsset('podcast')">🎙️ Podcast Script</button>
+                                    <button class="forge-asset-btn" onclick="switchStudioAsset('linkedin')">🔗 LinkedIn Post</button>
+                                    <button class="forge-asset-btn" onclick="switchStudioAsset('blog')">✍️ Technical Blog</button>
+                                    <button class="forge-asset-btn" onclick="switchStudioAsset('demo')">💻 Demo Guide</button>
+                                </div>
+
+                                <div class="forge-editor-container">
+                                    <div class="forge-editor-toolbar">
+                                        <span id="forge-asset-label">Shorts Script</span>
+                                        <button class="btn btn-small btn-primary" onclick="copyStudioAsset()">Copy to Clipboard</button>
+                                    </div>
+                                    <div class="forge-editor-content" id="forge-editor-content" contenteditable="true">
+                                        <!-- Asset content here -->
+                                    </div>
+                                </div>
+
+                                <div class="forge-context-sidebar">
+                                    <div class="forge-context-box">
+                                        <h4>Strategic Leads</h4>
+                                        <div class="forge-context-text" id="forge-context-leads">Loading...</div>
+                                    </div>
+                                    <div class="forge-context-box">
+                                        <h4>Munger Inversion</h4>
+                                        <div class="forge-context-text" id="forge-context-inversion">Loading...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="settings" class="section">
                     <div class="section-header">
                         <h2 class="section-title">Settings</h2>

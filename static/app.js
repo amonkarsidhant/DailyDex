@@ -1235,6 +1235,10 @@ function showTab(tabId, btn, updateHash) {
             if (typeof initTrendsCharts === 'function') {
                 requestAnimationFrame(function() { initTrendsCharts(); });
             }
+        } else if (tabId === 'forge-studio') {
+            if (typeof refreshForgeStudio === 'function') {
+                refreshForgeStudio();
+            }
         } else {
             if (typeof resizeVisibleCharts === 'function') {
                 requestAnimationFrame(function() { resizeVisibleCharts(); });
@@ -1857,4 +1861,120 @@ function switchForgeTab(btn, type) {
     btn.classList.add('active');
     const activePane = card.querySelector('.forge-pane.' + type);
     if (activePane) activePane.classList.add('active');
+}
+
+let activeForgeItem = null;
+let activeForgeAssetType = 'shorts';
+
+async function refreshForgeStudio() {
+    const list = document.getElementById('forge-item-list');
+    list.innerHTML = '<div class="loading">Syncing Pipeline...</div>';
+    
+    try {
+        const res = await fetch('/api/saved?status=script_ready');
+        const data = await res.json();
+        const items = (data.items || []).filter(i => i.production_status === 'ready' || i.production_assets);
+        
+        if (items.length === 0) {
+            list.innerHTML = '<div class="empty-state">No forged items ready.</div>';
+            return;
+        }
+        
+        list.innerHTML = '';
+        items.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'forge-item-card';
+            if (activeForgeItem && activeForgeItem.id === item.id) card.classList.add('active');
+            card.onclick = () => selectForgeItem(item);
+            
+            card.innerHTML = `
+                <div class="forge-item-title">${item.working_title || item.title}</div>
+                <div class="forge-item-meta">${item.category} • ${item.source}</div>
+            `;
+            list.appendChild(card);
+        });
+    } catch (e) {
+        list.innerHTML = '<div class="error">Failed to load pipeline.</div>';
+    }
+}
+
+function selectForgeItem(item) {
+    activeForgeItem = item;
+    
+    // Update active class in list
+    document.querySelectorAll('.forge-item-card').forEach(c => {
+        c.classList.remove('active');
+        if (c.querySelector('.forge-item-title').innerText === (item.working_title || item.title)) {
+            c.classList.add('active');
+        }
+    });
+    
+    // Show content
+    document.getElementById('forge-main-empty').style.display = 'none';
+    document.getElementById('forge-main-content').style.display = 'flex';
+    
+    // Update headers
+    document.getElementById('forge-active-title').innerText = item.working_title || item.title;
+    document.getElementById('forge-active-meta').innerText = `${item.category} • ${item.source} • ${item.created_at.split(' ')[0]}`;
+    
+    // Update context
+    document.getElementById('forge-context-leads').innerText = item.notes.split('|')[0] || 'No leads extracted.';
+    document.getElementById('forge-context-inversion').innerText = item.notes.includes('INVERSION:') ? item.notes.split('INVERSION:')[1] : 'No risk analysis available.';
+    
+    // Default to shorts
+    switchStudioAsset('shorts');
+}
+
+function switchStudioAsset(type) {
+    activeForgeAssetType = type;
+    
+    // Update buttons
+    document.querySelectorAll('.forge-asset-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.innerText.toLowerCase().includes(type)) btn.classList.add('active');
+    });
+    
+    // Update label
+    const labels = {
+        'shorts': '📹 YouTube Shorts Script',
+        'podcast': '🎙️ Podcast Dialogue',
+        'linkedin': '🔗 LinkedIn Professional Post',
+        'blog': '✍️ Technical Blog Outline',
+        'demo': '💻 Visual Demo Guide'
+    };
+    document.getElementById('forge-asset-label').innerText = labels[type];
+    
+    // Load content
+    const assets = typeof activeForgeItem.production_assets === 'string' 
+        ? JSON.parse(activeForgeItem.production_assets) 
+        : activeForgeItem.production_assets;
+        
+    const content = assets[type + '_script'] || assets[type + '_post'] || assets[type + '_outline'] || assets[type + '_guide'] || assets[type] || 'Asset not forged for this format.';
+    document.getElementById('forge-editor-content').innerText = content;
+}
+
+function copyStudioAsset() {
+    const text = document.getElementById('forge-editor-content').innerText;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.querySelector('.forge-editor-toolbar .btn');
+        const oldText = btn.innerText;
+        btn.innerText = 'Copied!';
+        btn.classList.add('btn-success');
+        setTimeout(() => {
+            btn.innerText = oldText;
+            btn.classList.remove('btn-success');
+        }, 2000);
+    });
+}
+
+// End of Forge Studio logic
+
+window.selectForgeItem = selectForgeItem;
+
+async function openItemInStudio(itemId) {
+    showTab('forge-studio');
+    const res = await fetch('/api/saved?status=script_ready');
+    const data = await res.json();
+    const item = (data.items || []).find(i => i.id === itemId);
+    if (item) selectForgeItem(item);
 }
