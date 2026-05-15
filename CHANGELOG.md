@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.10 (unreleased) — Creator Enrichment Pipeline
+
+- replaced templated creator-pack stubs with a real Gemini CLI pipeline that runs asynchronously off the request path
+- added a `creator_assets` SQLite table that caches the full creator pack per item, keyed by content hash
+- introduced `creator_enricher.EnrichmentService`: in-process worker, dedupe queue, status reporting, and a blocking `ensure_pack` helper for the agentic flow
+- rewrote `llm_summary` to return one structured JSON pack per item (hook, beats, script, titles, thumbnails, b-roll, on-screen cues) with schema validation, banned-phrase stripping, and retry on parse failure
+- added `config/creator_profile.json` for brand voice, length rules, signature angles, and automation thresholds
+- extended `agentic_researcher.recursive_dive` to return a strategic brief and wired it into a cluster-level promotion pipeline (`run_cluster_pipeline`) that saves to the creator pipeline and optionally fires the Production Forge
+- new routes: `POST /api/enrich`, `GET /api/enrich-status`, `GET /api/enrich/<hash>`, `POST /api/forge/<id>`, `GET /api/forge-status/<id>`, `POST /api/agentic-run`
+- new UI: enrichment badge per opportunity card, header queue pill, Forge button with live tab updates, auto-refreshing badges
+- Dockerfile installs `@google/gemini-cli` (skip with `--build-arg DAILYDEX_SKIP_GEMINI=1`) and defaults to a single Gunicorn worker so the enrichment thread isn't duplicated
+- removed unused legacy `dashboard.py`
+- added `test_creator_enrichment.py` exercising the pipeline with a fake LLM
+
 ## v0.9
 
 - added DailyDex Creator as a dedicated creator-intelligence variant

@@ -253,6 +253,59 @@ flowchart LR
 - `DELETE /api/track/<id>` - remove tracked topic
 - `GET /api/digest` - build today's Markdown digest
 
+### Creator enrichment endpoints
+
+- `POST /api/enrich` - enqueue one item for Gemini creator-pack generation
+- `GET /api/enrich-status` - queue depth, worker state, provider label
+- `GET /api/enrich/<content_hash>` - fetch the cached creator pack
+- `POST /api/forge/<saved_id>` - generate multi-format Production Forge assets
+- `GET /api/forge-status/<saved_id>` - poll forge progress + result
+- `POST /api/agentic-run` - kick off the cluster-level agentic pipeline
+
+## Creator Enrichment Pipeline
+
+DailyDex turns scored AI items into real creator briefs by calling the **Gemini CLI** in
+the background. The pipeline is cache-first so the dashboard stays responsive on a
+Raspberry Pi 4:
+
+1. Scoring runs as usual and produces deterministic baselines for every item.
+2. Top items are enqueued to `creator_enricher.EnrichmentService`, which runs one
+   Gemini subprocess at a time and writes the full creator pack
+   (hook, beats, script, titles, thumbnails, b-roll, on-screen cues) to the
+   `creator_assets` SQLite table keyed by a content hash.
+3. The template merges cached LLM output on top of the baseline. Cards show an
+   `LLM ✓` / `Queued` / `Draft` badge so it is obvious what is real synthesis vs.
+   placeholder.
+4. The agentic runner (`/api/agentic-run`) walks **topic clusters** through the
+   same cache + a two-stage Gemini "recursive dive", saves the qualifying ones
+   into the creator pipeline at `idea` or `script_ready`, and (above a score
+   threshold) automatically fires the **Production Forge** to generate Shorts,
+   Podcast, LinkedIn, Blog, and Demo assets.
+
+### Brand voice configuration
+
+Tune the writer by editing `config/creator_profile.json`:
+
+- `tone`, `audience`, `niche`, `perspective` - identity injected into every prompt.
+- `banned_phrases`, `preferred_words` - hard guardrails.
+- `format_rules` - title length, hook length, thumbnail word count, short-script seconds.
+- `signature_angles` - recurring framing hooks specific to the channel.
+- `automation` - cluster thresholds: `auto_research_cluster_score`,
+  `auto_script_ready_score`, `auto_forge_score`, `max_auto_promotions_per_day`,
+  `enrichment_wait_seconds`.
+
+### Pi 4 deployment notes
+
+- The Docker image installs `@google/gemini-cli`. Build with
+  `--build-arg DAILYDEX_SKIP_GEMINI=1` if you want to run an Ollama fallback
+  (`LLM_PROVIDER=ollama`, `OLLAMA_MODEL=phi3:mini`).
+- The enricher runs as a daemon thread inside the Flask process, so the image
+  defaults to `GUNICORN_WORKERS=1`. If you scale workers, set
+  `CREATOR_ENRICHER_PRIMARY=0` on every replica except one to avoid duplicate
+  subprocess calls and a divergent queue.
+- Configurable env vars: `GEMINI_BIN`, `GEMINI_MODEL`, `GEMINI_TIMEOUT`,
+  `CREATOR_ENRICH_DAILY_LIMIT`, `CREATOR_PROFILE_PATH`, `LLM_PROVIDER`.
+
 ## Development
 
 ### Run tests

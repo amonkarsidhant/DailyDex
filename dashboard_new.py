@@ -77,7 +77,13 @@ else:
 try:
     from creator_enricher import EnrichmentService, content_hash as creator_content_hash
     enrichment_service = EnrichmentService(intel_db)
-    enrichment_service.start()
+    # Multi-worker deployments (e.g. gunicorn -w N>1) must designate one worker
+    # as primary to avoid spawning N independent enricher threads that all try
+    # to dequeue the same hash and run duplicate Gemini subprocesses.
+    if os.environ.get("CREATOR_ENRICHER_PRIMARY", "1") == "1":
+        enrichment_service.start()
+    else:
+        print("Creator enrichment worker is in standby mode (CREATOR_ENRICHER_PRIMARY=0).")
 except Exception as e:
     print(f"Warning: Could not start creator enrichment worker: {e}")
     enrichment_service = None
@@ -226,13 +232,24 @@ def load_scored_data(force: bool = False):
         return raw_data
 
 
+_enrichment_last_version = {"value": None}
+
+
 def _maybe_enqueue_enrichment(scored_data):
-    """Schedule top items for background LLM enrichment, if worker is running."""
+    """Schedule top items for background LLM enrichment, if worker is running.
+
+    Throttled per scored-data version: avoids re-enqueueing on every page load
+    when the underlying source data hasn't changed.
+    """
     if enrichment_service is None:
+        return
+    version = scored_data.get("last_updated") if isinstance(scored_data, dict) else None
+    if version and _enrichment_last_version["value"] == version:
         return
     try:
         top = _top_items_for_enrichment(scored_data, limit=20)
         enrichment_service.enqueue_batch(top, limit=20)
+        _enrichment_last_version["value"] = version
     except Exception as exc:
         print(f"Enrichment enqueue skipped: {exc}")
 
