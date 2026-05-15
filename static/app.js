@@ -1445,6 +1445,91 @@ function buildResearchPack(item, btn) {
     });
 }
 
+function requestEnrichment(item, btn) {
+    setButtonLoading(btn, true);
+    fetch('/api/enrich', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ ...item, force: true }),
+    }).then(r => r.json()).then(d => {
+        if (d.queued) {
+            setButtonLoading(btn, false, 'Queued');
+            showToast('Enrichment queued', 'LLM creator pack will appear shortly.', 'success');
+            startEnrichmentPolling();
+        } else {
+            setButtonLoading(btn, false);
+            const reason = d.reason || 'unknown';
+            showToast('Not queued', `Reason: ${reason}.`, 'info');
+        }
+    }).catch(() => {
+        setButtonLoading(btn, false);
+        showToast('Error', 'Network error. Please try again.', 'error');
+    });
+}
+
+let enrichmentPollTimer = null;
+
+function startEnrichmentPolling() {
+    if (enrichmentPollTimer) return;
+    enrichmentPollTimer = setInterval(() => {
+        fetch('/api/enrich-status').then(r => r.json()).then(d => {
+            const el = document.getElementById('enrichment-status-pill');
+            if (el) {
+                const queued = d.queued || 0;
+                const inflight = d.in_flight || 0;
+                const ready = (d.cache_counts && d.cache_counts.ready) || 0;
+                el.textContent = `LLM: ${ready} ready / ${queued + inflight} pending`;
+                el.dataset.state = (queued + inflight) > 0 ? 'working' : 'idle';
+            }
+            if ((d.queued || 0) === 0 && (d.in_flight || 0) === 0) {
+                clearInterval(enrichmentPollTimer);
+                enrichmentPollTimer = null;
+            }
+        }).catch(() => {});
+    }, 4000);
+}
+
+function forgeProductionAssets(itemId, btn) {
+    setButtonLoading(btn, true);
+    fetch(`/api/forge/${itemId}`, { method: 'POST' }).then(r => r.json()).then(d => {
+        if (d.ok) {
+            setButtonLoading(btn, false, 'Forging…');
+            showToast('Forge started', 'Multi-format assets will appear in a moment.', 'success');
+            pollForgeStatus(itemId, btn);
+        } else {
+            setButtonLoading(btn, false);
+            showToast('Forge error', d.error || 'Could not start forge.', 'error');
+        }
+    }).catch(() => {
+        setButtonLoading(btn, false);
+        showToast('Error', 'Network error. Please try again.', 'error');
+    });
+}
+
+function pollForgeStatus(itemId, btn) {
+    let attempts = 0;
+    const max = 30;
+    const timer = setInterval(() => {
+        attempts += 1;
+        fetch(`/api/forge-status/${itemId}`).then(r => r.json()).then(d => {
+            const status = d.status || 'none';
+            if (status === 'ready') {
+                clearInterval(timer);
+                setButtonLoading(btn, false, 'Forged');
+                showToast('Production assets ready', 'Reload the card to see all 5 formats.', 'success');
+            } else if (status === 'failed') {
+                clearInterval(timer);
+                setButtonLoading(btn, false);
+                showToast('Forge failed', 'See server logs for details.', 'error');
+            } else if (attempts >= max) {
+                clearInterval(timer);
+                setButtonLoading(btn, false);
+                showToast('Forge still running', 'Reload later to see results.', 'info');
+            }
+        }).catch(() => {});
+    }, 4000);
+}
+
 function ignoreItem(item, btn) {
     setButtonLoading(btn, true);
     

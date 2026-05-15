@@ -72,6 +72,9 @@ class IntelligenceDB:
             "thumbnail_text": "TEXT",
             "priority": "TEXT",
             "published_url": "TEXT",
+            "production_assets": "TEXT",
+            "production_status": "TEXT DEFAULT 'none'",
+            "content_hash": "TEXT",
         }
         for column, definition in creator_columns.items():
             if column not in existing_columns:
@@ -153,12 +156,118 @@ class IntelligenceDB:
 
         # Unique index on seen_items.url
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_seen_items_url ON seen_items(url)")
-        
+
         # Unique index on saved_items.url for deduplication
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_items_url ON saved_items(url)")
-        
+
+        # Cached LLM creator enrichment, keyed by content hash
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS creator_assets (
+                content_hash TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL,
+                model TEXT,
+                schema_version INTEGER DEFAULT 1,
+                status TEXT DEFAULT 'ready',
+                error TEXT,
+                source_title TEXT,
+                source_url TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_creator_assets_status ON creator_assets(status)")
+
         conn.commit()
         conn.close()
+
+    # ---- creator_assets helpers ----
+
+    def get_creator_asset(self, content_hash: str) -> Optional[Dict]:
+        if not content_hash:
+            return None
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM creator_assets WHERE content_hash = ?", (content_hash,))
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return None
+        out = dict(row)
+        try:
+            out["payload"] = json.loads(out.get("payload_json") or "{}")
+        except Exception:
+            out["payload"] = {}
+        return out
+
+    def upsert_creator_asset(self, content_hash: str, payload: Dict, model: str = "", status: str = "ready", error: str = "", source_title: str = "", source_url: str = "", schema_version: int = 1) -> None:
+        if not content_hash:
+            return
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        cursor.execute("""
+            INSERT INTO creator_assets (content_hash, payload_json, model, schema_version, status, error, source_title, source_url, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(content_hash) DO UPDATE SET
+                payload_json = excluded.payload_json,
+                model = excluded.model,
+                schema_version = excluded.schema_version,
+                status = excluded.status,
+                error = excluded.error,
+                source_title = excluded.source_title,
+                source_url = excluded.source_url,
+                updated_at = excluded.updated_at
+        """, (content_hash, json.dumps(payload or {}), model, schema_version, status, error, source_title, source_url, now, now))
+        conn.commit()
+        conn.close()
+
+    def mark_creator_asset_status(self, content_hash: str, status: str, error: str = "") -> None:
+        if not content_hash:
+            return
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        cursor.execute("""
+            INSERT INTO creator_assets (content_hash, payload_json, status, error, updated_at)
+            VALUES (?, '{}', ?, ?, ?)
+            ON CONFLICT(content_hash) DO UPDATE SET
+                status = excluded.status,
+                error = excluded.error,
+                updated_at = excluded.updated_at
+        """, (content_hash, status, error, now))
+        conn.commit()
+        conn.close()
+
+    def creator_assets_stats(self) -> Dict[str, int]:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT status, COUNT(*) FROM creator_assets GROUP BY status")
+        counts = {row[0]: row[1] for row in cursor.fetchall()}
+        conn.close()
+        return counts
+
+    def set_production_assets(self, item_id: int, assets: Dict, status: str = "ready", error: str = "") -> bool:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE saved_items SET production_assets = ?, production_status = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(assets or {}), status, datetime.now().isoformat(), item_id),
+        )
+        conn.commit()
+        conn.close()
+        return True
+
+    def get_saved_item(self, item_id: int) -> Optional[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM saved_items WHERE id = ?", (item_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return None
+        return dict(row)
 
     def _serialize_value(self, key: str, value):
         """Serialize structured values for SQLite storage."""

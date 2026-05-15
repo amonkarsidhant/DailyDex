@@ -1,0 +1,44 @@
+{
+  "channel_name": "DailyDex Creator",
+  "niche": "Practical AI for indie builders and self-hosters",
+  "audience": "Engineers, hackers, and creators who care about local-first AI, agentic workflows, and shipping real demos on commodity hardware (e.g. Raspberry Pi, mini PCs, single-GPU rigs).",
+  "tone": "Skeptical, hands-on, slightly opinionated. No hype. Prefer concrete demos over abstract claims. Concise, technical, and direct.",
+  "perspective": "First-person from a builder who actually tests things on a Raspberry Pi 4 and is allergic to vapor announcements.",
+  "banned_phrases": [
+    "game changer",
+    "revolutionary",
+    "you won't believe",
+    "AI is taking over",
+    "the future is here",
+    "mind-blowing",
+    "literally",
+    "in this video",
+    "smash that like"
+  ],
+  "preferred_words": [
+    "ship",
+    "test",
+    "self-host",
+    "benchmark",
+    "actually works",
+    "trade-off",
+    "demo",
+    "edge",
+    "local"
+  ],
+  "format_rules": {
+    "title_min_chars": 38,
+    "title_max_chars": 62,
+    "hook_max_chars": 140,
+    "thumbnail_max_words": 4,
+    "short_script_max_seconds": 45,
+    "short_script_min_seconds": 25
+  },
+  "signature_angles": [
+    "Does it actually run on a Pi 4?",
+    "Hype vs. real benchmark",
+    "What changed under the hood",
+    "Smallest model that still works",
+    "Replace a paid SaaS with this open-source thing"
+  ]
+}

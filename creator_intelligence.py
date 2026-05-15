@@ -365,29 +365,48 @@ def _creator_score(factors: Dict) -> int:
 
 
 import llm_summary
+from creator_enricher import content_hash as _content_hash
 
-def enrich_with_llm_intelligence(item: Dict) -> Dict:
-    """Use LLM to generate deep insights, hooks and outlines for high-signal items."""
-    # Only enrich if it has high signal or is specifically requested
-    if item.get("signal_score", 0) < 70 and item.get("creator_score", 0) < 70:
-        return item
-        
-    enrichment = llm_summary.get_item_enrichment(item)
-    
-    # Update item with LLM intelligence
-    item["insight"] = enrichment.get("insight", item.get("insight", ""))
-    item["opening_hook"] = enrichment.get("hooks", [item.get("opening_hook", "")])[0]
-    item["hooks"] = enrichment.get("hooks", [])
-    item["three_key_points"] = enrichment.get("outline", item.get("three_key_points", []))
-    
-    # If it's a very high score, set as idea automatically
-    if item.get("creator_score", 0) >= 85:
-        item["status"] = "idea"
-        item["pipeline_type"] = "creator"
-        
-    return item
 
-def enrich_scored_data_with_creator_fields(scored_data: Dict) -> Dict:
+def _apply_creator_pack(target: Dict, pack: Dict) -> None:
+    """Merge a cached LLM creator pack into an item dict.
+
+    Only overwrites a key when the LLM produced a non-empty value so that
+    deterministic fallbacks (titles, thumbnails) remain visible until the
+    real pack arrives.
+    """
+    if not pack:
+        return
+    string_fields = (
+        "opening_hook", "hook_line", "intro_context", "demo_segment",
+        "caveats", "closing_takeaway", "call_to_action", "short_script",
+        "visual_idea", "cta", "insight",
+    )
+    list_fields = (
+        "three_key_points", "three_beat_structure", "hooks", "tags",
+        "thumbnail_text", "broll_list", "on_screen_cues",
+    )
+    if pack.get("hook"):
+        target["opening_hook"] = pack["hook"]
+        target["hook_line"] = pack.get("hook_line") or pack["hook"]
+    for key in string_fields:
+        value = pack.get(key)
+        if value:
+            target[key] = value
+    for key in list_fields:
+        value = pack.get(key)
+        if value:
+            target[key] = value
+    titles = pack.get("suggested_titles") or {}
+    if any(titles.values()):
+        merged = dict(target.get("suggested_titles") or {})
+        for k, v in titles.items():
+            if v:
+                merged[k] = v
+        target["suggested_titles"] = merged
+
+
+def enrich_scored_data_with_creator_fields(scored_data: Dict, intel_db=None) -> Dict:
     """Add creator metadata to every scored item."""
     support_map = {}
     for cluster in build_topic_clusters(scored_data):
@@ -413,10 +432,22 @@ def enrich_scored_data_with_creator_fields(scored_data: Dict) -> Dict:
                 "signal_score": item.get("signal_score", 0),
                 "creator_score": creator_score,
             }]
-            # Only populate these if we have real LLM data (now handled in digest_generator)
-            # Otherwise, keep them empty to avoid "dumb" template content
-            enriched_items.append({
+            # Deterministic baseline so the UI always renders something.
+            # Real LLM output is layered on top via _apply_creator_pack below.
+            sibling_titles = [
+                row.get("title", "")
+                for row in support.get("related_items", [])
+                if row.get("title")
+            ][:5]
+            hash_ = _content_hash(item)
+            enrichment_status = "unenriched"
+            enrichment_model = ""
+            enrichment_error = ""
+
+            enriched = {
                 **item,
+                "content_hash": hash_,
+                "cluster_sibling_titles": sibling_titles,
                 "creator_topic": topic,
                 "creator_score": creator_score,
                 "creator_score_breakdown": factors,
@@ -428,21 +459,41 @@ def enrich_scored_data_with_creator_fields(scored_data: Dict) -> Dict:
                 "demo_idea": _demo_idea(item, topic, source_type),
                 "risks_or_caveats": _risks_or_caveats(item, source_type),
                 "recommended_action": _recommended_action(creator_score, effort_label, support),
-                "opening_hook": item.get("opening_hook", ""),
+                "opening_hook": item.get("opening_hook") or hook,
+                "hook_line": item.get("hook_line") or hook,
                 "intro_context": item.get("intro_context", ""),
-                "three_key_points": item.get("three_key_points", []),
+                "three_key_points": item.get("three_key_points", []) or _outline_points(topic, item, source_type),
+                "three_beat_structure": item.get("three_beat_structure", []),
                 "demo_segment": item.get("demo_segment", ""),
                 "caveats": item.get("caveats", ""),
                 "closing_takeaway": item.get("closing_takeaway", ""),
                 "call_to_action": item.get("call_to_action", ""),
-                "hook_line": item.get("hook_line", ""),
-                "three_beat_structure": item.get("three_beat_structure", []),
-                "short_script": item.get("short_script", ""),
+                "short_script": item.get("short_script") or _short_script(topic, item),
                 "visual_idea": item.get("visual_idea", ""),
                 "cta": item.get("cta", ""),
                 "suggested_titles": titles,
                 "thumbnail_text": thumbnails,
-            })
+                "broll_list": item.get("broll_list", []),
+                "on_screen_cues": item.get("on_screen_cues", []),
+            }
+
+            if intel_db is not None:
+                try:
+                    cached = intel_db.get_creator_asset(hash_)
+                except Exception:
+                    cached = None
+                if cached:
+                    status = cached.get("status") or "ready"
+                    enrichment_status = status
+                    enrichment_model = cached.get("model") or ""
+                    enrichment_error = cached.get("error") or ""
+                    if status in {"ready", "ready_with_warnings"}:
+                        _apply_creator_pack(enriched, cached.get("payload") or {})
+
+            enriched["enrichment_status"] = enrichment_status
+            enriched["enrichment_model"] = enrichment_model
+            enriched["enrichment_error"] = enrichment_error
+            enriched_items.append(enriched)
         scored_data[source_type] = enriched_items
     return scored_data
 

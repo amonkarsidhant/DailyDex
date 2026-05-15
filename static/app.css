@@ -2466,3 +2466,56 @@ canvas:focus {
     animation: none;
   }
 }
+
+/* ===== Creator enrichment + forge UI ===== */
+.enrichment-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--surface-2, #1f2937);
+  color: var(--text-muted, #9ca3af);
+  border: 1px solid var(--border, #374151);
+  margin-left: 8px;
+  letter-spacing: 0.02em;
+}
+.enrichment-pill[data-state="working"] {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+.enrichment-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: #e5e7eb;
+  color: #4b5563;
+}
+.enrichment-badge.state-ready { background: #d1fae5; color: #065f46; }
+.enrichment-badge.state-ready_with_warnings { background: #fef3c7; color: #92400e; }
+.enrichment-badge.state-queued { background: #dbeafe; color: #1e40af; }
+.enrichment-badge.state-failed { background: #fee2e2; color: #991b1b; }
+.enrichment-badge.state-unenriched { background: #f3f4f6; color: #6b7280; }
+
+.forge-status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-left: 4px;
+  background: #f3f4f6;
+  color: #6b7280;
+}
+.forge-status-pill.state-ready { background: #d1fae5; color: #065f46; }
+.forge-status-pill.state-queued { background: #dbeafe; color: #1e40af; }
+.forge-status-pill.state-failed { background: #fee2e2; color: #991b1b; }

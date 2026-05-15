@@ -140,6 +140,9 @@
                         <span class="live-dot"></span>
                         <span class="live-text">Live</span>
                     </button>
+                    {% if creator_mode %}
+                    <span class="enrichment-pill" id="enrichment-status-pill" data-state="idle" title="Creator-pack LLM enrichment queue">LLM: idle</span>
+                    {% endif %}
                     <div class="last-updated-group">
                         <span class="last-updated-label">Updated</span>
                         <span class="last-updated">{{ last_updated }}</span>
@@ -503,11 +506,15 @@
                     </div>
                     <div class="creator-opportunity-grid">
                         {% for item in creator_opportunities %}
-                        <div class="card creator-opportunity-card creator-action-card search-target" data-search="{{ (item.title ~ ' ' ~ item.topic ~ ' ' ~ item.hook ~ ' ' ~ item.best_format)|lower }}">
+                        <div class="card creator-opportunity-card creator-action-card search-target" data-content-hash="{{ item.content_hash }}" data-enrichment="{{ item.enrichment_status or 'unenriched' }}" data-search="{{ (item.title ~ ' ' ~ item.topic ~ ' ' ~ item.hook ~ ' ' ~ item.best_format)|lower }}">
                             <div class="creator-opportunity-head">
                                 <div>
                                     <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
                                     <span class="creator-topic-pill">{{ item.topic }}</span>
+                                    {% set es = item.enrichment_status or 'unenriched' %}
+                                    <span class="enrichment-badge state-{{ es }}" title="{{ item.enrichment_error or es }}">
+                                        {% if es == 'ready' %}LLM ✓{% elif es == 'ready_with_warnings' %}LLM ~{% elif es == 'queued' %}Queued{% elif es == 'failed' %}LLM ✗{% else %}Draft{% endif %}
+                                    </span>
                                 </div>
                                 <div class="creator-score-pair">
                                     <span class="badge-score {% if item.creator_score >= 80 %}hot{% elif item.creator_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.creator_score }}</span>
@@ -565,6 +572,7 @@
                                 <button class="btn btn-small" onclick='saveCreatorItem({{ item|tojson }}, "idea", this)'>Save as idea</button>
                                 <button class="btn btn-small" onclick='buildResearchPack({{ item|tojson }}, this)'>Build research pack</button>
                                 <button class="btn btn-small" onclick='saveCreatorItem({{ item|tojson }}, "script_ready", this)'>Draft script</button>
+                                <button class="btn btn-small" onclick='requestEnrichment({{ {"url": item.url, "title": item.title, "description": item.hook, "source_type": item.source_type, "creator_topic": item.topic}|tojson }}, this)'>Re-enrich</button>
                                 <button class="btn btn-small action-ignore" onclick='ignoreItem({{ {"url": item.url, "title": item.title, "source_type": item.source_type}|tojson }}, this)'>Ignore</button>
                                 <button class="btn btn-small" onclick='trackItem({{ {"topic": item.topic, "reason": "creator topic: " + item.title}|tojson }}, this)'>Track topic</button>
                             </div>
@@ -712,6 +720,8 @@
                                     </div>
                                     <div class="saved-actions">
                                         <button class="btn btn-small" onclick="updateCreatorItem({{ item.id }}, this.closest('.creator-saved-card'))">Save</button>
+                                        <button class="btn btn-small btn-primary" onclick="forgeProductionAssets({{ item.id }}, this)" title="Generate Shorts / Podcast / LinkedIn / Blog / Demo">Forge assets</button>
+                                        <span class="forge-status-pill state-{{ item.production_status or 'none' }}">{{ item.production_status or 'none' }}</span>
                                         <button class="btn btn-small action-ignore" onclick="deleteItem({{ item.id }}, this)">Remove</button>
                                     </div>
                                 </div>

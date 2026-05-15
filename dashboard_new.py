@@ -74,6 +74,31 @@ else:
     intel_db = None
     intel_json = None
 
+try:
+    from creator_enricher import EnrichmentService, content_hash as creator_content_hash
+    enrichment_service = EnrichmentService(intel_db)
+    enrichment_service.start()
+except Exception as e:
+    print(f"Warning: Could not start creator enrichment worker: {e}")
+    enrichment_service = None
+    creator_content_hash = None
+
+
+def _top_items_for_enrichment(scored_data, limit: int = 20):
+    """Pick the highest-signal items across sources for background enrichment."""
+    pool = []
+    for source_type in ("github", "huggingface", "youtube", "blogs", "papers"):
+        for item in scored_data.get(source_type, []) or []:
+            score = max(
+                int(item.get("signal_score") or 0),
+                int(item.get("creator_score") or 0),
+            )
+            if score < 40:
+                continue
+            pool.append((score, item))
+    pool.sort(key=lambda row: row[0], reverse=True)
+    return [item for _, item in pool[:limit]]
+
 
 def load_data():
     """Load data from JSON file"""
@@ -190,11 +215,26 @@ def load_scored_data(force: bool = False):
             with open(SCORED_DATA_FILE, encoding="utf-8") as f:
                 scored = json.load(f)
             if scored.get("last_updated") == raw_data.get("last_updated"):
-                return enrich_scored_data_with_creator_fields(scored)
-        return enrich_scored_data_with_creator_fields(generate_scored_data(raw_data))
+                enriched = enrich_scored_data_with_creator_fields(scored, intel_db=intel_db)
+                _maybe_enqueue_enrichment(enriched)
+                return enriched
+        enriched = enrich_scored_data_with_creator_fields(generate_scored_data(raw_data), intel_db=intel_db)
+        _maybe_enqueue_enrichment(enriched)
+        return enriched
     except Exception as e:
         print(f"Error generating scored data: {e}")
         return raw_data
+
+
+def _maybe_enqueue_enrichment(scored_data):
+    """Schedule top items for background LLM enrichment, if worker is running."""
+    if enrichment_service is None:
+        return
+    try:
+        top = _top_items_for_enrichment(scored_data, limit=20)
+        enrichment_service.enqueue_batch(top, limit=20)
+    except Exception as exc:
+        print(f"Enrichment enqueue skipped: {exc}")
 
 
 def filter_ignored_items(items, ignored_urls):
@@ -1241,6 +1281,105 @@ def api_creator_digest():
         })
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/enrich-status", methods=["GET"])
+def api_enrich_status():
+    if enrichment_service is None:
+        return jsonify({"enabled": False})
+    payload = enrichment_service.status()
+    payload["enabled"] = True
+    return jsonify(payload)
+
+
+@app.route("/api/enrich", methods=["POST"])
+def api_enrich():
+    """Enqueue a single item for creator-pack enrichment."""
+    if enrichment_service is None:
+        return jsonify({"error": "enrichment_disabled"}), 503
+    item = request.get_json(silent=True) or {}
+    if not item.get("url") and not item.get("title"):
+        return jsonify({"error": "missing url or title"}), 400
+    result = enrichment_service.enqueue(item, force=bool(item.get("force")))
+    return jsonify(result)
+
+
+@app.route("/api/enrich/<content_hash>", methods=["GET"])
+def api_enrich_get(content_hash):
+    """Return the cached creator pack for a content hash, if any."""
+    if intel_db is None:
+        return jsonify({"error": "no_db"}), 503
+    cached = intel_db.get_creator_asset(content_hash)
+    if not cached:
+        return jsonify({"status": "missing"}), 404
+    return jsonify({
+        "status": cached.get("status"),
+        "model": cached.get("model"),
+        "error": cached.get("error"),
+        "payload": cached.get("payload"),
+        "updated_at": cached.get("updated_at"),
+    })
+
+
+@app.route("/api/forge/<int:item_id>", methods=["POST"])
+def api_forge(item_id):
+    """Generate Production Forge multi-format assets for a saved item."""
+    if enrichment_service is None or intel_db is None:
+        return jsonify({"error": "forge_disabled"}), 503
+    item = intel_db.get_saved_item(item_id)
+    if not item:
+        return jsonify({"error": "not_found"}), 404
+
+    payload_lines = [
+        f"Title: {item.get('working_title') or item.get('title') or ''}",
+        f"Hook: {item.get('hook') or ''}",
+        f"Format: {item.get('format') or ''}",
+        f"Notes: {item.get('notes') or ''}",
+    ]
+    outline = item.get("outline")
+    if isinstance(outline, str):
+        try:
+            outline = json.loads(outline)
+        except Exception:
+            outline = [outline]
+    if isinstance(outline, list) and outline:
+        payload_lines.append("Outline:")
+        payload_lines.extend([f"- {line}" for line in outline if line])
+
+    content_hash_val = item.get("content_hash")
+    if content_hash_val:
+        cached = intel_db.get_creator_asset(content_hash_val)
+        if cached and cached.get("payload"):
+            pack = cached["payload"]
+            payload_lines.extend([
+                f"Insight: {pack.get('insight', '')}",
+                f"Demo segment: {pack.get('demo_segment', '')}",
+                f"Caveats: {pack.get('caveats', '')}",
+            ])
+
+    research_data = "\n".join(line for line in payload_lines if line.strip())
+    result = enrichment_service.forge_saved(item_id, research_data)
+    return jsonify(result)
+
+
+@app.route("/api/forge-status/<int:item_id>", methods=["GET"])
+def api_forge_status(item_id):
+    if intel_db is None:
+        return jsonify({"error": "no_db"}), 503
+    item = intel_db.get_saved_item(item_id)
+    if not item:
+        return jsonify({"error": "not_found"}), 404
+    assets = item.get("production_assets")
+    if isinstance(assets, str):
+        try:
+            assets = json.loads(assets)
+        except Exception:
+            assets = {}
+    return jsonify({
+        "status": item.get("production_status") or "none",
+        "assets": assets or {},
+        "updated_at": item.get("updated_at"),
+    })
 
 
 if __name__ == "__main__":
