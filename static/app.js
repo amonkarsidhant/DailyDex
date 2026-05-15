@@ -1469,6 +1469,53 @@ function requestEnrichment(item, btn) {
 
 let enrichmentPollTimer = null;
 
+const ENRICHMENT_BADGE_LABELS = {
+    ready: 'LLM ✓',
+    ready_with_warnings: 'LLM ~',
+    queued: 'Queued',
+    failed: 'LLM ✗',
+    unenriched: 'Draft',
+};
+
+function refreshEnrichmentBadge(card) {
+    const hash = card.dataset.contentHash;
+    if (!hash) return Promise.resolve();
+    return fetch(`/api/enrich/${hash}`).then(r => {
+        if (!r.ok) return null;
+        return r.json();
+    }).then(d => {
+        if (!d) return;
+        const status = d.status || 'unenriched';
+        const badge = card.querySelector('.enrichment-badge');
+        if (badge) {
+            badge.className = `enrichment-badge state-${status}`;
+            badge.textContent = ENRICHMENT_BADGE_LABELS[status] || status;
+            badge.setAttribute('title', d.error || status);
+        }
+        card.dataset.enrichment = status;
+        if (status === 'ready' || status === 'ready_with_warnings') {
+            // Replace inline hook + title text from the fresh pack so the user
+            // sees real LLM output without needing a manual reload.
+            const pack = d.payload || {};
+            const hookEl = card.querySelector('.creator-hook');
+            if (hookEl && pack.hook) hookEl.textContent = pack.hook;
+            const titleEl = card.querySelector('h3');
+            if (titleEl && pack.suggested_titles && pack.suggested_titles.practical) {
+                titleEl.textContent = pack.suggested_titles.practical;
+            }
+        }
+    }).catch(() => {});
+}
+
+function refreshStaleEnrichmentBadges() {
+    const cards = document.querySelectorAll('.creator-opportunity-card[data-content-hash]');
+    cards.forEach(card => {
+        const state = card.dataset.enrichment || 'unenriched';
+        if (state === 'ready' || state === 'ready_with_warnings') return;
+        refreshEnrichmentBadge(card);
+    });
+}
+
 function startEnrichmentPolling() {
     if (enrichmentPollTimer) return;
     enrichmentPollTimer = setInterval(() => {
@@ -1481,6 +1528,7 @@ function startEnrichmentPolling() {
                 el.textContent = `LLM: ${ready} ready / ${queued + inflight} pending`;
                 el.dataset.state = (queued + inflight) > 0 ? 'working' : 'idle';
             }
+            refreshStaleEnrichmentBadges();
             if ((d.queued || 0) === 0 && (d.in_flight || 0) === 0) {
                 clearInterval(enrichmentPollTimer);
                 enrichmentPollTimer = null;
@@ -1488,6 +1536,12 @@ function startEnrichmentPolling() {
         }).catch(() => {});
     }, 4000);
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (document.querySelector('.creator-opportunity-card[data-content-hash][data-enrichment="queued"]')) {
+        startEnrichmentPolling();
+    }
+});
 
 function forgeProductionAssets(itemId, btn) {
     setButtonLoading(btn, true);
@@ -1506,17 +1560,66 @@ function forgeProductionAssets(itemId, btn) {
     });
 }
 
+const FORGE_PANE_KEYS = {
+    shorts: 'shorts_script',
+    podcast: 'podcast_script',
+    linkedin: 'linkedin_post',
+    blog: 'blog_outline',
+    demo: 'demo_guide',
+};
+
+function applyForgeAssets(card, assets) {
+    if (!card || !assets) return;
+    let forgeArea = card.querySelector('.production-forge-area');
+    if (!forgeArea) {
+        // Build the missing forge area in-place so a freshly-forged item
+        // doesn't require a page reload to show the new tabs.
+        const editor = card.querySelector('.saved-editor');
+        if (!editor) return;
+        forgeArea = document.createElement('div');
+        forgeArea.className = 'production-forge-area';
+        forgeArea.innerHTML = `
+            <div class="forge-label">🛠️ Production Forge</div>
+            <div class="forge-tabs">
+                <button class="forge-tab-btn active" onclick="switchForgeTab(this, 'shorts')">Shorts</button>
+                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'podcast')">Podcast</button>
+                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'linkedin')">LinkedIn</button>
+                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'blog')">Blog</button>
+                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'demo')">Demo</button>
+            </div>
+            <div class="forge-content-area">
+                <div class="forge-pane shorts active"></div>
+                <div class="forge-pane podcast"></div>
+                <div class="forge-pane linkedin"></div>
+                <div class="forge-pane blog"></div>
+                <div class="forge-pane demo"></div>
+            </div>`;
+        editor.appendChild(forgeArea);
+    }
+    Object.entries(FORGE_PANE_KEYS).forEach(([pane, key]) => {
+        const target = forgeArea.querySelector(`.forge-pane.${pane}`);
+        if (target) target.textContent = assets[key] || '';
+    });
+}
+
 function pollForgeStatus(itemId, btn) {
+    const card = btn ? btn.closest('.creator-saved-card') : null;
     let attempts = 0;
     const max = 30;
     const timer = setInterval(() => {
         attempts += 1;
         fetch(`/api/forge-status/${itemId}`).then(r => r.json()).then(d => {
             const status = d.status || 'none';
+            const pill = card ? card.querySelector('.forge-status-pill') : null;
+            if (pill) {
+                pill.className = `forge-status-pill state-${status}`;
+                pill.textContent = status;
+            }
             if (status === 'ready') {
                 clearInterval(timer);
                 setButtonLoading(btn, false, 'Forged');
-                showToast('Production assets ready', 'Reload the card to see all 5 formats.', 'success');
+                applyForgeAssets(card, d.assets || {});
+                showToast('Production assets ready', 'Five formats injected below.', 'success');
             } else if (status === 'failed') {
                 clearInterval(timer);
                 setButtonLoading(btn, false);
