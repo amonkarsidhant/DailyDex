@@ -6,14 +6,23 @@
   "perspective": "First-person from a builder who actually tests things on a Raspberry Pi 4 and is allergic to vapor announcements.",
   "banned_phrases": [
     "game changer",
+    "game-changer",
+    "game-changing",
     "revolutionary",
     "you won't believe",
     "AI is taking over",
     "the future is here",
     "mind-blowing",
+    "mindblowing",
     "literally",
     "in this video",
-    "smash that like"
+    "smash that like",
+    "next-level",
+    "next level",
+    "groundbreaking",
+    "paradigm shift",
+    "unleash",
+    "supercharge"
   ],
   "preferred_words": [
     "ship",
@@ -42,11 +51,58 @@
     "Replace a paid SaaS with this open-source thing"
   ],
   "automation": {
-    "min_cluster_sources": 3,
-    "auto_research_cluster_score": 75,
-    "auto_script_ready_score": 85,
-    "auto_forge_score": 90,
-    "max_auto_promotions_per_day": 3,
+    "min_cluster_sources": 2,
+    "auto_research_cluster_score": 65,
+    "auto_script_ready_score": 78,
+    "auto_forge_score": 82,
+    "max_auto_promotions_per_day": 5,
     "enrichment_wait_seconds": 180
-  }
+  },
+  "examples": [
+    {
+      "input_title": "Llamafile 0.9 ships single-binary distribution for tiny LLMs",
+      "input_description": "Mozilla's Llamafile project releases a single binary that bundles model weights + runtime, runnable on CPU-only hardware including Raspberry Pi.",
+      "pack": {
+        "hook": "One file. No GPU. Llama running on a Pi 4 in under five minutes.",
+        "intro_context": "Llamafile collapses model + runtime into a single executable. The 0.9 cut adds ARM64 support and quietly raises the bar for self-hosters.",
+        "three_key_points": [
+          "Single binary means no Python, no CUDA, no setup hell.",
+          "ARM64 build runs a 3B model on a Pi 4 at ~6 tok/s without quantization tricks.",
+          "Trade-off: no streaming server on Day 1, you wire your own."
+        ],
+        "three_beat_structure": [
+          "Hook: One file beats six pages of setup notes.",
+          "Payoff: Live demo from `wget` to first token on a Pi 4.",
+          "CTA: Try it on whatever box is closest to a power outlet."
+        ],
+        "demo_segment": "SSH into the Pi, wget the .llamafile, chmod +x, run, hit the local port. Show real tokens per second on a stopwatch.",
+        "caveats": "Cold start is slow. Memory pressure climbs above 3.7GB during context fill. ARM build still misses a few quantization paths.",
+        "closing_takeaway": "If you only test one local-LLM project this week, this is the one.",
+        "call_to_action": "Run it on whatever Pi you already own and post your tok/s.",
+        "short_script": "Llamafile 0.9 just dropped and it actually runs on my Pi 4. One binary. No CUDA. I clocked six tokens a second on a 3B model and the setup took four minutes. The catch is memory pressure climbs over 3.7 gigs once context fills. Worth testing tonight.",
+        "visual_idea": "Stopwatch overlay on the SSH session as the model loads.",
+        "cta": "Post your Pi 4 tok/s number.",
+        "suggested_titles": {
+          "curiosity": "The single-file LLM that finally runs on a Pi 4",
+          "practical": "Llamafile 0.9: a real local LLM in four minutes flat",
+          "contrarian": "You do not need a GPU to self-host a useful LLM",
+          "tutorial": "How to run Llamafile 0.9 on a Raspberry Pi 4 today"
+        },
+        "thumbnail_text": ["ONE FILE", "NO GPU", "PI 4 READY"],
+        "broll_list": [
+          "Top-down shot of the Pi 4 board with the SSH terminal overlaid",
+          "Stopwatch animation timing the cold start",
+          "tok/s graph filling in live during a prompt"
+        ],
+        "on_screen_cues": ["6 tok/s", "0 deps", "3.7GB RAM"],
+        "insight": "Distribution beats raw quality for self-hosters. A binary you can scp is worth more than a slightly smarter model behind a paywall.",
+        "hooks": [
+          "Local LLMs lost the binary war until last week.",
+          "One file. No CUDA. Real tokens on a Pi 4.",
+          "If self-hosting is dead, why did this just go viral?"
+        ],
+        "tags": ["llamafile", "local-ai", "pi"]
+      }
+    }
+  ]
 }

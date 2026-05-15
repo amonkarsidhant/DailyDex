@@ -220,11 +220,39 @@ def _cluster_block(item: Dict[str, Any]) -> str:
     return "Related items in the same topic cluster:\n" + "\n".join(lines)
 
 
+def _examples_block(profile: Dict[str, Any], limit: int = 2) -> str:
+    """Render a few-shot block of validated past packs.
+
+    The examples teach voice + structure better than any amount of rule
+    enumeration. Keep `limit` small so we do not blow the prompt budget.
+    """
+    examples = profile.get("examples") or []
+    if not examples:
+        return ""
+    blocks = ["Past creator packs that hit the bar — use this voice, density, and structure (do not copy text verbatim):"]
+    for example in examples[:limit]:
+        title = example.get("input_title") or "(untitled item)"
+        desc = example.get("input_description") or ""
+        pack = example.get("pack") or {}
+        blocks.append("---")
+        blocks.append(f"INPUT TITLE: {title}")
+        if desc:
+            blocks.append(f"INPUT DESCRIPTION: {desc}")
+        blocks.append("OUTPUT PACK:")
+        try:
+            blocks.append(json.dumps(pack, ensure_ascii=False))
+        except Exception:
+            continue
+    blocks.append("---")
+    return "\n".join(blocks)
+
+
 def build_creator_system_prompt(profile: Dict[str, Any]) -> str:
     rules = profile.get("format_rules", {})
     banned = ", ".join(profile.get("banned_phrases", [])) or "(none)"
     preferred = ", ".join(profile.get("preferred_words", [])) or "(none)"
     angles = "; ".join(profile.get("signature_angles", [])) or "(none)"
+    examples = _examples_block(profile)
     return (
         f"You are the head writer for {profile.get('channel_name', 'a creator channel')}.\n"
         f"Niche: {profile.get('niche', '')}\n"
@@ -253,6 +281,7 @@ def build_creator_system_prompt(profile: Dict[str, Any]) -> str:
         "thumbnail_text (array of 3 strings), broll_list (array of 3 strings), on_screen_cues (array of 3 strings), "
         "insight, hooks (array of 3 strings), tags (array of 3 strings).\n"
         "Output JSON only. No markdown, no commentary, no code fences."
+        + (f"\n\n{examples}" if examples else "")
     )
 
 
@@ -337,14 +366,41 @@ def _coerce_titles(value: Any) -> Dict[str, str]:
 
 
 def _strip_banned(text: str, banned: List[str]) -> str:
+    """Remove banned phrases. Also catches hyphenated / inflected variants.
+
+    We escape the phrase, then loosen any internal space/hyphen so
+    "game changer" also matches "game-changer". A trailing optional
+    ``(?:s|ed|ing)`` catches the most common inflections without dragging in a
+    real stemmer.
+    """
     if not isinstance(text, str):
         return ""
     cleaned = text
     for phrase in banned:
         if not phrase:
             continue
-        cleaned = re.sub(re.escape(phrase), "", cleaned, flags=re.IGNORECASE)
-    return re.sub(r"\s+", " ", cleaned).strip()
+        # Tokenize on whitespace/hyphen, escape each token, rejoin with
+        # ``[\s\-]+`` so "game changer" also matches "game-changer". Trailing
+        # ``\w*`` sweeps up inflections (-ed, -er, -ing, -s).
+        tokens = [t for t in re.split(r"[\s\-]+", phrase.strip()) if t]
+        if not tokens:
+            continue
+
+        def _token_pattern(token: str) -> str:
+            escaped = re.escape(token)
+            # English drops trailing ``e`` before consonant suffixes
+            # ("supercharge" -> "supercharging"). Make the final ``e`` optional
+            # so the suffix-absorbing ``\w*`` still catches inflected forms.
+            if token.lower().endswith("e") and len(token) > 2:
+                escaped = escaped[:-1] + "e?"
+            return escaped
+
+        pattern = r"\b" + r"[\s\-]+".join(_token_pattern(tok) for tok in tokens) + r"\w*"
+        cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+    # Collapse double whitespace and leftover punctuation islands.
+    cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -,;:")
+    return cleaned
 
 
 def normalize_creator_pack(raw: Dict[str, Any], profile: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
