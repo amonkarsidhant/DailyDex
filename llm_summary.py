@@ -15,7 +15,7 @@ def query_gemini_cli(prompt, system_prompt=None):
     """Query the Gemini CLI tool for high-quality synthesis."""
     full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
     try:
-        # Use headless mode
+        # Use headless mode with JSON output
         result = subprocess.run(
             ["gemini", "--prompt", full_prompt, "--output-format", "json"],
             capture_output=True,
@@ -121,6 +121,32 @@ Output MUST be valid JSON."""
         "outline": ["The Problem", "The Solution", "The Practical Test", "The Verdict"],
         "tags": ["AI", source]
     }
+
+def generate_production_assets(research_data: str):
+    """Synthesize multi-format content assets from research context."""
+    system_prompt = """You are an Elite Content Production House. 
+Your goal is to repurpose a single technical 'Research Pack' into 5 high-impact formats.
+
+For each format, be technical, creative, and optimized for the platform:
+1. YouTube Shorts (60s): Use [Visual] and [Audio] cues. High retention.
+2. Podcast Script (5 min): A 'Host A' and 'Host B' technical dialogue. Natural chemistry.
+3. LinkedIn Post: Professional, technical, bullet-pointed, with a clear takeaway.
+4. Technical Blog: A 'How-to' or 'State of the Art' structured outline.
+5. The Demo Guide: Step-by-step visual walkthrough to show the tool in action.
+
+Output MUST be a JSON object with keys: shorts_script, podcast_script, linkedin_post, blog_outline, demo_guide."""
+
+    prompt = f"RESEARCH PACK CONTEXT:\n{research_data}\n\nForge the production assets:"
+    
+    response = query_llm(prompt, system_prompt)
+    if response:
+        try:
+            if "{" in response and "}" in response:
+                json_str = response[response.find("{"):response.rfind("}")+1]
+                return json.loads(json_str)
+        except:
+            pass
+    return None
 
 if __name__ == "__main__":
     base_dir = os.path.dirname(os.path.abspath(__file__))
