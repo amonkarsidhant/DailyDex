@@ -28,3 +28,4 @@ data/digests/*.md
 
 data.json
 data_scored.json
+data/research_packs/*.md

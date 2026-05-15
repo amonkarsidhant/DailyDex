@@ -1121,6 +1121,29 @@ body {
   overflow-wrap: anywhere;
 }
 
+.card-insight {
+  background: rgba(59, 130, 246, 0.08);
+  border-left: 2px solid var(--primary);
+  padding: 0.6rem 0.8rem;
+  margin: 0.6rem 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--text);
+  border-radius: 0 4px 4px 0;
+}
+
+.card-hook {
+  background: rgba(245, 158, 11, 0.08);
+  border-left: 2px solid var(--warning);
+  padding: 0.6rem 0.8rem;
+  margin: 0.6rem 0;
+  font-size: 0.85rem;
+  font-style: italic;
+  line-height: 1.4;
+  color: var(--text);
+  border-radius: 0 4px 4px 0;
+}
+
 .card-why-matters, .card-why-me, .card-why-worth {
   font-size: 0.8rem;
   color: var(--text-muted);

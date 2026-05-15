@@ -167,6 +167,29 @@
                         </div>
 
                         <div class="creator-section full-width">
+                            <h2 class="section-title">Recent Pipeline Ideas</h2>
+                            <div class="card-grid">
+                                {% for item in creator_saved_groups[0].group_entries[:3] %}
+                                <div class="card item-card creator-saved-card">
+                                    <div class="card-header">
+                                        <span class="badge-source">{{ item.format or 'Creator Idea' }}</span>
+                                        <span class="badge-score hot">{{ item.creator_score }}</span>
+                                    </div>
+                                    <div class="card-title">{{ item.working_title or item.title }}</div>
+                                    {% if item.hook %}
+                                    <div class="card-hook"><strong>Hook:</strong> {{ item.hook }}</div>
+                                    {% endif %}
+                                    <div class="card-footer">
+                                        <div class="card-actions">
+                                            <button class="btn btn-small" onclick="showTab('content-pipeline')">View in Pipeline</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="creator-section full-width">
                             <h2 class="section-title">Best Video Idea Today</h2>
                             {% set best = creator_brief.best_video_idea %}
                             {% if best %}

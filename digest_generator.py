@@ -50,7 +50,7 @@ class DailyDigestGenerator:
             if source_type in ["github", "huggingface", "youtube", "blogs", "papers"]:
                 for i in range(len(items)):
                     # Only enrich top 3 items per source to save tokens/time
-                    if i < 3 and (items[i].get("signal_score", 0) >= 80 or items[i].get("creator_score", 0) >= 80):
+                    if i < 3 and (items[i].get("signal_score", 0) >= 60 or items[i].get("creator_score", 0) >= 60):
                         items[i] = creator_intelligence.enrich_with_llm_intelligence(items[i])
                         # Save to database if it's high signal
                         self.db.save_item({**items[i], "source_type": source_type})
