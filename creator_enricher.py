@@ -166,6 +166,213 @@ class EnrichmentService:
                 "daily_limit": self.daily_limit,
             }
 
+    def wait_for_cache(self, hash_: str, timeout_seconds: int = 180, poll: float = 2.0) -> Optional[Dict[str, Any]]:
+        """Block until the asset is ready (or fails). Used by the agentic pipeline."""
+        if not self.db:
+            return None
+        deadline = time.time() + max(5, int(timeout_seconds))
+        while time.time() < deadline:
+            row = self.db.get_creator_asset(hash_)
+            if row and row.get("status") in {"ready", "ready_with_warnings"}:
+                return row
+            if row and row.get("status") == "failed":
+                return row
+            time.sleep(poll)
+        return self.db.get_creator_asset(hash_)
+
+    def ensure_pack(self, item: Dict[str, Any], timeout_seconds: int = 180) -> Optional[Dict[str, Any]]:
+        """Enqueue (if needed) and wait for the creator pack to land in cache."""
+        if not self.db:
+            return None
+        hash_ = content_hash(item)
+        existing = self.db.get_creator_asset(hash_)
+        if existing and existing.get("status") in {"ready", "ready_with_warnings"}:
+            return existing
+        self.enqueue(item)
+        return self.wait_for_cache(hash_, timeout_seconds=timeout_seconds)
+
+    def run_cluster_pipeline(
+        self,
+        clusters: List[Dict[str, Any]],
+        scored_data: Dict[str, Any],
+        automation: Dict[str, Any],
+        recursive_dive_fn: Optional[Callable[[str], Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Walk clusters through enrich -> recursive dive -> save -> forge.
+
+        Caller decides whether to invoke this synchronously (cron) or fire it
+        from a background thread (manual button press). The function itself
+        does not spawn threads.
+        """
+        if not self.db:
+            return {"ok": False, "error": "no_db"}
+
+        min_sources = int(automation.get("min_cluster_sources", 3))
+        research_threshold = int(automation.get("auto_research_cluster_score", 75))
+        script_threshold = int(automation.get("auto_script_ready_score", 85))
+        forge_threshold = int(automation.get("auto_forge_score", 90))
+        max_promotions = int(automation.get("max_auto_promotions_per_day", 3))
+        timeout_seconds = int(automation.get("enrichment_wait_seconds", 180))
+
+        item_lookup: Dict[str, Dict[str, Any]] = {}
+        for source_type in ("github", "huggingface", "youtube", "blogs", "papers"):
+            for raw_item in scored_data.get(source_type, []) or []:
+                url = raw_item.get("url")
+                if url:
+                    item_lookup[url] = raw_item
+
+        promoted: List[Dict[str, Any]] = []
+        skipped: List[Dict[str, Any]] = []
+
+        for cluster in clusters:
+            if len(promoted) >= max_promotions:
+                skipped.append({"topic": cluster.get("topic"), "reason": "daily_cap"})
+                continue
+            if cluster.get("source_count", 0) < min_sources:
+                skipped.append({"topic": cluster.get("topic"), "reason": "few_sources"})
+                continue
+            score = float(cluster.get("creator_score") or 0)
+            if score < research_threshold:
+                skipped.append({"topic": cluster.get("topic"), "reason": "low_score"})
+                continue
+
+            related = cluster.get("related_items") or []
+            seed = next(
+                (item_lookup.get(row.get("url")) for row in related if item_lookup.get(row.get("url"))),
+                None,
+            )
+            if not seed:
+                skipped.append({"topic": cluster.get("topic"), "reason": "no_seed_item"})
+                continue
+
+            try:
+                cached = self.ensure_pack(seed, timeout_seconds=timeout_seconds)
+            except Exception as exc:
+                LOG.exception("ensure_pack failed for %s", cluster.get("topic"))
+                skipped.append({"topic": cluster.get("topic"), "reason": f"enrich_error:{exc}"})
+                continue
+            pack = (cached or {}).get("payload") or {}
+
+            dive_result: Dict[str, Any] = {}
+            if recursive_dive_fn:
+                try:
+                    dive_result = recursive_dive_fn(cluster.get("topic", "")) or {}
+                except Exception as exc:
+                    LOG.exception("recursive_dive failed for %s", cluster.get("topic"))
+                    dive_result = {"error": str(exc)[:300]}
+
+            target_status = "idea"
+            if score >= script_threshold:
+                target_status = "script_ready"
+
+            saved_id = self._save_cluster_item(cluster, seed, pack, dive_result, target_status)
+            promotion = {
+                "topic": cluster.get("topic"),
+                "saved_id": saved_id,
+                "status": target_status,
+                "creator_score": score,
+            }
+
+            if saved_id and score >= forge_threshold:
+                research_blob = self._build_forge_blob(cluster, seed, pack, dive_result)
+                forge_result = self.forge_saved(saved_id, research_blob)
+                promotion["forge"] = forge_result.get("status") or "started"
+
+            promoted.append(promotion)
+
+        LOG.info("Cluster pipeline complete: %d promoted, %d skipped", len(promoted), len(skipped))
+        return {"ok": True, "promoted": promoted, "skipped": skipped}
+
+    def _save_cluster_item(
+        self,
+        cluster: Dict[str, Any],
+        seed: Dict[str, Any],
+        pack: Dict[str, Any],
+        dive: Dict[str, Any],
+        status: str,
+    ) -> Optional[int]:
+        titles = pack.get("suggested_titles") or {}
+        working_title = (
+            titles.get("practical")
+            or dive.get("strategic_title")
+            or cluster.get("topic")
+            or seed.get("title")
+            or "Untitled"
+        )
+        hook = pack.get("hook") or dive.get("hook_contrarian") or seed.get("title", "")
+        outline = pack.get("three_key_points") or dive.get("narrative_beats") or []
+        thumbnails = pack.get("thumbnail_text") or []
+        notes_lines = [
+            f"Topic: {cluster.get('topic')}",
+            f"Cluster score: {cluster.get('creator_score')}",
+            f"Sources: {', '.join(cluster.get('sources', []))}",
+        ]
+        if dive.get("shift"):
+            notes_lines.append(f"Shift: {dive.get('shift')}")
+        if dive.get("inversion"):
+            notes_lines.append(f"Inversion: {dive.get('inversion')}")
+        if pack.get("caveats"):
+            notes_lines.append(f"Caveats: {pack.get('caveats')}")
+
+        item = {
+            "title": working_title,
+            "url": seed.get("url"),
+            "source": "Agentic Researcher",
+            "source_type": seed.get("source_type") or "research",
+            "category": cluster.get("topic"),
+            "signal_score": int(seed.get("signal_score") or 0),
+            "creator_score": int(cluster.get("creator_score") or 0),
+            "pipeline_type": "creator",
+            "status": status,
+            "working_title": working_title,
+            "hook": hook,
+            "format": cluster.get("best_content_format") or pack.get("visual_idea") or "Deep Dive",
+            "outline": outline,
+            "sources": [row.get("url") for row in cluster.get("related_items", []) if row.get("url")],
+            "thumbnail_text": ", ".join(thumbnails) if thumbnails else "",
+            "notes": "\n".join(notes_lines),
+            "tags": ["agentic", cluster.get("topic", "").lower().replace(" ", "-")],
+            "priority": "high" if status == "script_ready" else "medium",
+        }
+        try:
+            return self.db.save_item(item)
+        except Exception as exc:
+            LOG.exception("save_item failed for %s", cluster.get("topic"))
+            return None
+
+    def _build_forge_blob(
+        self,
+        cluster: Dict[str, Any],
+        seed: Dict[str, Any],
+        pack: Dict[str, Any],
+        dive: Dict[str, Any],
+    ) -> str:
+        lines = [
+            f"TOPIC: {cluster.get('topic')}",
+            f"SEED TITLE: {seed.get('title', '')}",
+            f"SEED URL: {seed.get('url', '')}",
+            f"CLUSTER SCORE: {cluster.get('creator_score')} | SOURCES: {', '.join(cluster.get('sources', []))}",
+            "",
+            "CREATOR PACK:",
+            f"- Hook: {pack.get('hook', '')}",
+            f"- Insight: {pack.get('insight', '')}",
+            f"- Demo: {pack.get('demo_segment', '')}",
+            f"- Caveats: {pack.get('caveats', '')}",
+            f"- Three key points: {' | '.join(pack.get('three_key_points', []) or [])}",
+            "",
+            "RECURSIVE DIVE:",
+            f"- Strategic title: {dive.get('strategic_title', '')}",
+            f"- Shift: {dive.get('shift', '')}",
+            f"- Superpower: {dive.get('superpower', '')}",
+            f"- Inversion: {dive.get('inversion', '')}",
+            f"- Narrative beats: {' | '.join(dive.get('narrative_beats', []) or [])}",
+            "",
+            "RELATED EVIDENCE:",
+        ]
+        for row in (cluster.get("related_items") or [])[:6]:
+            lines.append(f"- {row.get('source_label') or row.get('source_type')}: {row.get('title', '')} ({row.get('url', '')})")
+        return "\n".join(line for line in lines if line is not None)
+
     def forge_saved(self, item_id: int, research_data: str) -> Dict[str, Any]:
         if not self.db:
             return {"ok": False, "error": "no_db"}

@@ -1362,6 +1362,38 @@ def api_forge(item_id):
     return jsonify(result)
 
 
+@app.route("/api/agentic-run", methods=["POST"])
+def api_agentic_run():
+    """Run the full cluster -> enrich -> dive -> save -> forge pipeline."""
+    if enrichment_service is None or intel_db is None:
+        return jsonify({"error": "agentic_disabled"}), 503
+    try:
+        from agentic_researcher import AgenticResearcher
+    except Exception as exc:
+        return jsonify({"error": f"import_failed:{exc}"}), 500
+
+    payload = request.get_json(silent=True) or {}
+    automation_override = payload.get("automation") or {}
+    profile = __import__("llm_summary").load_creator_profile()
+    automation = {**(profile.get("automation") or {}), **automation_override}
+
+    scored = load_scored_data()
+    researcher = AgenticResearcher(db=intel_db, enrichment_service=enrichment_service)
+
+    import threading
+
+    def _runner():
+        try:
+            result = researcher.run_daily_pipeline(scored, automation=automation)
+            print(f"[agentic] daily pipeline result: {result}")
+        except Exception as exc:
+            print(f"[agentic] failed: {exc}")
+
+    thread = threading.Thread(target=_runner, name="agentic-run", daemon=True)
+    thread.start()
+    return jsonify({"ok": True, "status": "running", "automation": automation})
+
+
 @app.route("/api/forge-status/<int:item_id>", methods=["GET"])
 def api_forge_status(item_id):
     if intel_db is None:
