@@ -355,22 +355,22 @@
                         <!-- KPI strip -->
                         <div class="brief-kpi-strip">
                             <div class="brief-kpi-cell">
-                                <div class="brief-kpi-label">Trust State</div>
+                                <div class="brief-kpi-label">Daily Trust</div>
                                 <div class="brief-kpi-value">{{ daily_summary.trust_state }}<small style="color:var(--success)">● {{ daily_summary.freshness_message }}</small></div>
                             </div>
                             <div class="brief-kpi-cell">
                                 <div class="brief-kpi-label">New Today</div>
-                                <div class="brief-kpi-value">{{ daily_summary.new_items_today }}</div>
-                                <div class="brief-kpi-sub">Items collected</div>
+                                <div class="brief-kpi-value">{{ daily_summary.new_items_today }}<canvas class="sparkline brief-spark" id="sparkline-new" data-metric="new" width="60" height="18"></canvas></div>
+                                <div class="brief-kpi-sub">Items collected since 00:00</div>
                             </div>
                             <div class="brief-kpi-cell">
                                 <div class="brief-kpi-label">High Signal</div>
-                                <div class="brief-kpi-value">{{ top_items|length }}</div>
-                                <div class="brief-kpi-sub">Actionable items</div>
+                                <div class="brief-kpi-value">{{ top_items|length }}<canvas class="sparkline brief-spark" id="sparkline-signal" data-metric="signal" width="60" height="18"></canvas></div>
+                                <div class="brief-kpi-sub">Score ≥ 75</div>
                             </div>
                             <div class="brief-kpi-cell">
                                 <div class="brief-kpi-label">Saved</div>
-                                <div class="brief-kpi-value">{{ saved_items|length }}</div>
+                                <div class="brief-kpi-value">{{ saved_items|length }}<canvas class="sparkline brief-spark" id="sparkline-saved" data-metric="saved" width="60" height="18"></canvas></div>
                                 <div class="brief-kpi-sub">In your board</div>
                             </div>
                         </div>
@@ -450,6 +450,7 @@
                                             <span class="brief-mini-title">{{ item.title }}</span>
                                             <span class="brief-mini-badges">
                                                 <span class="badge-source source-{{ item.source_type }}">{{ item.source_type }}</span>
+                                                <span class="badge-score {% if item.signal_score >= 80 %}hot{% elif item.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.signal_score }}</span>
                                             </span>
                                         </div>
                                         {% endfor %}

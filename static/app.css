@@ -2213,6 +2213,15 @@ body {
   pointer-events: none;
 }
 
+/* Compact inline sparkline for KPI strip */
+.brief-spark {
+  width: 60px;
+  height: 18px;
+  flex-shrink: 0;
+  align-self: center;
+  opacity: 0.85;
+}
+
 /* ── Daily Brief — KPI strip ────────────────────────────────── */
 .brief-kpi-strip {
   display: grid;
@@ -2245,8 +2254,9 @@ body {
   font-weight: 700;
   letter-spacing: -0.01em;
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 .brief-kpi-value small {
   font-size: 10.5px;
@@ -2295,11 +2305,12 @@ body {
   min-width: 20px;
 }
 .brief-lead h2 {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
   letter-spacing: -0.015em;
   line-height: 1.2;
   margin: 0;
+  text-wrap: balance;
 }
 .brief-lead-body {
   font-size: 13.5px;
