@@ -1103,7 +1103,17 @@ body {
   background: var(--bg);
   color: var(--text-muted);
   border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  vertical-align: middle;
 }
+.badge-source[data-iconified] {
+  padding: 3px 5px;
+  min-width: 0;
+}
+.badge-source svg { display: block; }
 
 .source-github { color: #3B82F6; border-color: #3B82F6; background: rgba(59, 130, 246, 0.1); }
 .source-huggingface { color: #F59E0B; border-color: #F59E0B; background: rgba(245, 158, 11, 0.1); }
