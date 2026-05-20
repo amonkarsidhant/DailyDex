@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DailyDex</title>
+    <title>Sarrow DailyDex</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>D</text></svg>">
     <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/app.css">
@@ -14,7 +14,7 @@
     <div class="app-shell">
         <aside class="sidebar">
             <div class="sidebar-header">
-                <div class="logo">DailyDex <span class="variant-badge" id="current-variant">{{ variant_info.name }}</span></div>
+                <div class="logo">Sarrow DailyDex <span class="variant-badge" id="current-variant">{{ variant_info.name }}</span></div>
                 <div class="sidebar-tools">
                     <button class="theme-toggle-btn" type="button" onclick="toggleTheme()" aria-label="Toggle theme">🌙</button>
                     <button class="help-btn" type="button" onclick="showShortcuts()" aria-label="Show keyboard shortcuts">?</button>
@@ -134,7 +134,7 @@
                     </button>
                     <button class="btn" onclick="openDigest('{{ 'creator' if creator_mode else 'default' }}')">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-                        {{ 'Creator Digest' if creator_mode else 'DailyDex Digest' }}
+                        {{ 'Creator Digest' if creator_mode else 'Sarrow DailyDex Digest' }}
                     </button>
                     <button class="live-status" id="live-status" data-live-state="live" type="button" onclick="applyPendingLiveRefresh()" aria-live="polite">
                         <span class="live-dot"></span>
@@ -157,7 +157,7 @@
                                 <div>
                                     <div class="section-kicker">Creator Brief</div>
                                     <h2 class="creator-hero-title">What should I make today?</h2>
-                                    <p class="creator-hero-copy">DailyDex Creator turns AI signals into concrete content decisions with hooks, formats, evidence, and script starters.</p>
+                                    <p class="creator-hero-copy">Sarrow DailyDex Creator turns AI signals into concrete content decisions with hooks, formats, evidence, and script starters.</p>
                                 </div>
                                 <div class="creator-hero-meta">
                                     <span class="creator-stat">{{ creator_opportunities|length }} ideas</span>
