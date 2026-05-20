@@ -1657,3 +1657,25 @@ function showShortcuts() {
     }
     modal.style.display = 'flex';
 }
+
+// --- Friend vote badges ---
+async function loadVoteBadges() {
+    try {
+        const votes = await fetch('/api/votes').then(r => r.json());
+        if (!votes || typeof votes !== 'object') return;
+        document.querySelectorAll('.item-card[data-url]').forEach(card => {
+            const url = card.dataset.url;
+            const count = votes[url];
+            if (!count) return;
+            const badge = card.querySelector('.vote-badge');
+            if (!badge) return;
+            badge.querySelector('.vote-count').textContent =
+                `${count} friend${count > 1 ? 's' : ''} voted`;
+            badge.style.display = 'inline-flex';
+        });
+    } catch (e) {
+        // votes API unavailable — silently skip
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadVoteBadges);

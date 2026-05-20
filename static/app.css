@@ -1111,6 +1111,17 @@ body {
 .source-blogs { color: #10B981; border-color: #10B981; background: rgba(16, 185, 129, 0.1); }
 .source-papers { color: #8B5CF6; border-color: #8B5CF6; background: rgba(139, 92, 246, 0.1); }
 
+.vote-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  margin-left: auto;
+}
+
 .card-title {
   font-size: 0.95rem;
   font-weight: 600;

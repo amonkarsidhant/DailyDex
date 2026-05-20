@@ -695,10 +695,11 @@
                     </div>
                     <div class="card-grid" id="feed-grid">
                         {% for item in feed_items %}
-                        <div class="card item-card search-target" data-search="{{ (item.title ~ ' ' ~ item.description ~ ' ' ~ item.categories|join(' '))|lower }}" data-breakdown='{{ item.score_breakdown|tojson if item.score_breakdown else "{}" }}' data-why="{{ item.why|default('calculating') }}" data-score-label="{{ item.score_label|default('Interesting')|lower }}" data-pi="{{ item.pi_suitability|default('partial') }}" data-saved="{{ 'yes' if item.url in saved_urls else 'no' }}">
+                        <div class="card item-card search-target" data-url="{{ item.url }}" data-search="{{ (item.title ~ ' ' ~ item.description ~ ' ' ~ item.categories|join(' '))|lower }}" data-breakdown='{{ item.score_breakdown|tojson if item.score_breakdown else "{}" }}' data-why="{{ item.why|default('calculating') }}" data-score-label="{{ item.score_label|default('Interesting')|lower }}" data-pi="{{ item.pi_suitability|default('partial') }}" data-saved="{{ 'yes' if item.url in saved_urls else 'no' }}">
                             <div class="card-header">
                                 <span class="badge-score {% if item.signal_score >= 80 %}hot{% elif item.signal_score >= 60 %}watch{% else %}interesting{% endif %}" title="Hover for score breakdown">{{ item.signal_score }}</span>
                                 <span class="badge-source source-{{ item.source_type }}">{{ item.source_type }}</span>
+                                <span class="vote-badge" style="display:none">👍 <span class="vote-count"></span></span>
                             </div>
                             <div class="card-title">{{ item.title }}</div>
                             <div class="card-desc">{{ item.description }}</div>

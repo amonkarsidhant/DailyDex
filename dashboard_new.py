@@ -1243,5 +1243,36 @@ def api_creator_digest():
         return jsonify({"error": str(exc)}), 500
 
 
+@app.route("/api/votes")
+def api_votes():
+    """Return vote counts for all items: {url: count}"""
+    try:
+        db = IntelligenceDB()
+        return jsonify(db.get_all_votes())
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/bot/send", methods=["POST"])
+def api_bot_send():
+    """Trigger a broadcast of the daily digest to all Telegram subscribers."""
+    import asyncio
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if not token:
+        return jsonify({"error": "TELEGRAM_BOT_TOKEN not set"}), 400
+    try:
+        from telegram_bot import build_application, broadcast_digest
+        application = build_application()
+
+        async def _run():
+            async with application:
+                return await broadcast_digest(application)
+
+        sent = asyncio.run(_run())
+        return jsonify({"sent": sent})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8888, debug=True)

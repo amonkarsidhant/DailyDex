@@ -84,6 +84,11 @@
       "description": "Decide what AI content to make today"
     }
   },
+  "telegram": {
+    "bot_token_env": "TELEGRAM_BOT_TOKEN",
+    "digest_time": "08:00",
+    "top_n": 5
+  },
   "arxiv": {
     "limit": 15
   },

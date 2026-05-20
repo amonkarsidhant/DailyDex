@@ -1,12 +1,12 @@
 # DailyDex
 
-![Version](https://img.shields.io/badge/version-v0.9-blue)
+![Version](https://img.shields.io/badge/version-v0.10-blue)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![Flask](https://img.shields.io/badge/flask-dashboard-111827?logo=flask&logoColor=white)
-![Status](https://img.shields.io/badge/status-release%20candidate-f59e0b)
+![Status](https://img.shields.io/badge/status-active-22c55e)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-DailyDex is a lightweight open-source AI signal cockpit for tracking high-value AI updates across GitHub, Hugging Face, research papers, videos, and news.
+DailyDex is a lightweight open-source AI signal cockpit for tracking high-value AI updates across GitHub, Hugging Face, research papers, videos, and news — with a Telegram bot for sharing daily picks with friends and letting them vote on what you should read.
 
 It is built for people who want a daily AI signal cockpit instead of a generic RSS reader.
 
@@ -16,7 +16,7 @@ Most AI feeds are noisy.
 
 DailyDex helps builders identify what matters, what is worth saving, what is worth testing, and whether source data is fresh.
 
-It now also includes **DailyDex Creator Mode**, a creator-intelligence layer for turning AI signals into concrete content decisions.
+It now also includes **DailyDex Creator Mode**, a creator-intelligence layer for turning AI signals into concrete content decisions, and a **Telegram social layer** so friends can vote on your daily picks.
 
 ## Highlights
 
@@ -29,6 +29,7 @@ It now also includes **DailyDex Creator Mode**, a creator-intelligence layer for
 - **Creator Mode** for video ideas, content clusters, research packs, and script starters
 - **Trends view** with charts and radar
 - **Digest generation** in Markdown
+- **Telegram bot** — friends subscribe, receive daily picks, and vote on items; voted items surface a badge on the dashboard
 - **Flask + SQLite + JSON + vanilla JS** with no heavy frontend framework
 
 ## Screenshots
@@ -102,6 +103,26 @@ pip install -r requirements.txt
 python3 dashboard_new.py
 ```
 
+### Telegram Bot (optional)
+
+1. Create a bot via [@BotFather](https://t.me/BotFather) on Telegram and copy the token.
+2. Set the environment variable:
+   ```bash
+   export TELEGRAM_BOT_TOKEN="your_token_here"
+   ```
+3. Run the bot in a separate terminal:
+   ```bash
+   python3 telegram_bot.py
+   ```
+4. Share your bot link with friends. They send `/start` to subscribe and `/digest` to get today's picks immediately.
+
+Friends receive the top 5 scored items each day with signal bars and three inline buttons — **Read**, **Vote**, **Skip**. Votes are stored in the local SQLite database and appear as green `👍 N friends voted` badges on feed cards in your dashboard.
+
+To broadcast the digest manually from the dashboard admin, call:
+```
+POST /api/bot/send
+```
+
 ## Daily Workflows
 
 ### Daily check-in
@@ -146,13 +167,14 @@ DailyDex/
 ├── creator_intelligence.py   # creator scoring, briefs, clusters, and research packs
 ├── fetch_news.py             # external source fetch pipeline
 ├── scoring_engine.py         # scoring and ranking logic
-├── data_models.py            # SQLite state and source health
-├── digest_generator.py      # Markdown digest generation
+├── data_models.py            # SQLite state, source health, subscribers, and votes
+├── digest_generator.py       # Markdown digest generation
+├── telegram_bot.py           # Telegram bot — daily digest and friend voting
 ├── templates/dashboard.html  # main server-rendered UI
 ├── static/app.css            # design system and layout
-├── static/app.js             # live updates and interactions
-├── config.json               # runtime source configuration and variants
-└── data/                     # runtime cache, digests, and DB
+├── static/app.js             # live updates, interactions, and vote badge loader
+├── config.json               # runtime source configuration, variants, and telegram settings
+└── data/                     # runtime cache, digests, DB, and vote URL map
 ```
 
 ## System Flow
@@ -194,6 +216,13 @@ flowchart LR
         LIVE[Hot-swap rendered UI]
     end
 
+    subgraph BOT[Telegram Social Layer]
+        direction TB
+        TGBOT[telegram_bot.py]
+        SUBS[(subscribers)]
+        VOTES[(item votes)]
+    end
+
     GH --> FETCH
     HF --> FETCH
     YT --> FETCH
@@ -216,16 +245,24 @@ flowchart LR
     BROWSER --> REFRESH
     REFRESH --> FETCH
 
+    SCORED --> TGBOT
+    TGBOT --> SUBS
+    TGBOT --> VOTES
+    VOTES --> FLASK
+    FLASK --> UI
+
     classDef source fill:#eff6ff,stroke:#3b82f6,color:#1e3a8a,stroke-width:1.5px;
     classDef pipeline fill:#f8fafc,stroke:#94a3b8,color:#0f172a,stroke-width:1.5px;
     classDef app fill:#eef2ff,stroke:#6366f1,color:#312e81,stroke-width:1.5px;
     classDef loop fill:#fff7ed,stroke:#f59e0b,color:#9a3412,stroke-width:1.5px;
+    classDef bot fill:#ecfdf5,stroke:#10b981,color:#065f46,stroke-width:1.5px;
     classDef user fill:#ecfdf5,stroke:#10b981,color:#065f46,stroke-width:1.5px;
 
     class GH,HF,YT,BL,AX source;
     class FETCH,RAW,SCORE,SCORED,HEALTH pipeline;
     class FLASK,STATE,UI app;
     class META,REFRESH,LIVE loop;
+    class TGBOT,SUBS,VOTES bot;
     class BROWSER user;
 ```
 
@@ -252,6 +289,8 @@ flowchart LR
 - `GET /api/track` - list tracked topics
 - `DELETE /api/track/<id>` - remove tracked topic
 - `GET /api/digest` - build today's Markdown digest
+- `GET /api/votes` - return friend vote counts per item URL
+- `POST /api/bot/send` - broadcast daily digest to all Telegram subscribers
 
 ## Development
 
@@ -264,7 +303,7 @@ python3 -m pytest -q
 ### Validate key files
 
 ```bash
-python3 -m py_compile dashboard_new.py data_models.py fetch_news.py
+python3 -m py_compile dashboard_new.py data_models.py fetch_news.py telegram_bot.py
 node --check static/app.js
 ```
 
@@ -398,12 +437,24 @@ See [docs/release_validation_v0.9.md](docs/release_validation_v0.9.md) for manua
 - publishing calendar
 - competitor channel tracking
 - trend-to-video automation
+- Reddit Pulse section (r/LocalLLaMA, r/MachineLearning)
+- ProductHunt AI launches feed
+- Model leaderboard delta tracking
 
 ## Project Status
 
-v0.9 DailyDex UI and Workflow Release
+v0.10 — Telegram Social Layer
 
 This repo is actively evolving. Expect rapid iteration on data quality, workflow UX, and presentation.
+
+## What's New (v0.10)
+
+- **Telegram bot** — friends subscribe with `/start`, receive the daily top-5 digest with signal bars, and vote on items via inline buttons
+- **Friend vote badges** — feed cards show a green `👍 N friends voted` badge when friends have voted for an item
+- `GET /api/votes` — vote counts endpoint consumed by the dashboard
+- `POST /api/bot/send` — trigger digest broadcast from the admin UI
+- `telegram_bot.py` — standalone bot process with persistent URL hash map for vote tracking across restarts
+- `python-telegram-bot>=20.7` added to requirements
 
 ## What's New (v0.9)
 
@@ -416,8 +467,6 @@ This repo is actively evolving. Expect rapid iteration on data quality, workflow
 - Sidebar and desktop layout cleanup with verified navigation rendering
 - Mobile drawer behavior limited to phone-sized screens
 - Saved-item export and bulk actions
-
-## Architecture
 
 ## Contributing and Feedback
 
