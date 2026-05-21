@@ -42,7 +42,7 @@ function collapseSidebar() {
 
 // Daily Brief rail tab switcher
 function briefTab(btn, panelId) {
-    var rail = document.getElementById('brief-rail');
+    var rail = btn.closest('.brief-rail');
     if (!rail) return;
     rail.querySelectorAll('.brief-tab').forEach(function(t) { t.classList.remove('active'); });
     rail.querySelectorAll('.brief-rail-body').forEach(function(p) { p.hidden = true; });
