@@ -168,6 +168,9 @@
                     <!-- ── Creator Daily Brief Layout ── -->
                     <div class="brief-overview-shell">
 
+                        <!-- ETF pulse (populated by JS) -->
+                        <div id="brief-etf-strip-creator" class="etf-strip etf-strip-overview" style="display:none"></div>
+
                         <!-- Creator KPI strip -->
                         <div class="brief-kpi-strip">
                             <div class="brief-kpi-cell">
@@ -336,6 +339,9 @@
                             <span>{{ status_warning }}</span>
                         </div>
                         {% endif %}
+
+                        <!-- ETF pulse (populated by JS) -->
+                        <div id="brief-etf-strip" class="etf-strip etf-strip-overview" style="display:none"></div>
 
                         <!-- KPI strip -->
                         <div class="brief-kpi-strip">

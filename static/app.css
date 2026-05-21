@@ -2586,6 +2586,11 @@ body {
   gap: 2px 0;
   margin-bottom: 20px;
 }
+.etf-strip-overview {
+  padding: 7px 14px;
+  margin-bottom: 0;
+}
+.etf-strip-overview .etf-name { display: none; }
 .etf-strip-label {
   font-size: 10px;
   font-weight: 700;

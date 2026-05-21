@@ -1903,6 +1903,38 @@ async function loadVoteBadges() {
 
 document.addEventListener('DOMContentLoaded', loadVoteBadges);
 
+// --- ETF pulse on overview page ---
+async function loadOverviewEtfStrip() {
+    var strips = ['brief-etf-strip', 'brief-etf-strip-creator']
+        .map(function(id) { return document.getElementById(id); })
+        .filter(Boolean);
+    if (!strips.length) return;
+
+    try {
+        var data = await fetch('/api/markets').then(function(r) { return r.json(); });
+        var etfs = data.etfs || [];
+        if (!etfs.length) return;
+
+        var html = '<div class="etf-strip-label">AI ETF Pulse</div>' +
+            etfs.map(function(e) {
+                var cls = e.change_pct >= 0 ? 'up' : 'down';
+                var arrow = e.change_pct >= 0 ? '▲' : '▼';
+                return '<div class="etf-item">' +
+                    '<span class="etf-ticker">' + e.ticker + '</span>' +
+                    '<span class="etf-price">$' + e.price.toFixed(2) + '</span>' +
+                    '<span class="stock-change ' + cls + '">' + arrow + ' ' + Math.abs(e.change_pct).toFixed(2) + '%</span>' +
+                    '</div>';
+            }).join('');
+
+        strips.forEach(function(el) {
+            el.innerHTML = html;
+            el.style.display = 'flex';
+        });
+    } catch (e) { /* silently skip if markets not cached yet */ }
+}
+
+document.addEventListener('DOMContentLoaded', loadOverviewEtfStrip);
+
 function switchForgeTab(btn, type) {
     const card = btn.closest('.production-forge-area');
     const tabs = card.querySelectorAll('.forge-tab-btn');
