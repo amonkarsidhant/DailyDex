@@ -1185,14 +1185,10 @@ def api_variant():
 
 
 @app.route("/")
-def home():
-    """Main dashboard page"""
-    return render_template("dashboard.html", **build_dashboard_context())
-
-
 @app.route("/cockpit")
-def cockpit():
-    """Creator Cockpit — new React UI mounted via CDN, hydrated server-side."""
+def home():
+    """Creator Cockpit — the homepage. New React UI mounted via CDN, hydrated
+    server-side from the same data pipeline the classic dashboard uses."""
     try:
         dd_data = build_cockpit_data()
     except Exception as e:
@@ -1202,6 +1198,12 @@ def cockpit():
                    "sourceHealth": {}, "agents": [], "pipeline": {},
                    "calendar": [], "thumbnails": []}
     return render_template("cockpit.html", dd_data=dd_data)
+
+
+@app.route("/classic")
+def classic_dashboard():
+    """The original DailyDex dashboard, kept for reference."""
+    return render_template("dashboard.html", **build_dashboard_context())
 
 
 @app.route("/api/cockpit-data")
