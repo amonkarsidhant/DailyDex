@@ -17,8 +17,16 @@ const ThumbsView = ({ onJump }) => {
         <PanelHeader no="01"
           actions={
             <>
-              <button className="btn ghost"><I.Refresh size={12}/> Regenerate 6</button>
-              <button className="btn primary"><I.Spark size={11}/> Dispatch director</button>
+              <button className="btn ghost" onClick={async () => {
+                const ch = (topicThumbs[0] || {}).content_hash;
+                const cl = clusters.find(c => c.slug === topic) || {};
+                if (window.DDX && ch) { await window.DDX.genThumbnails(ch, cl.topic, 6); window.DDX.reload(); }
+              }}><I.Refresh size={12}/> Regenerate 6</button>
+              <button className="btn primary" onClick={() => {
+                const cl = clusters.find(c => c.slug === topic) || {};
+                const ch = (topicThumbs[0] || {}).content_hash || topic;
+                if (window.DDX) window.DDX.dispatch("thumbnail_director", cl.topic, ch);
+              }}><I.Spark size={11}/> Dispatch director</button>
             </>
           }>
           Thumb Lab · title × thumbnail experiments
@@ -132,7 +140,7 @@ const ThumbsView = ({ onJump }) => {
         }}>
           {topicThumbs.map((t, i) => (
             <div key={t.id}
-                 onClick={() => setPicked(t.id)}
+                 onClick={() => { setPicked(t.id); if (window.DDX) window.DDX.pickThumbnail(t.id); }}
                  style={{
                    padding: 16, background: "var(--bg-1)", cursor: "pointer",
                    display: "flex", flexDirection: "column", gap: 10,

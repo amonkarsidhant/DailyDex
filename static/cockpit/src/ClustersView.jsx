@@ -92,14 +92,18 @@ const ClusterCard = ({ c, expanded, onToggle }) => {
 
             <div className="label" style={{ marginTop: 18, marginBottom: 8 }}>Auto-actions</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <AutoRow icon="🔎" label="Build research pack" desc="merges 5 sources + key claims" agentStatus="ready" />
-              <AutoRow icon="✎" label="Draft 3-beat script" desc="brand voice + signature angle" agentStatus="ready" />
-              <AutoRow icon="▣" label="Generate thumbnails" desc="6 variants × CTR-scored" agentStatus="ready" />
-              <AutoRow icon="↗" label="Adapt for LinkedIn" desc="reshape tone + add 1 chart" agentStatus="ready" />
+              <AutoRow icon="🔎" label="Build research pack" desc="merges 5 sources + key claims" agent="topic_researcher" c={c} />
+              <AutoRow icon="✎" label="Draft 3-beat script" desc="brand voice + signature angle" agent="script_writer" c={c} />
+              <AutoRow icon="▣" label="Generate thumbnails" desc="6 variants × CTR-scored" agent="thumbnail_director" c={c} />
+              <AutoRow icon="↗" label="Adapt for LinkedIn" desc="reshape tone + add 1 chart" agent="cross_poster" c={c} />
             </div>
 
             <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
-              <button className="btn primary" style={{ flex: 1, justifyContent: "center" }}>
+              <button className="btn primary" style={{ flex: 1, justifyContent: "center" }}
+                      onClick={() => {
+                        ["topic_researcher","script_writer","thumbnail_director","cross_poster"]
+                          .forEach(a => window.DDX && window.DDX.dispatch(a, c.topic, c.slug));
+                      }}>
                 <I.Spark size={11}/> Dispatch all agents
               </button>
               <button className="btn ghost"><I.Save size={12}/></button>
@@ -128,19 +132,30 @@ const ActionTile = ({ label, icon, sub, hot }) => (
   </button>
 );
 
-const AutoRow = ({ icon, label, desc, agentStatus }) => (
-  <div style={{
-    display: "grid", gridTemplateColumns: "24px 1fr auto", gap: 10, alignItems: "center",
-    padding: "8px 10px", background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 4,
-  }}>
-    <span style={{ color: "var(--signal)", fontSize: 14, lineHeight: 1, textAlign: "center" }}>{icon}</span>
-    <div style={{ lineHeight: 1.15 }}>
-      <div style={{ color: "var(--text-hi)", fontSize: 12.5, fontWeight: 500 }}>{label}</div>
-      <div className="mono" style={{ fontSize: 10, color: "var(--text-lo)", marginTop: 2 }}>{desc}</div>
+const AutoRow = ({ icon, label, desc, agent, c }) => {
+  const [state, setState] = useState("ready");
+  const run = async () => {
+    if (!window.DDX || state === "running") return;
+    setState("running");
+    try { await window.DDX.dispatch(agent, c.topic, c.slug); setState("dispatched"); }
+    catch (e) { setState("ready"); }
+  };
+  return (
+    <div style={{
+      display: "grid", gridTemplateColumns: "24px 1fr auto", gap: 10, alignItems: "center",
+      padding: "8px 10px", background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 4,
+    }}>
+      <span style={{ color: "var(--signal)", fontSize: 14, lineHeight: 1, textAlign: "center" }}>{icon}</span>
+      <div style={{ lineHeight: 1.15 }}>
+        <div style={{ color: "var(--text-hi)", fontSize: 12.5, fontWeight: 500 }}>{label}</div>
+        <div className="mono" style={{ fontSize: 10, color: "var(--text-lo)", marginTop: 2 }}>{desc}</div>
+      </div>
+      <button className="btn ghost" style={{ padding: "3px 7px", fontSize: 10 }} onClick={run} disabled={state==="running"}>
+        {state === "dispatched" ? "✓ Sent" : state === "running" ? "…" : "Run"}
+      </button>
     </div>
-    <button className="btn ghost" style={{ padding: "3px 7px", fontSize: 10 }}>Run</button>
-  </div>
-);
+  );
+};
 
 const ClustersView = ({ onJump }) => {
   const { clusters } = window.DD_DATA;

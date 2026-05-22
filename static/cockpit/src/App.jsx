@@ -9,9 +9,37 @@ const App = () => {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [view, setView] = useState("pulse");
   const [now, setNow] = useState("");
+  const [dataVersion, setDataVersion] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   // expose tweaks for nav rendering without prop-drilling
   window.__tweaks = t;
+
+  // Re-render whenever the live data layer swaps window.DD_DATA.
+  useEffect(() => window.DDX && window.DDX.onReload(() => setDataVersion(v => v + 1)), []);
+
+  // Auto-refresh: pick up a fetch triggered elsewhere (e.g. the home dashboard)
+  // when the tab regains focus, plus a slow background poll.
+  useEffect(() => {
+    if (!window.DDX) return;
+    let last = (window.DD_DATA && window.DD_DATA.last_updated) || null;
+    const pull = async () => {
+      try {
+        const d = await window.DDX.reload();
+        last = d.last_updated || last;
+      } catch (e) {}
+    };
+    const onFocus = () => pull();
+    window.addEventListener("focus", onFocus);
+    const id = setInterval(pull, 30000);
+    return () => { window.removeEventListener("focus", onFocus); clearInterval(id); };
+  }, []);
+
+  const onRefresh = async () => {
+    if (!window.DDX || refreshing) return;
+    setRefreshing(true);
+    try { await window.DDX.refresh(); } finally { setRefreshing(false); }
+  };
 
   // sync theme on <html>
   useEffect(() => {
@@ -45,7 +73,8 @@ const App = () => {
   return (
     <div className="app">
       <Nav view={view} setView={setView}/>
-      <Topbar now={now} onOpenTweaks={() => {/* host controls */}}/>
+      <Topbar now={now} onOpenTweaks={() => {/* host controls */}}
+              onRefresh={onRefresh} refreshing={refreshing}/>
       <main className="main">
         <div className="main-scroll" key={view}>
           <CurrentView onJump={setView}/>

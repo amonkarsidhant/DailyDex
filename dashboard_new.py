@@ -851,7 +851,8 @@ def _cockpit_thumbnails(clusters, opp_by_slug):
             v = serialize_thumbnail_variant(r)
             out.append({"id": v["id"], "topic": slug, "text": v["text"],
                         "subtext": v["subtext"], "hue": v["hue"],
-                        "ctr": v["ctr_pred"], "kind": v["kind"]})
+                        "ctr": v["ctr_pred"], "kind": v["kind"],
+                        "content_hash": chash, "picked": v["picked"]})
     return out
 
 

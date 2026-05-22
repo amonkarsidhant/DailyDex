@@ -113,7 +113,7 @@ const PersonaBadge = () => {
 };
 
 // ─── Topbar ─────────────────────────────────────────────────────────────────
-const Topbar = ({ now, onOpenTweaks }) => {
+const Topbar = ({ now, onOpenTweaks, onRefresh, refreshing }) => {
   const { sourceHealth, SOURCES } = window.DD_DATA;
   return (
     <header className="topbar" style={{
@@ -151,7 +151,10 @@ const Topbar = ({ now, onOpenTweaks }) => {
 
       {/* Right: actions */}
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <button className="btn ghost"><I.Refresh size={13}/> Refresh</button>
+        <button className="btn ghost" onClick={onRefresh} disabled={refreshing}
+                style={{ opacity: refreshing ? 0.6 : 1 }}>
+          <I.Refresh size={13}/> {refreshing ? "Refreshing…" : "Refresh"}
+        </button>
         <button className="btn ghost icon" aria-label="notifications"><I.Bell size={14}/></button>
         <button className="btn ghost icon" onClick={onOpenTweaks} aria-label="settings"><I.Settings size={14}/></button>
         <span style={{ width: 1, height: 22, background: "var(--line)", margin: "0 4px" }}/>
@@ -167,11 +170,12 @@ const Topbar = ({ now, onOpenTweaks }) => {
 
 // ─── Agent rail ─────────────────────────────────────────────────────────────
 const AgentCard = ({ a }) => {
-  const [logIdx, setLogIdx] = useState(Math.min(2, a.logs.length - 1));
+  const logs = (a.logs && a.logs.length) ? a.logs : ["queued…"];
+  const [logIdx, setLogIdx] = useState(Math.max(0, logs.length - 1));
   useEffect(() => {
-    const id = setInterval(() => setLogIdx(i => (i + 1) % a.logs.length), 2400);
+    const id = setInterval(() => setLogIdx(i => (i + 1) % logs.length), 2400);
     return () => clearInterval(id);
-  }, [a.logs.length]);
+  }, [logs.length]);
   return (
     <div style={{
       padding: "10px 12px",
@@ -213,7 +217,7 @@ const AgentCard = ({ a }) => {
       }}>
         <span style={{ color: "var(--signal-up)" }}>›</span>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-          {a.logs[logIdx]}
+          {logs[logIdx]}
         </span>
         <span className="blink">▍</span>
       </div>
@@ -226,15 +230,41 @@ const AgentCard = ({ a }) => {
   );
 };
 
+const AGENT_OPTIONS = [
+  ["topic_researcher", "Topic Researcher"],
+  ["script_writer", "Script Writer"],
+  ["thumbnail_director", "Thumbnail Director"],
+  ["cross_poster", "Cross-Poster"],
+];
+
 const AgentRail = () => {
-  const { agents } = window.DD_DATA;
-  const [tick, setTick] = useState(0);
+  const [active, setActive] = useState(window.DD_DATA.agents || []);
+  const [recent, setRecent] = useState([]);
+  const [picking, setPicking] = useState(false);
+
+  const pull = async () => {
+    if (!window.DDX) return;
+    try {
+      const snap = await window.DDX.agents();
+      setActive(snap.active || []);
+      setRecent(snap.recent_done || []);
+    } catch (e) {}
+  };
+
   useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 1200);
-    return () => clearInterval(id);
+    pull();
+    if (!window.DDX) return;
+    const es = window.DDX.agentStream(() => pull());   // re-snapshot on any event
+    const id = setInterval(pull, 3000);                // safety poll while running
+    return () => { try { es.close(); } catch (_) {} clearInterval(id); };
   }, []);
-  // progress drifts slowly upward
-  const live = agents.map(a => ({ ...a, progress: Math.min(0.97, a.progress + (tick * 0.005) % 0.3) }));
+
+  const dispatch = async (agent_type) => {
+    setPicking(false);
+    const top = window.DD_DATA.clusters[0] || {};
+    try { await window.DDX.dispatch(agent_type, top.topic, top.slug); } catch (e) {}
+    pull();
+  };
 
   return (
     <aside className="rail" style={{ display: "flex", flexDirection: "column" }}>
@@ -246,26 +276,44 @@ const AgentRail = () => {
           <span className="label" style={{ color: "var(--text-hi)", fontWeight: 600 }}>Agents</span>
           <span className="chip" style={{ color: "var(--signal-up)", borderColor: "rgba(124,255,178,0.3)", background: "rgba(124,255,178,0.08)" }}>
             <span style={{ width: 5, height: 5, borderRadius: 999, background: "var(--signal-up)" }}/>
-            {live.length} active
+            {active.length} active
           </span>
         </div>
-        <button className="btn ghost icon" aria-label="more"><I.Plus size={12}/></button>
+        <button className="btn ghost icon" aria-label="dispatch" onClick={() => setPicking(p => !p)}><I.Plus size={12}/></button>
       </div>
 
+      {picking && (
+        <div style={{ padding: "8px 14px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {AGENT_OPTIONS.map(([type, label]) => (
+            <button key={type} className="btn ghost" style={{ textTransform: "none", letterSpacing: 0 }}
+                    onClick={() => dispatch(type)}>{label}</button>
+          ))}
+        </div>
+      )}
+
       <div style={{ flex: 1, overflowY: "auto" }}>
-        {live.map(a => <AgentCard key={a.id} a={a}/>)}
+        {active.length === 0 && (
+          <div className="mono" style={{ padding: "16px 14px", fontSize: 11, color: "var(--text-lo)" }}>
+            No agents running. Dispatch one ↑ or below.
+          </div>
+        )}
+        {active.map(a => <AgentCard key={a.id} a={a}/>)}
 
         {/* Recent completions */}
         <div style={{ padding: "12px 14px 8px" }}>
           <div className="micro" style={{ marginBottom: 8 }}>Just finished</div>
-          <CompletedRow topic="Memory Systems" what="research pack" when="2m" />
-          <CompletedRow topic="Cheap Inference" what="LinkedIn carousel draft" when="6m" />
-          <CompletedRow topic="Voice Agents" what="thumbnail variants" when="11m" />
+          {recent.length === 0 && <div className="mono" style={{ fontSize: 10, color: "var(--text-vlo)" }}>nothing yet</div>}
+          {recent.slice(0, 3).map(r => (
+            <CompletedRow key={r.id} topic={r.task || r.name}
+                          what={r.result_summary || "done"}
+                          when={r.duration_sec != null ? `${r.duration_sec}s` : "·"} />
+          ))}
         </div>
       </div>
 
       <div style={{ padding: "10px 14px", borderTop: "1px solid var(--line)" }}>
-        <button className="btn primary" style={{ width: "100%", justifyContent: "center" }}>
+        <button className="btn primary" style={{ width: "100%", justifyContent: "center" }}
+                onClick={() => setPicking(p => !p)}>
           <I.Plus size={12}/> Dispatch a new agent
         </button>
       </div>
@@ -293,15 +341,11 @@ const CopilotDock = ({ context }) => {
     if (!q.trim()) return;
     setBusy(true); setAnswer("");
     try {
-      const r = await window.claude.complete({
-        messages: [{
-          role: "user",
-          content: `You are DailyDex's creator copilot. The user is on the "${context}" screen of a multi-format AI creator's dashboard. Give a 1–2 sentence, punchy, opinionated answer. No preamble. Question: ${q}`
-        }]
-      });
-      setAnswer(r);
+      const focused = (window.DD_DATA.clusters[0] || {}).slug;
+      const r = await window.DDX.copilot(context, q, { focused_cluster: focused });
+      setAnswer(r.answer || "No answer.");
     } catch (e) {
-      setAnswer("Copilot is offline in this preview. Try: 'rank today's clusters by demo-readiness'.");
+      setAnswer("Copilot is offline — set GEMINI_API_KEY on the server.");
     } finally { setBusy(false); }
   };
   const suggestions = {
