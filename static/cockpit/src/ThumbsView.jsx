@@ -79,8 +79,14 @@ const ThumbsView = ({ onJump }) => {
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                       <span className="mono tnum" style={{ fontSize: 12, color: "var(--signal-up)", fontWeight: 600 }}>CTR-likelihood {p.ctr}</span>
-                      <button className="btn ghost"><I.Save size={11}/> Save</button>
-                      <button className="btn ghost"><I.X size={11}/> Reject</button>
+                      <button className="btn ghost" onClick={() => {
+                        if (window.DDX && p) window.DDX.pickThumbnail(p.id).then(() => { alert("Thumbnail picked."); window.DDX.reload(); });
+                      }}><I.Save size={11}/> Save</button>
+                      <button className="btn ghost" onClick={async () => {
+                        if (!window.DDX || !p) return;
+                        await fetch(`/api/thumbnails/${p.id}`, { method: "DELETE" });
+                        window.DDX.reload();
+                      }}><I.X size={11}/> Reject</button>
                     </div>
                   </div>
 

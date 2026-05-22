@@ -39,7 +39,7 @@ const ClusterCard = ({ c, expanded, onToggle }) => {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
           <Waveform data={c.pulse} w={140} h={36} color={S[c.sources[0]].color}/>
-          <button className="btn ghost" style={{ padding: "4px 8px" }}>{expanded ? "−" : "+"} details</button>
+          <button className="btn ghost" style={{ padding: "4px 8px" }} onClick={onToggle}>{expanded ? "−" : "+"} details</button>
         </div>
       </div>
 
@@ -106,7 +106,14 @@ const ClusterCard = ({ c, expanded, onToggle }) => {
                       }}>
                 <I.Spark size={11}/> Dispatch all agents
               </button>
-              <button className="btn ghost"><I.Save size={12}/></button>
+              <button className="btn ghost" title="Save to pipeline" onClick={() => {
+                if (!window.DDX) return;
+                window.DDX.saveToPipeline({
+                  title: c.topic, working_title: c.topic, topic: c.topic, category: c.topic,
+                  format: c.best_content_format, creator_score: c.creator_score,
+                  signal_score: c.average_signal_score, pipeline_type: "creator", status: "idea",
+                }).then(() => { alert("Saved to pipeline."); window.DDX.reload(); });
+              }}><I.Save size={12}/></button>
             </div>
           </div>
         </div>

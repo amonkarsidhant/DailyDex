@@ -2,6 +2,14 @@
 
 const PipelineView = ({ onJump }) => {
   const { pipeline, calendar } = window.DD_DATA;
+  const addToLane = (status) => {
+    const title = window.prompt(`New ${status} title:`);
+    if (!title || !window.DDX) return;
+    window.DDX.saveToPipeline({
+      title, working_title: title, topic: title, category: title,
+      pipeline_type: "creator", status,
+    }).then(() => window.DDX.reload());
+  };
   const lanes = [
     { key: "idea",         label: "Idea",         tone: "var(--text-mid)" },
     { key: "researching",  label: "Researching",  tone: "var(--src-papers)" },
@@ -19,7 +27,7 @@ const PipelineView = ({ onJump }) => {
             <>
               <button className="btn ghost">Filter · format</button>
               <button className="btn ghost">Group · creator</button>
-              <button className="btn primary"><I.Plus size={12}/> New idea</button>
+              <button className="btn primary" onClick={() => addToLane("idea")}><I.Plus size={12}/> New idea</button>
             </>
           }>
           Production pipeline · 6 in flight
@@ -41,7 +49,7 @@ const PipelineView = ({ onJump }) => {
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {items.map(it => <PipeCard key={it.id} it={it} tone={l.tone}/>)}
-                  <button style={{
+                  <button onClick={() => addToLane(l.key)} style={{
                     padding: "8px 10px", border: "1px dashed var(--line-2)", background: "transparent",
                     color: "var(--text-lo)", fontSize: 11.5, borderRadius: 4, cursor: "pointer",
                     fontFamily: "var(--font-mono)", letterSpacing: "0.04em",

@@ -14,7 +14,9 @@ const ResearchView = ({ onJump }) => {
             <>
               <button className="btn ghost"><I.Doc size={12}/> Export MD</button>
               <button className="btn ghost">Open file</button>
-              <button className="btn primary"><I.Spark size={11}/> Re-research</button>
+              <button className="btn primary" onClick={() => {
+                if (cluster && window.DDX) { window.DDX.dispatch("topic_researcher", cluster.topic, cluster.slug); alert("Topic Researcher dispatched — watch the agent rail."); }
+              }}><I.Spark size={11}/> Re-research</button>
             </>
           }>
           Research pack · data/research_packs/2026-05-22-{topic}.md
@@ -112,7 +114,14 @@ const ResearchView = ({ onJump }) => {
 
             <div style={{ display: "flex", gap: 8, marginTop: 24 }}>
               <button className="btn primary" onClick={() => onJump("brief")}><I.Brief size={12}/> Open in brief</button>
-              <button className="btn ghost"><I.Save size={12}/> Send to pipeline</button>
+              <button className="btn ghost" onClick={() => {
+                if (!cluster || !window.DDX) return;
+                window.DDX.saveToPipeline({
+                  title: cluster.topic, working_title: cluster.topic, topic: cluster.topic, category: cluster.topic,
+                  format: cluster.best_content_format, creator_score: cluster.creator_score,
+                  signal_score: cluster.average_signal_score, pipeline_type: "creator", status: "researching",
+                }).then(() => { alert("Sent to pipeline (researching)."); window.DDX.reload(); });
+              }}><I.Save size={12}/> Send to pipeline</button>
               <button className="btn ghost" onClick={() => onJump("thumbs")}><I.Thumb size={12}/> Generate thumbnails</button>
             </div>
           </div>

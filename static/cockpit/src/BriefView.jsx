@@ -23,7 +23,7 @@ const BriefView = ({ onJump }) => {
                 <I.Spark size={10} stroke="var(--signal)"/>
                 AI · drafted 4m ago
               </span>
-              <button className="btn ghost"><I.Refresh size={12}/> Re-pick</button>
+              <button className="btn ghost" onClick={() => window.DDX && window.DDX.reload()}><I.Refresh size={12}/> Re-pick</button>
             </>
           }>
           {P.hero_title}
@@ -73,9 +73,25 @@ const BriefView = ({ onJump }) => {
             </div>
 
             <div style={{ display: "flex", gap: 8, marginTop: 24, flexWrap: "wrap" }}>
-              <button className="btn primary">{P.cta} <I.ArrowR size={12}/></button>
-              <button className="btn ghost" onClick={() => onJump("research")}>Generate research pack</button>
-              <button className="btn ghost"><I.Save size={12}/> Save to pipeline</button>
+              <button className="btn primary" onClick={() => {
+                if (window.DDX) window.DDX.dispatch("script_writer", hero.topic, hero.slug);
+                onJump("research");
+              }}>{P.cta} <I.ArrowR size={12}/></button>
+              <button className="btn ghost" onClick={() => {
+                if (window.DDX) window.DDX.dispatch("topic_researcher", hero.topic, hero.slug);
+                onJump("research");
+              }}>Generate research pack</button>
+              <button className="btn ghost" onClick={() => {
+                if (!window.DDX) return;
+                window.DDX.saveToPipeline({
+                  title: titles[titleKey] || hero.topic,
+                  working_title: titles[titleKey] || hero.topic,
+                  topic: hero.topic, category: hero.topic,
+                  format: hero.best_content_format, creator_score: hero.creator_score,
+                  signal_score: hero.average_signal_score,
+                  pipeline_type: "creator", status: "idea",
+                }).then(() => { alert("Saved to pipeline as an idea."); window.DDX.reload(); });
+              }}><I.Save size={12}/> Save to pipeline</button>
             </div>
           </div>
 
