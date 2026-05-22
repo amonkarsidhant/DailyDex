@@ -26,7 +26,7 @@ except Exception:  # pragma: no cover
 PROVIDER = os.environ.get("LLM_PROVIDER", "gemini")
 GEMINI_BIN = os.environ.get("GEMINI_BIN", "gemini")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "")
-GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "120"))
+GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "600"))
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/generate")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "phi3:mini")
 
@@ -71,23 +71,28 @@ def _gemini_args(prompt: str) -> List[str]:
     args = [GEMINI_BIN]
     if GEMINI_MODEL:
         args += ["--model", GEMINI_MODEL]
-    args += ["--prompt", prompt, "--output-format", "json"]
+    # Headless Automation Mode: Use --prompt and --output-format json.
+    # --approval-mode yolo allows the agent to use its research tools (search, etc.) autonomously.
+    args += [
+        "--prompt", prompt,
+        "--output-format", "json",
+        "--approval-mode", "yolo",
+        "--accept-raw-output-risk"
+    ]
     return args
 
 
 def query_gemini_cli(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:
-    """Run the Gemini CLI and return the model's text response.
-
-    The CLI wraps the response in a JSON envelope when called with
-    `--output-format json`. We extract the inner text so callers can parse the
-    model's payload directly.
+    """Run the Gemini CLI in headless mode and return the model's text response.
     """
     full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
     try:
+        # Pass DEVNULL to stdin to ensure non-interactive behavior
         result = subprocess.run(
             _gemini_args(full_prompt),
             capture_output=True,
             text=True,
+            stdin=subprocess.DEVNULL,
             timeout=GEMINI_TIMEOUT,
         )
     except FileNotFoundError:

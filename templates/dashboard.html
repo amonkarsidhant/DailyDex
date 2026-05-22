@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DailyDex</title>
+    <title>Sarrow DailyDex</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>D</text></svg>">
     <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/app.css">
@@ -12,9 +12,12 @@
 <body>
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
     <div class="app-shell">
-        <aside class="sidebar">
+        <aside class="sidebar" id="main-sidebar">
+            <button class="sidebar-collapse-btn" onclick="collapseSidebar()" aria-label="Collapse sidebar" title="Collapse sidebar" id="sidebar-collapse-btn">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
             <div class="sidebar-header">
-                <div class="logo">DailyDex <span class="variant-badge" id="current-variant">{{ variant_info.name }}</span></div>
+                <div class="logo">Sarrow DailyDex <span class="variant-badge" id="current-variant">{{ variant_info.name }}</span></div>
                 <div class="sidebar-tools">
                     <button class="theme-toggle-btn" type="button" onclick="toggleTheme()" aria-label="Toggle theme">🌙</button>
                     <button class="help-btn" type="button" onclick="showShortcuts()" aria-label="Show keyboard shortcuts">?</button>
@@ -30,78 +33,86 @@
             
             <nav class="sidebar-nav">
                 {% if creator_mode %}
-                <button class="nav-btn active" data-tab="overview" id="nav-overview">
+                <button class="nav-btn active" data-tab="overview" data-label="Creator Brief" id="nav-overview">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-                    Creator Brief
+                    <span class="nav-label">Creator Brief</span>
                 </button>
-                <button class="nav-btn" data-tab="video-ideas" id="nav-video-ideas">
+                <button class="nav-btn" data-tab="video-ideas" data-label="Video Ideas" id="nav-video-ideas">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
-                    Video Ideas
+                    <span class="nav-label">Video Ideas</span>
                 </button>
-                <button class="nav-btn" data-tab="shorts" id="nav-shorts">
+                <button class="nav-btn" data-tab="shorts" data-label="Shorts" id="nav-shorts">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h8"></path><path d="M6 12h12"></path><path d="M10 18h4"></path></svg>
-                    Shorts
+                    <span class="nav-label">Shorts</span>
                 </button>
-                <button class="nav-btn" data-tab="clusters" id="nav-clusters">
+                <button class="nav-btn" data-tab="clusters" data-label="Clusters" id="nav-clusters">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="2"></circle><circle cx="19" cy="6" r="2"></circle><circle cx="12" cy="18" r="2"></circle><path d="M7 7.5 10.5 16"></path><path d="M17 7.5 13.5 16"></path></svg>
-                    Clusters
+                    <span class="nav-label">Clusters</span>
                 </button>
-                <button class="nav-btn" data-tab="research-packs" id="nav-research-packs">
+                <button class="nav-btn" data-tab="research-packs" data-label="Research Packs" id="nav-research-packs">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-                    Research Packs
+                    <span class="nav-label">Research Packs</span>
                 </button>
-                <button class="nav-btn" data-tab="content-pipeline" id="nav-content-pipeline">
+                <button class="nav-btn" data-tab="content-pipeline" data-label="Content Pipeline" id="nav-content-pipeline">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M7 12h10"></path><path d="M10 18h4"></path></svg>
-                    Content Pipeline
+                    <span class="nav-label">Content Pipeline</span>
                 </button>
-                <button class="nav-btn" data-tab="settings" id="nav-settings">
+                <button class="nav-btn" data-tab="forge-studio" data-label="Forge Studio" id="nav-forge-studio">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+                    <span class="nav-label">Forge Studio</span>
+                </button>
+                <button class="nav-btn" data-tab="settings" data-label="Settings" id="nav-settings">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                    Settings
+                    <span class="nav-label">Settings</span>
                 </button>
                 {% else %}
-                <button class="nav-btn active" data-tab="overview" id="nav-overview">
+                <button class="nav-btn active" data-tab="overview" data-label="Overview" id="nav-overview">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-                    Overview
+                    <span class="nav-label">Overview</span>
                 </button>
-                <button class="nav-btn" data-tab="feed" id="nav-feed">
+                <button class="nav-btn" data-tab="feed" data-label="Feed" id="nav-feed">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"></path><path d="M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1"></circle></svg>
-                    Feed
+                    <span class="nav-label">Feed</span>
                 </button>
-                <button class="nav-btn" data-tab="github" id="nav-github">
+                <button class="nav-btn" data-tab="github" data-label="GitHub" id="nav-github">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
-                    GitHub
+                    <span class="nav-label">GitHub</span>
                 </button>
-                <button class="nav-btn" data-tab="models" id="nav-models">
+                <button class="nav-btn" data-tab="models" data-label="Models" id="nav-models">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                    Models
+                    <span class="nav-label">Models</span>
                 </button>
-                <button class="nav-btn" data-tab="research" id="nav-research">
+                <button class="nav-btn" data-tab="research" data-label="Research" id="nav-research">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
-                    Research
+                    <span class="nav-label">Research</span>
                 </button>
-                <button class="nav-btn" data-tab="videos" id="nav-videos">
+                <button class="nav-btn" data-tab="videos" data-label="Videos" id="nav-videos">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
-                    Videos
+                    <span class="nav-label">Videos</span>
                 </button>
-                <button class="nav-btn" data-tab="news" id="nav-news">
+                <button class="nav-btn" data-tab="news" data-label="News" id="nav-news">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-4c0-1.1.9-2 2-2h2"></path><path d="M10 6v-2c0-1.1-.9-2-2-2H4"></path></svg>
-                    News
+                    <span class="nav-label">News</span>
                 </button>
-                <button class="nav-btn" data-tab="local" id="nav-local">
+                <button class="nav-btn" data-tab="local" data-label="Local Lab" id="nav-local">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
-                    Local Lab
+                    <span class="nav-label">Local Lab</span>
                 </button>
-                <button class="nav-btn" data-tab="saved" id="nav-saved">
+                <button class="nav-btn" data-tab="saved" data-label="Saved" id="nav-saved">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
-                    Saved
+                    <span class="nav-label">Saved</span>
                 </button>
-                <button class="nav-btn" data-tab="trends" id="nav-trends">
+                <button class="nav-btn" data-tab="trends" data-label="Trends" id="nav-trends">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
-                    Trends
+                    <span class="nav-label">Trends</span>
                 </button>
-                <button class="nav-btn" data-tab="settings" id="nav-settings">
+                <button class="nav-btn" data-tab="markets" data-label="Markets" id="nav-markets">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                    <span class="nav-label">Markets</span>
+                </button>
+                <button class="nav-btn" data-tab="settings" data-label="Settings" id="nav-settings">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                    Settings
+                    <span class="nav-label">Settings</span>
                 </button>
                 {% endif %}
             </nav>
@@ -121,7 +132,7 @@
         <div class="main-container">
             <header class="top-header">
                 <div class="header-left">
-                    <h1 id="page-title">{{ 'Creator Brief' if creator_mode else 'Overview' }}</h1>
+                    <h1 id="page-title">{{ 'Creator Brief' if creator_mode else 'Daily Brief' }}</h1>
                 </div>
                 <div class="header-right">
                     <div class="search-container">
@@ -134,7 +145,7 @@
                     </button>
                     <button class="btn" onclick="openDigest('{{ 'creator' if creator_mode else 'default' }}')">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-                        {{ 'Creator Digest' if creator_mode else 'DailyDex Digest' }}
+                        {{ 'Creator Digest' if creator_mode else 'Sarrow DailyDex Digest' }}
                     </button>
                     <button class="live-status" id="live-status" data-live-state="live" type="button" onclick="applyPendingLiveRefresh()" aria-live="polite">
                         <span class="live-dot"></span>
@@ -154,347 +165,363 @@
                 <!-- Overview Page -->
                 <div id="overview" class="section active" data-title="{{ 'Creator Brief' if creator_mode else 'Overview' }}">
                     {% if creator_mode %}
-                    <div class="creator-brief-grid">
-                        <div class="creator-hero card">
-                            <div class="creator-hero-head">
-                                <div>
-                                    <div class="section-kicker">Creator Brief</div>
-                                    <h2 class="creator-hero-title">What should I make today?</h2>
-                                    <p class="creator-hero-copy">DailyDex Creator turns AI signals into concrete content decisions with hooks, formats, evidence, and script starters.</p>
-                                </div>
-                                <div class="creator-hero-meta">
-                                    <span class="creator-stat">{{ creator_opportunities|length }} ideas</span>
-                                    <span class="creator-stat">{{ creator_brief.pipeline_count }} in pipeline</span>
-                                </div>
+                    <!-- ── Creator Daily Brief Layout ── -->
+                    <div class="brief-overview-shell">
+
+                        <!-- ETF pulse (populated by JS) -->
+                        <div id="brief-etf-strip-creator" class="etf-strip etf-strip-overview" style="display:none"></div>
+
+                        <!-- Creator KPI strip -->
+                        <div class="brief-kpi-strip">
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">Ideas Today</div>
+                                <div class="brief-kpi-value">{{ creator_opportunities|length }}<small style="color:var(--primary)">● ready</small></div>
+                            </div>
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">In Pipeline</div>
+                                <div class="brief-kpi-value">{{ creator_brief.pipeline_count }}</div>
+                                <div class="brief-kpi-sub">Ideas in progress</div>
+                            </div>
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">Best Score</div>
+                                <div class="brief-kpi-value">{{ creator_brief.best_video_idea.creator_score if creator_brief.best_video_idea else '—' }}</div>
+                                <div class="brief-kpi-sub">Creator potential</div>
+                            </div>
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">Clusters</div>
+                                <div class="brief-kpi-value">{{ creator_brief.content_clusters|length }}</div>
+                                <div class="brief-kpi-sub">Story clusters</div>
                             </div>
                         </div>
 
-                        <div class="creator-section full-width">
-                            <h2 class="section-title">Recent Pipeline Ideas</h2>
-                            <div class="card-grid">
-                                {% for item in creator_saved_groups[0].group_entries[:3] %}
-                                <div class="card item-card creator-saved-card">
-                                    <div class="card-header">
-                                        <span class="badge-source">{{ item.format or 'Creator Idea' }}</span>
-                                        <span class="badge-score hot">{{ item.creator_score }}</span>
-                                    </div>
-                                    <div class="card-title">{{ item.working_title or item.title }}</div>
-                                    {% if item.hook %}
-                                    <div class="card-hook"><strong>Hook:</strong> {{ item.hook }}</div>
+                        {% set best = creator_brief.best_video_idea %}
+                        {% if best %}
+                        <div class="brief-digest-grid">
+
+                            <!-- Lead idea -->
+                            <div class="brief-lead">
+                                <div class="brief-kicker">
+                                    <span>Lead Idea</span>
+                                    <span class="badge-source source-{{ best.source_type }}">{{ best.best_format }}</span>
+                                    <span class="badge-score hot">{{ best.creator_score }}</span>
+                                    <span class="brief-kicker-tail"></span>
+                                    <span style="font-family:'Fira Code',monospace;font-size:11px;color:var(--text-muted)">{{ last_updated }}</span>
+                                </div>
+                                <h2>{{ best.suggested_titles.curiosity or best.title }}</h2>
+                                <div class="brief-lead-body">{{ best.hook }}</div>
+                                <div class="brief-lead-why">
+                                    <strong style="color:var(--text)">Why viewers care.</strong> {{ best.why_viewers_care }}
+                                    {% if best.creator_reason %}
+                                    <strong style="color:var(--text)"> Why now.</strong> {{ best.creator_reason }}
                                     {% endif %}
-                                    <div class="card-footer">
-                                        <div class="card-actions">
-                                            <button class="btn btn-small" onclick="showTab('content-pipeline')">View in Pipeline</button>
+                                </div>
+                                {% if best.three_key_points %}
+                                <div style="display:flex;flex-wrap:wrap;gap:6px">
+                                    {% for point in best.three_key_points %}<span class="tag">{{ point }}</span>{% endfor %}
+                                </div>
+                                {% endif %}
+                                <div class="brief-lead-actions">
+                                    <button class="btn btn-primary btn-small" onclick='saveCreatorItem({{ best|tojson }}, "idea", this)'>Save as idea</button>
+                                    <button class="btn btn-small" onclick='buildResearchPack({{ best|tojson }}, this)'>Research pack</button>
+                                    <button class="btn btn-small" onclick='saveCreatorItem({{ best|tojson }}, "script_ready", this)'>Draft script</button>
+                                    <a href="{{ best.url }}" target="_blank" class="btn btn-small">Open source</a>
+                                    <span class="brief-action-rec">{{ best.production_effort|title }} effort</span>
+                                </div>
+
+                                <div class="brief-rule"></div>
+                                <div class="brief-kicker">Also Worth Making <span class="brief-kicker-tail"></span></div>
+
+                                <!-- Long-form candidates as followups -->
+                                <div class="brief-followup-list">
+                                    {% for item in creator_brief.long_form_candidates[:4] %}
+                                    <div class="brief-followup-row">
+                                        <span class="brief-rank">#{{ loop.index + 1 }}</span>
+                                        <div style="min-width:0">
+                                            <div class="brief-followup-title">{{ item.suggested_titles.curiosity or item.title }}</div>
+                                            <div class="brief-followup-meta">
+                                                <span class="badge-score {% if item.creator_score >= 80 %}hot{% elif item.creator_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.creator_score }}</span>
+                                                <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
+                                            </div>
+                                            {% if item.why_viewers_care %}
+                                            <div class="brief-followup-summary"><strong>Why viewers care.</strong> {{ item.why_viewers_care }}</div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="brief-followup-actions">
+                                            <button class="btn btn-small" onclick='saveCreatorItem({{ item|tojson }}, "idea", this)'>Save</button>
+                                            <button class="btn btn-small" onclick='buildResearchPack({{ item|tojson }}, this)'>Research</button>
                                         </div>
                                     </div>
+                                    {% endfor %}
                                 </div>
-                                {% endfor %}
                             </div>
-                        </div>
 
-                        <div class="creator-section full-width">
-                            <h2 class="section-title">Best Video Idea Today</h2>
-                            {% set best = creator_brief.best_video_idea %}
-                            {% if best %}
-                            <div class="card creator-best-card search-target" data-search="{{ (best.title ~ ' ' ~ best.topic ~ ' ' ~ best.hook)|lower }}">
-                                <div class="creator-best-head">
-                                    <div>
-                                        <div class="badge-source source-{{ best.source_type }}">{{ best.best_format }}</div>
-                                        <h3>{{ best.suggested_titles.curiosity or best.title }}</h3>
-                                    </div>
-                                    <div class="creator-score-stack">
-                                        <span class="badge-score hot">{{ best.creator_score }}</span>
-                                        <span class="creator-score-label">Creator</span>
-                                    </div>
+                            <!-- Sticky right rail -->
+                            <div class="brief-rail" id="brief-creator-rail">
+                                <div class="brief-tabs" role="tablist">
+                                    <button class="brief-tab active" onclick="briefTab(this,'brief-creator-shorts')" role="tab">Shorts<span class="brief-tab-count">{{ creator_brief.shorts_ideas|length }}</span></button>
+                                    <button class="brief-tab" onclick="briefTab(this,'brief-creator-wins')" role="tab">Quick Wins<span class="brief-tab-count">{{ creator_brief.quick_wins|length }}</span></button>
+                                    <button class="brief-tab" onclick="briefTab(this,'brief-creator-clusters')" role="tab">Clusters<span class="brief-tab-count">{{ creator_brief.content_clusters|length }}</span></button>
                                 </div>
-                                <p class="creator-hook">{{ best.hook }}</p>
-                                <div class="creator-insight-grid">
-                                    <div>
-                                        <h4>Why viewers care</h4>
-                                        <p>{{ best.why_viewers_care }}</p>
-                                    </div>
-                                    <div>
-                                        <h4>Why now</h4>
-                                        <p>{{ best.creator_reason }}</p>
-                                    </div>
-                                    <div>
-                                        <h4>Production effort</h4>
-                                        <p>{{ best.production_effort|title }}</p>
-                                    </div>
-                                    <div>
-                                        <h4>Thumbnail text</h4>
-                                        <p>{{ best.thumbnail_text|join(' / ') }}</p>
-                                    </div>
-                                </div>
-                                <div class="creator-outline-block">
-                                    <h4>Suggested outline</h4>
-                                    <ol>
-                                        {% for point in best.three_key_points %}
-                                        <li>{{ point }}</li>
-                                        {% endfor %}
-                                    </ol>
-                                </div>
-                                <div class="creator-evidence-block">
-                                    <h4>Source evidence</h4>
-                                    <ul>
-                                        {% for evidence in best.source_evidence[:4] %}
-                                        <li><a href="{{ evidence.url }}" target="_blank">{{ evidence.source_label }}: {{ evidence.title }}</a></li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-                                <div class="card-actions creator-actions-row">
-                                    <button class="btn btn-small" onclick='saveCreatorItem({{ best|tojson }}, "idea", this)'>Save as idea</button>
-                                    <button class="btn btn-small" onclick='buildResearchPack({{ best|tojson }}, this)'>Build research pack</button>
-                                    <button class="btn btn-small btn-primary" onclick='saveCreatorItem({{ best|tojson }}, "script_ready", this)'>Draft script</button>
-                                    <a href="{{ best.url }}" target="_blank" class="btn btn-small">Open Source</a>
-                                </div>
-                            </div>
-                            {% else %}
-                            <div class="card"><p>No creator-ready ideas yet. Refresh data and check again.</p></div>
-                            {% endif %}
-                        </div>
 
-                        <div class="creator-section">
-                            <h2 class="section-title">Shorts Ideas</h2>
-                            <div class="creator-mini-grid">
-                                {% for item in creator_brief.shorts_ideas %}
-                                <div class="card creator-mini-card search-target" data-search="{{ (item.topic ~ ' ' ~ item.hook_line)|lower }}">
-                                    <div class="creator-mini-top">
-                                        <span class="badge-source source-{{ item.source_type }}">Short</span>
-                                        <span class="badge-score interesting">{{ item.creator_score }}</span>
+                                <!-- Shorts tab -->
+                                <div class="brief-rail-body" id="brief-creator-shorts">
+                                    {% for item in creator_brief.shorts_ideas %}
+                                    <div class="brief-weekend-item">
+                                        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+                                            <span class="badge-score interesting">{{ item.creator_score }}</span>
+                                            <span class="badge-source source-{{ item.source_type }}">Short</span>
+                                        </div>
+                                        <div class="brief-weekend-title">{{ item.hook_line }}</div>
+                                        <div class="brief-weekend-why">{{ item.short_script }}</div>
+                                        {% if item.visual_idea %}
+                                        <div class="brief-cmd">Visual: {{ item.visual_idea }}</div>
+                                        {% endif %}
                                     </div>
-                                    <h3>{{ item.hook_line }}</h3>
-                                    <p>{{ item.short_script }}</p>
-                                    <div class="creator-mini-meta">
-                                        <span>Visual: {{ item.visual_idea }}</span>
-                                        <span>CTA: {{ item.cta }}</span>
-                                    </div>
+                                    {% else %}
+                                    <p class="text-muted" style="font-size:12px;padding-top:8px">No shorts ideas yet.</p>
+                                    {% endfor %}
                                 </div>
-                                {% endfor %}
-                            </div>
-                        </div>
 
-                        <div class="creator-section">
-                            <h2 class="section-title">Quick Wins</h2>
-                            <div class="creator-mini-grid">
-                                {% for item in creator_brief.quick_wins %}
-                                <div class="card creator-mini-card search-target" data-search="{{ (item.title ~ ' ' ~ item.topic)|lower }}">
-                                    <div class="creator-mini-top">
-                                        <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
-                                        <span class="creator-effort creator-effort-{{ item.production_effort }}">{{ item.production_effort }}</span>
+                                <!-- Quick Wins tab -->
+                                <div class="brief-rail-body" id="brief-creator-wins" hidden>
+                                    {% for item in creator_brief.quick_wins %}
+                                    <div class="brief-weekend-item">
+                                        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+                                            <span class="badge-score {% if item.creator_score >= 80 %}hot{% elif item.creator_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.creator_score }}</span>
+                                            <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
+                                            <span style="margin-left:auto;font-size:10px;color:var(--text-muted)">{{ item.production_effort }}</span>
+                                        </div>
+                                        <div class="brief-weekend-title">{{ item.suggested_titles.practical or item.title }}</div>
+                                        <div class="brief-weekend-why">{{ item.why_viewers_care }}</div>
+                                        <div style="display:flex;gap:4px;margin-top:4px">
+                                            <button class="btn btn-small" style="font-size:10px;padding:2px 6px" onclick='saveCreatorItem({{ item|tojson }}, "idea", this)'>Save</button>
+                                            <button class="btn btn-small" style="font-size:10px;padding:2px 6px" onclick='buildResearchPack({{ item|tojson }}, this)'>Research</button>
+                                        </div>
                                     </div>
-                                    <h3>{{ item.suggested_titles.practical or item.title }}</h3>
-                                    <p>{{ item.why_viewers_care }}</p>
-                                    <div class="card-actions">
-                                        <button class="btn btn-small" onclick='saveCreatorItem({{ item|tojson }}, "idea", this)'>Save</button>
-                                        <button class="btn btn-small" onclick='buildResearchPack({{ item|tojson }}, this)'>Research pack</button>
-                                    </div>
+                                    {% else %}
+                                    <p class="text-muted" style="font-size:12px;padding-top:8px">No quick wins yet.</p>
+                                    {% endfor %}
                                 </div>
-                                {% endfor %}
-                            </div>
-                        </div>
 
-                        <div class="creator-section full-width">
-                            <h2 class="section-title">Long-form Candidates</h2>
-                            <div class="creator-opportunity-grid">
-                                {% for item in creator_brief.long_form_candidates %}
-                                <div class="card creator-opportunity-card search-target" data-search="{{ (item.title ~ ' ' ~ item.topic ~ ' ' ~ item.hook)|lower }}">
-                                    <div class="creator-opportunity-head">
-                                        <span class="badge-score {% if item.creator_score >= 80 %}hot{% elif item.creator_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.creator_score }}</span>
-                                        <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
+                                <!-- Clusters tab -->
+                                <div class="brief-rail-body" id="brief-creator-clusters" hidden>
+                                    {% for cluster in creator_brief.content_clusters %}
+                                    <div class="brief-corr-card">
+                                        <div class="brief-corr-topic">
+                                            <span>{{ cluster.topic }}</span>
+                                            <span class="badge-score watch">{{ cluster.creator_score|round|int }}</span>
+                                        </div>
+                                        <div class="brief-weekend-why" style="margin-top:4px">{{ cluster.why_this_is_a_story }}</div>
+                                        <div class="brief-cmd" style="margin-top:4px">{{ cluster.recommended_angle }}</div>
+                                        <div style="font-size:10px;color:var(--text-muted);margin-top:4px">{{ cluster.source_count }} sources · {{ cluster.best_content_format }}</div>
                                     </div>
-                                    <h3>{{ item.suggested_titles.curiosity or item.title }}</h3>
-                                    <p class="creator-hook">{{ item.hook }}</p>
-                                    <p>{{ item.why_viewers_care }}</p>
-                                    <div class="creator-outline-inline">
-                                        {% for point in item.three_key_points %}<span class="tag">{{ point }}</span>{% endfor %}
-                                    </div>
+                                    {% else %}
+                                    <p class="text-muted" style="font-size:12px;padding-top:8px">No clusters yet.</p>
+                                    {% endfor %}
                                 </div>
-                                {% endfor %}
                             </div>
-                        </div>
+                        </div><!-- /brief-digest-grid -->
 
-                        <div class="creator-section full-width">
-                            <h2 class="section-title">Content Clusters</h2>
-                            <div class="creator-cluster-grid">
-                                {% for cluster in creator_brief.content_clusters %}
-                                <div class="card creator-cluster-card search-target" data-search="{{ (cluster.topic ~ ' ' ~ cluster.recommended_angle)|lower }}">
-                                    <div class="creator-cluster-head">
-                                        <h3>{{ cluster.topic }}</h3>
-                                        <span class="badge-score watch">{{ cluster.creator_score|round|int }}</span>
-                                    </div>
-                                    <p>{{ cluster.why_this_is_a_story }}</p>
-                                    <p><strong>Angle:</strong> {{ cluster.recommended_angle }}</p>
-                                    <div class="creator-cluster-meta">
-                                        <span>{{ cluster.source_count }} sources</span>
-                                        <span>{{ cluster.best_content_format }}</span>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
+                        {% else %}
+                        <div class="card" style="padding:2rem;text-align:center;color:var(--text-muted)">
+                            No creator ideas yet — click <strong>Refresh Now</strong> to fetch today's signals.
                         </div>
-                    </div>
+                        {% endif %}
+
+                    </div><!-- /brief-overview-shell -->
                     {% else %}
-                    <div class="overview-grid">
+                    <!-- ── Daily Brief Layout (Design D) ── -->
+                    <div class="brief-overview-shell">
+
                         {% if status_warning %}
                         <div class="inline-alert inline-alert-warning" id="overview-status-warning">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
                             <span>{{ status_warning }}</span>
                         </div>
                         {% endif %}
-                        <div class="summary-row">
-                            <div class="card summary-card highlight">
-                                <div class="summary-label">Daily Trust State</div>
-                                <div class="summary-value">{{ daily_summary.trust_state }}</div>
-                                <div class="summary-text">{{ daily_summary.freshness_message }}</div>
-                                <canvas class="sparkline" id="sparkline-trust" data-metric="trust"></canvas>
+
+                        <!-- ETF pulse (populated by JS) -->
+                        <div id="brief-etf-strip" class="etf-strip etf-strip-overview" style="display:none"></div>
+
+                        <!-- KPI strip -->
+                        <div class="brief-kpi-strip">
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">Daily Trust</div>
+                                <div class="brief-kpi-value">{{ daily_summary.trust_state }}<small style="color:var(--success)">● {{ daily_summary.freshness_message }}</small></div>
                             </div>
-                            <div class="card summary-card">
-                                <div class="summary-label">New Today</div>
-                                <div class="summary-value">{{ daily_summary.new_items_today }}</div>
-                                <div class="summary-text">Items collected</div>
-                                <canvas class="sparkline" id="sparkline-new" data-metric="new"></canvas>
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">New Today</div>
+                                <div class="brief-kpi-value">{{ daily_summary.new_items_today }}<canvas class="sparkline brief-spark" id="sparkline-new" data-metric="new" width="60" height="18"></canvas></div>
+                                <div class="brief-kpi-sub">Items collected since 00:00</div>
                             </div>
-                            <div class="card summary-card">
-                                <div class="summary-label">High Signal</div>
-                                <div class="summary-value">{{ top_items|length }}</div>
-                                <div class="summary-text">Actionable items</div>
-                                <canvas class="sparkline" id="sparkline-signal" data-metric="signal"></canvas>
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">High Signal</div>
+                                <div class="brief-kpi-value">{{ top_items|length }}<canvas class="sparkline brief-spark" id="sparkline-signal" data-metric="signal" width="60" height="18"></canvas></div>
+                                <div class="brief-kpi-sub">Score ≥ 75</div>
                             </div>
-                            <div class="card summary-card">
-                                <div class="summary-label">Saved</div>
-                                <div class="summary-value">{{ saved_items|length }}</div>
-                                <div class="summary-text">In your board</div>
-                                <canvas class="sparkline" id="sparkline-saved" data-metric="saved"></canvas>
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">Saved</div>
+                                <div class="brief-kpi-value">{{ saved_items|length }}<canvas class="sparkline brief-spark" id="sparkline-saved" data-metric="saved" width="60" height="18"></canvas></div>
+                                <div class="brief-kpi-sub">In your board</div>
                             </div>
                         </div>
 
-                        {% if new_items %}
-                        <div class="overview-section full-width">
-                            <h2 class="section-title">What's New</h2>
-                            <div class="new-items-grid">
-                                {% for item in new_items[:6] %}
-                                <div class="card new-item-card">
-                                    <div class="card-header">
-                                        <span class="badge-new">NEW</span>
-                                        <span class="badge-source source-{{ item.source_type }}">{{ item.source_type }}</span>
-                                    </div>
-                                    <div class="card-title">{{ item.title }}</div>
-                                    <div class="card-footer">
-                                        <button class="btn btn-small" onclick='saveItem({{ {"url": item.url, "title": item.title, "source": item.source, "source_type": item.source_type, "category": item.categories[0] if item.categories else "", "signal_score": item.signal_score}|tojson }}, this)'>Save</button>
-                                        <a href="{{ item.url }}" target="_blank" class="btn btn-small">Open</a>
-                                    </div>
+                        <!-- Digest grid: lead + sticky rail -->
+                        {% if top_items %}
+                        {% set lead = top_items[0] %}
+                        <div class="brief-digest-grid">
+
+                            <!-- Lead story -->
+                            <div class="brief-lead">
+                                <div class="brief-kicker">
+                                    <span>Lead Story</span>
+                                    <span class="badge-source source-{{ lead.source_type }}">{{ lead.source_label }}</span>
+                                    <span class="badge-score {% if lead.signal_score >= 80 %}hot{% elif lead.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ lead.signal_score }}</span>
+                                    <span class="brief-kicker-tail"></span>
+                                    <span style="font-family:'Fira Code',monospace;font-size:11px;color:var(--text-muted)">{{ last_updated }}</span>
                                 </div>
-                                {% endfor %}
-                            </div>
-                            {% if new_items|length > 6 %}
-                            <p class="text-muted">+ {{ new_items|length - 6 }} more new items</p>
-                            {% endif %}
-                        </div>
-                        {% endif %}
+                                <h2>{{ lead.title }}</h2>
+                                {% if lead.insight %}
+                                <div class="brief-lead-body">{{ lead.insight }}</div>
+                                {% endif %}
+                                <div class="brief-lead-why">
+                                    <strong style="color:var(--text)">Why it matters.</strong> {{ lead.why_it_matters }}
+                                    {% if lead.why_it_matters_to_me %}
+                                    <strong style="color:var(--text)"> For me.</strong> {{ lead.why_it_matters_to_me }}
+                                    {% endif %}
+                                </div>
+                                <div class="brief-lead-actions">
+                                    <button class="btn btn-primary btn-small" onclick='saveItem({{ {"url": lead.url, "title": lead.title, "source": lead.source, "source_type": lead.source_type, "category": lead.categories[0] if lead.categories else "", "signal_score": lead.signal_score}|tojson }}, this)'>{{ 'Saved' if lead.url in saved_urls else 'Save to board' }}</button>
+                                    <a href="{{ lead.url }}" target="_blank" class="btn btn-small">Open source</a>
+                                    <button class="btn btn-small" onclick='trackItem({{ {"topic": lead.categories[0] if lead.categories else "general", "reason": "from daily brief: " + lead.title}|tojson }}, this)'>Track topic</button>
+                                    <span class="brief-action-rec">{{ lead.recommended_action }}</span>
+                                </div>
 
-                        {% if correlations %}
-                        <div class="overview-section full-width">
-                            <h2 class="section-title">Correlation Signals</h2>
-                            <div class="correlations-grid">
-                                {% for c in correlations %}
-                                <div class="card correlation-card">
-                                    <div class="correlation-header">
-                                        <span class="correlation-topic">{{ c.topic }}</span>
-                                        <span class="correlation-sources">
-                                            {% for src in c.sources %}<span class="badge-source source-{{ src }}">{{ src }}</span>{% endfor %}
-                                        </span>
+                                <div class="brief-rule"></div>
+                                <div class="brief-kicker">Also Worth Reading <span class="brief-kicker-tail"></span></div>
+
+                                <!-- Followup items #2–#5 -->
+                                <div class="brief-followup-list">
+                                    {% for item in top_items[1:5] %}
+                                    <div class="brief-followup-row">
+                                        <span class="brief-rank">#{{ loop.index + 1 }}</span>
+                                        <div style="min-width:0">
+                                            <div class="brief-followup-title">{{ item.title }}</div>
+                                            <div class="brief-followup-meta">
+                                                <span class="badge-score {% if item.signal_score >= 80 %}hot{% elif item.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.signal_score }}</span>
+                                                <span class="badge-source source-{{ item.source_type }}">{{ item.source_label }}</span>
+                                            </div>
+                                            {% set summary = item.why_it_matters or item.insight %}
+                                            {% if summary %}
+                                            <div class="brief-followup-summary"><strong>Why it matters.</strong> {{ summary }}</div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="brief-followup-actions">
+                                            <button class="btn btn-small" onclick='saveItem({{ {"url": item.url, "title": item.title, "source": item.source, "source_type": item.source_type, "category": item.categories[0] if item.categories else "", "signal_score": item.signal_score}|tojson }}, this)'>{{ 'Saved' if item.url in saved_urls else 'Save' }}</button>
+                                            <a href="{{ item.url }}" target="_blank" class="btn btn-small">Open</a>
+                                        </div>
                                     </div>
-                                    <div class="correlation-items">
-                                        {% for item in c.item_list[:2] %}
-                                        <div class="correlation-item">
-                                            <a href="{{ item.url }}" target="_blank">{{ item.title[:50] }}...</a>
-                                            <span class="correlation-score">{{ item.signal_score }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Sticky right rail: tabbed module -->
+                            <div class="brief-rail" id="brief-rail">
+                                <div class="brief-tabs" role="tablist">
+                                    <button class="brief-tab active" onclick="briefTab(this,'brief-new')" role="tab">What's New<span class="brief-tab-count">{{ new_items|length }}</span></button>
+                                    <button class="brief-tab" onclick="briefTab(this,'brief-corr')" role="tab">Correlations<span class="brief-tab-count">{{ correlations|length }}</span></button>
+                                    <button class="brief-tab" onclick="briefTab(this,'brief-weekend')" role="tab">Weekend<span class="brief-tab-count">{{ weekend_items|length }}</span></button>
+                                </div>
+
+                                <!-- What's New tab -->
+                                <div class="brief-rail-body" id="brief-new">
+                                    {% if new_items %}
+                                    <div class="brief-mini-list" style="display:flex;flex-direction:column">
+                                        {% for item in new_items[:8] %}
+                                        <div class="brief-mini-row" onclick="window.open('{{ item.url }}','_blank')">
+                                            <span class="brief-mini-title">{{ item.title }}</span>
+                                            <span class="brief-mini-badges">
+                                                <span class="badge-source source-{{ item.source_type }}">{{ item.source_type }}</span>
+                                                <span class="badge-score {% if item.signal_score >= 80 %}hot{% elif item.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.signal_score }}</span>
+                                            </span>
                                         </div>
                                         {% endfor %}
                                     </div>
+                                    {% else %}
+                                    <p class="text-muted" style="font-size:12px;padding-top:8px">No new items today.</p>
+                                    {% endif %}
                                 </div>
-                                {% endfor %}
+
+                                <!-- Correlations tab -->
+                                <div class="brief-rail-body" id="brief-corr" hidden>
+                                    {% if correlations %}
+                                    {% for c in correlations %}
+                                    <div class="brief-corr-card">
+                                        <div class="brief-corr-topic">
+                                            <span>{{ c.topic }}</span>
+                                            <span class="brief-corr-sources">
+                                                {% for src in c.sources %}<span class="badge-source source-{{ src }}">{{ src }}</span>{% endfor %}
+                                            </span>
+                                        </div>
+                                        {% for item in c.item_list[:2] %}
+                                        <div class="brief-corr-item">
+                                            <a href="{{ item.url }}" target="_blank" style="color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{{ item.title[:55] }}…</a>
+                                            <span class="badge-score {% if item.signal_score >= 80 %}hot{% elif item.signal_score >= 60 %}watch{% else %}interesting{% endif %}" style="margin-left:6px;flex-shrink:0">{{ item.signal_score }}</span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% endfor %}
+                                    {% else %}
+                                    <p class="text-muted" style="font-size:12px;padding-top:8px">No correlations detected yet.</p>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Weekend tab -->
+                                <div class="brief-rail-body" id="brief-weekend" hidden>
+                                    {% if weekend_items %}
+                                    {% for item in weekend_items %}
+                                    <div class="brief-weekend-item">
+                                        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+                                            <span class="badge-score {% if item.signal_score >= 80 %}hot{% elif item.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.signal_score }}</span>
+                                            <span class="badge-source source-{{ item.source_type }}">{{ item.source_label }}</span>
+                                            <span class="badge-pi pi-{{ item.pi_suitability }}" style="margin-left:auto">Pi: {{ item.pi_suitability }}</span>
+                                        </div>
+                                        <div class="brief-weekend-title"><a href="{{ item.url }}" target="_blank" style="color:inherit;text-decoration:none">{{ item.title }}</a></div>
+                                        <div class="brief-weekend-why">{{ item.why_worth_trying }}</div>
+                                        {% if item.install_command %}
+                                        <div class="brief-cmd">{{ item.install_command }}</div>
+                                        {% endif %}
+                                    </div>
+                                    {% endfor %}
+                                    {% else %}
+                                    <p class="text-muted" style="font-size:12px;padding-top:8px">No weekend picks yet.</p>
+                                    {% endif %}
+                                </div>
                             </div>
+                        </div><!-- /brief-digest-grid -->
+                        {% else %}
+                        <div class="card" style="padding:2rem;text-align:center;color:var(--text-muted)">
+                            No data yet — click <strong>Refresh Now</strong> to fetch today's signals.
                         </div>
                         {% endif %}
 
-                        <div class="overview-main-grid">
-                            <div class="overview-section">
-                                <h2 class="section-title">Today's Top 5</h2>
-                                <div class="grid-cards">
-                                    {% for item in top_items %}
-                                    <div class="card item-card search-target" data-search="{{ (item.title ~ ' ' ~ item.why_it_matters ~ ' ' ~ item.why_it_matters_to_me ~ ' ' ~ item.categories|join(' '))|lower }}">
-                                        <div class="card-header">
-                                            <span class="badge-score {% if item.signal_score >= 80 %}hot{% elif item.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.signal_score }}</span>
-                                            <span class="badge-source source-{{ item.source_type }}">{{ item.source_label }}</span>
-                                        </div>
-                                        <div class="card-title">{{ item.title }}</div>
-                                        {% if item.insight %}
-                                        <div class="card-insight"><strong>Insight:</strong> {{ item.insight }}</div>
-                                        {% endif %}
-                                        {% if item.opening_hook %}
-                                        <div class="card-hook"><strong>Hook:</strong> {{ item.opening_hook }}</div>
-                                        {% endif %}
-                                        <div class="card-why-matters"><strong>Why it matters:</strong> {{ item.why_it_matters }}</div>
-                                        <div class="card-why-me"><strong>For me:</strong> {{ item.why_it_matters_to_me }}</div>
-                                        <div class="card-footer">
-                                            <span class="action-rec">{{ item.recommended_action }}</span>
-                                            <div class="card-actions">
-                                                <button class="btn btn-small" onclick='saveItem({{ {"url": item.url, "title": item.title, "source": item.source, "source_type": item.source_type, "category": item.categories[0] if item.categories else "", "signal_score": item.signal_score}|tojson }}, this)'>{{ 'Saved' if item.url in saved_urls else 'Save' }}</button>
-                                                <a href="{{ item.url }}" target="_blank" class="btn btn-small">Open</a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
+                    </div><!-- /brief-overview-shell -->
+                    <!-- kept for other tabs that reference source health -->
+                    <div style="display:none">
+                        {% for source in source_status_cards %}
+                        <div class="card health-card status-{{ source.status_key }}">
+                            <div class="health-card-header">
+                                <span class="health-label">{{ source.label }}</span>
+                                <span class="health-status-badge">{{ source.status_label }}</span>
                             </div>
-
-                            <div class="overview-section">
-                                <h2 class="section-title">Try This Weekend</h2>
-                                <div class="grid-cards">
-                                    {% for item in weekend_items %}
-                                    <div class="card item-card search-target" data-search="{{ (item.title ~ ' ' ~ item.why_worth_trying ~ ' ' ~ item.install_command)|lower }}">
-                                        <div class="card-header">
-                                            <span class="badge-score {% if item.signal_score >= 80 %}hot{% elif item.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.signal_score }}</span>
-                                            <span class="badge-source source-{{ item.source_type }}">{{ item.source_label }}</span>
-                                            <span class="badge-pi pi-{{ item.pi_suitability }}">Pi: {{ item.pi_suitability }}</span>
-                                        </div>
-                                        <div class="card-title">{{ item.title }}</div>
-                                        <div class="card-why-worth"><strong>Worth trying:</strong> {{ item.why_worth_trying }}</div>
-                                        <div class="command-box">{{ item.install_command }}</div>
-                                        <div class="card-footer">
-                                            <span class="difficulty">Difficulty: {{ item.setup_difficulty }}</span>
-                                            <div class="card-actions">
-                                                <button class="btn btn-small" onclick='saveItem({{ {"url": item.url, "title": item.title, "source": item.source, "source_type": item.source_type, "category": item.categories[0] if item.categories else "", "signal_score": item.signal_score}|tojson }}, this)'>{{ 'Saved' if item.url in saved_urls else 'Save' }}</button>
-                                                <a href="{{ item.url }}" target="_blank" class="btn btn-small">Open</a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
+                            <div class="health-metrics">
+                                <span>Items: {{ source.item_count }}</span>
+                                <span>Age: {{ source.cache_age_display }}</span>
+                                <span>Last: {{ source.last_success_relative }}</span>
                             </div>
+                            <div class="health-summary">{{ source.summary }}</div>
                         </div>
-
-                        <div class="overview-section full-width">
-                            <h2 class="section-title">Source Health</h2>
-                            <div class="health-grid">
-                                {% for source in source_status_cards %}
-                                <div class="card health-card status-{{ source.status_key }}">
-                                    <div class="health-card-header">
-                                        <span class="health-label">{{ source.label }}</span>
-                                        <span class="health-status-badge">{{ source.status_label }}</span>
-                                    </div>
-                                    <div class="health-metrics">
-                                        <span>Items: {{ source.item_count }}</span>
-                                        <span>Age: {{ source.cache_age_display }}</span>
-                                        <span>Last: {{ source.last_success_relative }}</span>
-                                    </div>
-                                    <div class="health-summary">{{ source.summary }}</div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        </div>
+                        {% endfor %}
                     </div>
                     {% endif %}
                 </div>
@@ -700,7 +727,10 @@
                                         
                                         {% if item.production_assets %}
                                         <div class="production-forge-area">
-                                            <div class="forge-label">🛠️ Production Forge</div>
+                                            <div class="forge-label">
+                                                🛠️ Production Forge
+                                                <button class="btn btn-tiny btn-primary" style="float: right; font-size: 0.6rem; padding: 2px 4px;" onclick="openItemInStudio({{ item.id }})">Open in Studio</button>
+                                            </div>
                                             <div class="forge-tabs">
                                                 <button class="forge-tab-btn active" onclick="switchForgeTab(this, 'shorts')">Shorts</button>
                                                 <button class="forge-tab-btn" onclick="switchForgeTab(this, 'podcast')">Podcast</button>
@@ -754,10 +784,11 @@
                     </div>
                     <div class="card-grid" id="feed-grid">
                         {% for item in feed_items %}
-                        <div class="card item-card search-target" data-search="{{ (item.title ~ ' ' ~ item.description ~ ' ' ~ item.categories|join(' '))|lower }}" data-breakdown='{{ item.score_breakdown|tojson if item.score_breakdown else "{}" }}' data-why="{{ item.why|default('calculating') }}" data-score-label="{{ item.score_label|default('Interesting')|lower }}" data-pi="{{ item.pi_suitability|default('partial') }}" data-saved="{{ 'yes' if item.url in saved_urls else 'no' }}">
+                        <div class="card item-card search-target" data-url="{{ item.url }}" data-search="{{ (item.title ~ ' ' ~ item.description ~ ' ' ~ item.categories|join(' '))|lower }}" data-breakdown='{{ item.score_breakdown|tojson if item.score_breakdown else "{}" }}' data-why="{{ item.why|default('calculating') }}" data-score-label="{{ item.score_label|default('Interesting')|lower }}" data-pi="{{ item.pi_suitability|default('partial') }}" data-saved="{{ 'yes' if item.url in saved_urls else 'no' }}">
                             <div class="card-header">
                                 <span class="badge-score {% if item.signal_score >= 80 %}hot{% elif item.signal_score >= 60 %}watch{% else %}interesting{% endif %}" title="Hover for score breakdown">{{ item.signal_score }}</span>
                                 <span class="badge-source source-{{ item.source_type }}">{{ item.source_type }}</span>
+                                <span class="vote-badge" style="display:none">👍 <span class="vote-count"></span></span>
                             </div>
                             <div class="card-title">{{ item.title }}</div>
                             <div class="card-desc">{{ item.description }}</div>
@@ -1229,6 +1260,72 @@
                 </div>
 
                 <!-- Settings Tab -->
+                <!-- Forge Studio Tab -->
+                <div id="forge-studio" class="section" data-title="Forge Studio">
+                    <div class="section-header">
+                        <h2 class="section-title">🛠️ Forge Studio</h2>
+                        <div class="section-tools">
+                            <button class="btn btn-small" onclick="refreshForgeStudio()">Refresh</button>
+                        </div>
+                    </div>
+                    
+                    <div class="forge-studio-container">
+                        <div class="forge-sidebar">
+                            <h3 class="forge-sidebar-title">Research Pipeline</h3>
+                            <div class="forge-item-list" id="forge-item-list">
+                                <!-- Populated by JS -->
+                                <div class="empty-state">No forged items ready.</div>
+                            </div>
+                        </div>
+                        
+                        <div class="forge-main" id="forge-main-empty">
+                            <div class="forge-empty-state">
+                                <div class="forge-empty-icon">⚒️</div>
+                                <h3>Select an item to enter the Studio</h3>
+                                <p>Items promoted to 'Script Ready' with forged assets will appear here.</p>
+                            </div>
+                        </div>
+
+                        <div class="forge-main" id="forge-main-content" style="display: none;">
+                            <div class="forge-workspace-header">
+                                <div class="forge-active-title" id="forge-active-title">Strategic Synthesis</div>
+                                <div class="forge-active-meta" id="forge-active-meta">Recursive Dive • May 2026</div>
+                            </div>
+
+                            <div class="forge-workspace-layout">
+                                <div class="forge-asset-selector">
+                                    <button class="forge-asset-btn active" onclick="switchStudioAsset('shorts')">📹 YouTube Shorts</button>
+                                    <button class="forge-asset-btn" onclick="switchStudioAsset('podcast')">🎙️ Podcast Script</button>
+                                    <button class="forge-asset-btn" onclick="switchStudioAsset('linkedin')">🔗 LinkedIn Post</button>
+                                    <button class="forge-asset-btn" onclick="switchStudioAsset('blog')">✍️ Technical Blog</button>
+                                    <button class="forge-asset-btn" onclick="switchStudioAsset('demo')">💻 Demo Guide</button>
+                                </div>
+
+                                <div class="forge-editor-container">
+                                    <div class="forge-editor-toolbar">
+                                        <span id="forge-asset-label">Shorts Script</span>
+                                        <button class="btn btn-small btn-primary" onclick="copyStudioAsset()">Copy to Clipboard</button>
+                                    </div>
+                                    <div class="forge-editor-content" id="forge-editor-content" contenteditable="true">
+                                        <!-- Asset content here -->
+                                    </div>
+                                </div>
+
+                                <div class="forge-context-sidebar">
+                                    <div class="forge-context-box">
+                                        <h4>Strategic Leads</h4>
+                                        <div class="forge-context-text" id="forge-context-leads">Loading...</div>
+                                    </div>
+                                    <div class="forge-context-box">
+                                        <h4>Munger Inversion</h4>
+                                        <div class="forge-context-text" id="forge-context-inversion">Loading...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="settings" class="section">
                     <div class="section-header">
                         <h2 class="section-title">Settings</h2>
@@ -1255,6 +1352,18 @@
                         </div>
                     </div>
                 </div>
+                <!-- Markets Section -->
+                <div id="markets" class="section" data-title="AI Markets">
+                    <div id="markets-content">
+                        <div class="markets-skeleton">
+                            <div class="markets-skeleton-strip"></div>
+                            <div class="markets-skeleton-grid">
+                                {% for _ in range(10) %}<div class="markets-skeleton-card"></div>{% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <script id="dashboard-state" type="application/json">{{ dashboard_state|tojson }}</script>
             </main>
         </div>

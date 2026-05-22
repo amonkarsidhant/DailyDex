@@ -22,6 +22,35 @@ function toggleSidebar() {
     }
 }
 
+// Desktop sidebar collapse — chevron button inside sidebar
+function collapseSidebar() {
+    var sidebar = document.getElementById('main-sidebar');
+    if (!sidebar) return;
+    var collapsed = sidebar.classList.toggle('collapsed');
+    try { localStorage.setItem('dailydex-sidebar-collapsed', collapsed ? '1' : '0'); } catch(e) {}
+}
+
+// Restore sidebar collapse state on load
+(function() {
+    try {
+        if (localStorage.getItem('dailydex-sidebar-collapsed') === '1') {
+            var sidebar = document.getElementById('main-sidebar');
+            if (sidebar) sidebar.classList.add('collapsed');
+        }
+    } catch(e) {}
+})();
+
+// Daily Brief rail tab switcher
+function briefTab(btn, panelId) {
+    var rail = btn.closest('.brief-rail');
+    if (!rail) return;
+    rail.querySelectorAll('.brief-tab').forEach(function(t) { t.classList.remove('active'); });
+    rail.querySelectorAll('.brief-rail-body').forEach(function(p) { p.hidden = true; });
+    btn.classList.add('active');
+    var panel = document.getElementById(panelId);
+    if (panel) panel.hidden = false;
+}
+
 function toggleTheme() {
     var body = document.body;
     var current = body.getAttribute('data-theme');
@@ -1231,9 +1260,15 @@ function showTab(tabId, btn, updateHash) {
             titleEl.textContent = sectionTitle;
         }
 
-        if (tabId === 'trends') {
+        if (tabId === 'markets') {
+            requestAnimationFrame(loadMarkets);
+        } else if (tabId === 'trends') {
             if (typeof initTrendsCharts === 'function') {
                 requestAnimationFrame(function() { initTrendsCharts(); });
+            }
+        } else if (tabId === 'forge-studio') {
+            if (typeof refreshForgeStudio === 'function') {
+                refreshForgeStudio();
             }
         } else {
             if (typeof resizeVisibleCharts === 'function') {
@@ -1846,6 +1881,60 @@ function showShortcuts() {
     modal.style.display = 'flex';
 }
 
+// --- Friend vote badges ---
+async function loadVoteBadges() {
+    try {
+        const votes = await fetch('/api/votes').then(r => r.json());
+        if (!votes || typeof votes !== 'object') return;
+        document.querySelectorAll('.item-card[data-url]').forEach(card => {
+            const url = card.dataset.url;
+            const count = votes[url];
+            if (!count) return;
+            const badge = card.querySelector('.vote-badge');
+            if (!badge) return;
+            badge.querySelector('.vote-count').textContent =
+                `${count} friend${count > 1 ? 's' : ''} voted`;
+            badge.style.display = 'inline-flex';
+        });
+    } catch (e) {
+        // votes API unavailable — silently skip
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadVoteBadges);
+
+// --- ETF pulse on overview page ---
+async function loadOverviewEtfStrip() {
+    var strips = ['brief-etf-strip', 'brief-etf-strip-creator']
+        .map(function(id) { return document.getElementById(id); })
+        .filter(Boolean);
+    if (!strips.length) return;
+
+    try {
+        var data = await fetch('/api/markets').then(function(r) { return r.json(); });
+        var etfs = data.etfs || [];
+        if (!etfs.length) return;
+
+        var html = '<div class="etf-strip-label">AI ETF Pulse</div>' +
+            etfs.map(function(e) {
+                var cls = e.change_pct >= 0 ? 'up' : 'down';
+                var arrow = e.change_pct >= 0 ? '▲' : '▼';
+                return '<div class="etf-item">' +
+                    '<span class="etf-ticker">' + e.ticker + '</span>' +
+                    '<span class="etf-price">$' + e.price.toFixed(2) + '</span>' +
+                    '<span class="stock-change ' + cls + '">' + arrow + ' ' + Math.abs(e.change_pct).toFixed(2) + '%</span>' +
+                    '</div>';
+            }).join('');
+
+        strips.forEach(function(el) {
+            el.innerHTML = html;
+            el.style.display = 'flex';
+        });
+    } catch (e) { /* silently skip if markets not cached yet */ }
+}
+
+document.addEventListener('DOMContentLoaded', loadOverviewEtfStrip);
+
 function switchForgeTab(btn, type) {
     const card = btn.closest('.production-forge-area');
     const tabs = card.querySelectorAll('.forge-tab-btn');
@@ -1858,3 +1947,241 @@ function switchForgeTab(btn, type) {
     const activePane = card.querySelector('.forge-pane.' + type);
     if (activePane) activePane.classList.add('active');
 }
+
+let activeForgeItem = null;
+let activeForgeAssetType = 'shorts';
+
+async function refreshForgeStudio() {
+    const list = document.getElementById('forge-item-list');
+    list.innerHTML = '<div class="loading">Syncing Pipeline...</div>';
+    
+    try {
+        const res = await fetch('/api/saved?status=script_ready');
+        const data = await res.json();
+        const items = (data.items || []).filter(i => i.production_status === 'ready' || i.production_assets);
+        
+        if (items.length === 0) {
+            list.innerHTML = '<div class="empty-state">No forged items ready.</div>';
+            return;
+        }
+        
+        list.innerHTML = '';
+        items.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'forge-item-card';
+            if (activeForgeItem && activeForgeItem.id === item.id) card.classList.add('active');
+            card.onclick = () => selectForgeItem(item);
+            
+            card.innerHTML = `
+                <div class="forge-item-title">${item.working_title || item.title}</div>
+                <div class="forge-item-meta">${item.category} • ${item.source}</div>
+            `;
+            list.appendChild(card);
+        });
+    } catch (e) {
+        list.innerHTML = '<div class="error">Failed to load pipeline.</div>';
+    }
+}
+
+function selectForgeItem(item) {
+    activeForgeItem = item;
+    
+    // Update active class in list
+    document.querySelectorAll('.forge-item-card').forEach(c => {
+        c.classList.remove('active');
+        if (c.querySelector('.forge-item-title').innerText === (item.working_title || item.title)) {
+            c.classList.add('active');
+        }
+    });
+    
+    // Show content
+    document.getElementById('forge-main-empty').style.display = 'none';
+    document.getElementById('forge-main-content').style.display = 'flex';
+    
+    // Update headers
+    document.getElementById('forge-active-title').innerText = item.working_title || item.title;
+    document.getElementById('forge-active-meta').innerText = `${item.category} • ${item.source} • ${item.created_at.split(' ')[0]}`;
+    
+    // Update context
+    document.getElementById('forge-context-leads').innerText = item.notes.split('|')[0] || 'No leads extracted.';
+    document.getElementById('forge-context-inversion').innerText = item.notes.includes('INVERSION:') ? item.notes.split('INVERSION:')[1] : 'No risk analysis available.';
+    
+    // Default to shorts
+    switchStudioAsset('shorts');
+}
+
+function switchStudioAsset(type) {
+    activeForgeAssetType = type;
+    
+    // Update buttons
+    document.querySelectorAll('.forge-asset-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.innerText.toLowerCase().includes(type)) btn.classList.add('active');
+    });
+    
+    // Update label
+    const labels = {
+        'shorts': '📹 YouTube Shorts Script',
+        'podcast': '🎙️ Podcast Dialogue',
+        'linkedin': '🔗 LinkedIn Professional Post',
+        'blog': '✍️ Technical Blog Outline',
+        'demo': '💻 Visual Demo Guide'
+    };
+    document.getElementById('forge-asset-label').innerText = labels[type];
+    
+    // Load content
+    const assets = typeof activeForgeItem.production_assets === 'string' 
+        ? JSON.parse(activeForgeItem.production_assets) 
+        : activeForgeItem.production_assets;
+        
+    const content = assets[type + '_script'] || assets[type + '_post'] || assets[type + '_outline'] || assets[type + '_guide'] || assets[type] || 'Asset not forged for this format.';
+    document.getElementById('forge-editor-content').innerText = content;
+}
+
+function copyStudioAsset() {
+    const text = document.getElementById('forge-editor-content').innerText;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.querySelector('.forge-editor-toolbar .btn');
+        const oldText = btn.innerText;
+        btn.innerText = 'Copied!';
+        btn.classList.add('btn-success');
+        setTimeout(() => {
+            btn.innerText = oldText;
+            btn.classList.remove('btn-success');
+        }, 2000);
+    });
+}
+
+// End of Forge Studio logic
+
+window.selectForgeItem = selectForgeItem;
+
+async function openItemInStudio(itemId) {
+    showTab('forge-studio');
+    const res = await fetch('/api/saved?status=script_ready');
+    const data = await res.json();
+    const item = (data.items || []).find(i => i.id === itemId);
+    if (item) selectForgeItem(item);
+}
+
+// --- AI Markets ---
+var _marketsLoaded = false;
+var _marketsRefreshTimer = null;
+
+async function loadMarkets(force) {
+    if (_marketsLoaded && !force) return;
+    var el = document.getElementById('markets-content');
+    if (!el) return;
+
+    try {
+        var data = await fetch('/api/markets').then(function(r) { return r.json(); });
+        renderMarkets(data);
+        _marketsLoaded = true;
+        clearTimeout(_marketsRefreshTimer);
+        _marketsRefreshTimer = setTimeout(function() { _marketsLoaded = false; }, 15 * 60 * 1000);
+    } catch (e) {
+        el.innerHTML = '<div class="card" style="padding:2rem;text-align:center;color:var(--text-muted)">Could not load market data. Check your connection.</div>';
+    }
+}
+
+async function refreshMarkets() {
+    _marketsLoaded = false;
+    document.getElementById('markets-content').innerHTML = '<div class="markets-skeleton"><div class="markets-skeleton-strip"></div><div class="markets-skeleton-grid">' + '<div class="markets-skeleton-card"></div>'.repeat(10) + '</div></div>';
+    try {
+        await fetch('/api/markets/refresh', { method: 'POST' });
+    } catch(e) {}
+    await loadMarkets(true);
+}
+
+function _fmtPct(pct) {
+    var cls = pct >= 0 ? 'up' : 'down';
+    var arrow = pct >= 0 ? '▲' : '▼';
+    return '<span class="stock-change ' + cls + '">' + arrow + ' ' + Math.abs(pct).toFixed(2) + '%</span>';
+}
+
+function _week52Bar(price, low, high) {
+    if (!high || high === low) return '';
+    var pct = Math.min(100, Math.max(0, ((price - low) / (high - low)) * 100));
+    return '<div class="stock-52w"><div class="stock-52w-bar"><div class="stock-52w-fill" style="width:' + pct.toFixed(1) + '%"></div></div><div class="stock-52w-labels"><span>$' + low.toLocaleString() + '</span><span>52w</span><span>$' + high.toLocaleString() + '</span></div></div>';
+}
+
+function renderMarkets(data) {
+    var el = document.getElementById('markets-content');
+    if (!el) return;
+
+    var updated = data.last_updated ? new Date(data.last_updated).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '—';
+
+    // ETF pulse strip
+    var etfHtml = (data.etfs || []).map(function(e) {
+        return '<div class="etf-item"><span class="etf-ticker">' + e.ticker + '</span>' +
+               '<span class="etf-name">' + e.name + '</span>' +
+               '<span class="etf-price">$' + e.price.toFixed(2) + '</span>' +
+               _fmtPct(e.change_pct) + '</div>';
+    }).join('');
+
+    // Stock cards
+    var stockHtml = (data.stocks || []).map(function(s) {
+        return '<div class="stock-card card">' +
+            '<div class="stock-card-top">' +
+                '<span class="stock-rank">' + s.rank + '</span>' +
+                '<div class="stock-identity"><div class="stock-name">' + s.name + '</div>' +
+                '<div class="stock-ticker">' + s.ticker + '</div></div>' +
+                '<div class="stock-right">' +
+                    '<div class="stock-price">$' + s.price.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</div>' +
+                    _fmtPct(s.change_pct) +
+                '</div>' +
+            '</div>' +
+            '<div class="stock-cap">' + s.market_cap + '</div>' +
+            _week52Bar(s.price, s.week52_low, s.week52_high) +
+        '</div>';
+    }).join('');
+
+    el.innerHTML =
+        '<div class="section-header">' +
+            '<div class="header-left">' +
+                '<h2 class="section-title">AI Markets <span class="section-count">' + (data.stocks||[]).length + ' companies</span></h2>' +
+                '<span class="text-muted" style="font-size:11px">Prices: Yahoo Finance &nbsp;·&nbsp; Rankings: <a href="https://companiesmarketcap.com/artificial-intelligence/largest-ai-companies-by-marketcap/" target="_blank" style="color:inherit">companiesmarketcap.com</a></span>' +
+            '</div>' +
+            '<div class="header-right">' +
+                '<span class="last-updated-label">Updated ' + updated + '</span>' +
+                '<button class="btn btn-small" onclick="refreshMarkets()">↻ Refresh</button>' +
+            '</div>' +
+        '</div>' +
+        '<div class="etf-strip"><div class="etf-strip-label">AI ETF Pulse</div>' + etfHtml + '</div>' +
+        '<div class="stock-grid">' + stockHtml + '</div>';
+
+    if (typeof initSourceBadgeIcons === 'function') initSourceBadgeIcons();
+}
+
+// --- Provider logo badges ---
+const _SOURCE_ICONS = {
+    github: '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>',
+    youtube: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.54 3.55 12 3.55 12 3.55s-7.54 0-9.38.5A3.02 3.02 0 0 0 .5 6.19C0 8.07 0 12 0 12s0 3.93.5 5.81a3.02 3.02 0 0 0 2.12 2.14C4.46 20.45 12 20.45 12 20.45s7.54 0 9.38-.5a3.02 3.02 0 0 0 2.12-2.14C24 15.93 24 12 24 12s0-3.93-.5-5.81zM9.55 15.57V8.43L15.82 12l-6.27 3.57z"/></svg>',
+    huggingface: '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 36 36" fill="currentColor" aria-hidden="true"><path d="M18 2C9.16 2 2 9.16 2 18s7.16 16 16 16 16-7.16 16-16S26.84 2 18 2zm-4.5 11a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm9 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm-9.3 8.5c.4-.26.92-.16 1.18.24.04.06 1.1 1.56 3.62 1.56s3.58-1.5 3.62-1.56a.87.87 0 0 1 1.18-.24.87.87 0 0 1 .24 1.18C22.9 23.28 21.2 25 18 25s-4.9-1.72-5.04-1.82a.87.87 0 0 1-.26-1.18z"/></svg>',
+    papers: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>',
+    arxiv: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>',
+    reddit: '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .379-.24l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>',
+    hackernews: '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M0 24V0h24v24H0zM6.951 5.896l4.112 7.708v5.064h1.583v-4.972l4.148-7.799h-1.749l-2.457 4.875c-.372.745-.688 1.434-.688 1.434s-.297-.708-.651-1.406L8.831 5.896z"/></svg>',
+    producthunt: '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.604 8.4h-3.405V12h3.405c.995 0 1.8-.805 1.8-1.8 0-.995-.805-1.8-1.8-1.8zM12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm1.604 13.8H10.2v4.2H8.4V6h5.204c1.985 0 3.6 1.615 3.6 3.6s-1.615 3.6-3.6 3.6z"/></svg>',
+    blogs: '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19.01 7.38 20 6.18 20C4.98 20 4 19.01 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1z"/></svg>',
+    models: '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+};
+
+function initSourceBadgeIcons() {
+    document.querySelectorAll('.badge-source:not([data-iconified])').forEach(function(badge) {
+        var sourceClass = Array.from(badge.classList).find(function(c) { return c.startsWith('source-'); });
+        if (!sourceClass) return;
+        var sourceType = sourceClass.replace('source-', '');
+        var icon = _SOURCE_ICONS[sourceType];
+        if (!icon) return;
+        badge.setAttribute('title', badge.textContent.trim() || sourceType);
+        badge.setAttribute('aria-label', sourceType);
+        badge.innerHTML = icon;
+        badge.setAttribute('data-iconified', '1');
+        badge.style.padding = '3px 5px';
+        badge.style.lineHeight = '1';
+        badge.style.verticalAlign = 'middle';
+    });
+}
+
+document.addEventListener('DOMContentLoaded', initSourceBadgeIcons);

@@ -160,6 +160,29 @@ class IntelligenceDB:
         # Unique index on saved_items.url for deduplication
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_items_url ON saved_items(url)")
 
+        # Telegram subscribers table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS telegram_subscribers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER NOT NULL UNIQUE,
+                name TEXT,
+                joined_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Friend votes table — one vote per user per item
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS item_votes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_url TEXT NOT NULL,
+                chat_id INTEGER NOT NULL,
+                voter_name TEXT,
+                voted_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(item_url, chat_id)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_item_votes_url ON item_votes(item_url)")
+
         # Cached LLM creator enrichment, keyed by content hash
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS creator_assets (
@@ -815,6 +838,18 @@ class IntelligenceDB:
         conn.commit()
         conn.close()
 
+    # ===== Telegram Subscribers =====
+
+    def add_subscriber(self, chat_id: int, name: str = "") -> None:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR IGNORE INTO telegram_subscribers (chat_id, name) VALUES (?, ?)",
+            (chat_id, name),
+        )
+        conn.commit()
+        conn.close()
+
     def read_cluster_history(self, topic: str, hours: int = 168) -> List[tuple]:
         """Returns list of (hour_bucket, item_count, signal_sum), newest-last."""
         conn = sqlite3.connect(self.db_path)
@@ -1089,6 +1124,59 @@ class IntelligenceDB:
         conn.commit()
         conn.close()
         return True
+
+    def remove_subscriber(self, chat_id: int) -> None:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM telegram_subscribers WHERE chat_id = ?", (chat_id,))
+        conn.commit()
+        conn.close()
+
+    def get_subscribers(self) -> List[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM telegram_subscribers ORDER BY joined_at")
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+
+    # ===== Friend Votes =====
+
+    def vote_item(self, item_url: str, chat_id: int, voter_name: str = "") -> bool:
+        """Record a vote. Returns True if this is a new vote, False if already voted."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "INSERT INTO item_votes (item_url, chat_id, voter_name) VALUES (?, ?, ?)",
+                (item_url, chat_id, voter_name),
+            )
+            conn.commit()
+            conn.close()
+            return True
+        except sqlite3.IntegrityError:
+            conn.close()
+            return False
+
+    def get_vote_count(self, item_url: str) -> int:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM item_votes WHERE item_url = ?", (item_url,))
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+
+    def get_all_votes(self) -> Dict[str, int]:
+        """Return {item_url: vote_count} for all items with at least one vote."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT item_url, COUNT(*) as cnt FROM item_votes GROUP BY item_url"
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return {row[0]: row[1] for row in rows}
 
 
 class IntelligenceJSON:
