@@ -3,11 +3,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
+import time
+import uuid
 from collections import defaultdict
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 SOURCE_LABELS = {
@@ -127,8 +131,14 @@ def _visual_boost(item: Dict, source_type: str) -> int:
     return min(100, score)
 
 
-def build_topic_clusters(scored_data: Dict) -> List[Dict]:
-    """Group related items into creator-friendly story clusters."""
+def build_topic_clusters(scored_data: Dict, intel_db=None) -> List[Dict]:
+    """Group related items into creator-friendly story clusters.
+
+    When ``intel_db`` is supplied, each cluster also carries the Pulse-screen
+    trend fields (``momentum_24h_pct``, ``first_seen_hrs``, ``pulse_24h``,
+    ``radar_coords``). Without a DB handle these default to neutral values so
+    existing callers keep working unchanged.
+    """
     topic_map = {}
     for source_type in ["github", "huggingface", "youtube", "blogs", "papers"]:
         for item in scored_data.get(source_type, []) or []:
@@ -137,6 +147,7 @@ def build_topic_clusters(scored_data: Dict) -> List[Dict]:
                     "topic": topic,
                     "sources": set(),
                     "related_items": [],
+                    "raw_items": [],
                     "signal_total": 0,
                     "creator_total": 0,
                     "demoable": False,
@@ -150,10 +161,12 @@ def build_topic_clusters(scored_data: Dict) -> List[Dict]:
                     "signal_score": item.get("signal_score", 0),
                     "creator_score": item.get("creator_score", 0),
                 })
+                cluster["raw_items"].append((item, source_type))
                 cluster["signal_total"] += int(item.get("signal_score") or 0)
                 cluster["creator_total"] += int(item.get("creator_score") or 0)
                 cluster["demoable"] = cluster["demoable"] or _is_demoable(item, source_type)
 
+    now_hour = int(time.time() // 3600)
     clusters = []
     for topic, cluster in topic_map.items():
         source_count = len(cluster["sources"])
@@ -168,8 +181,12 @@ def build_topic_clusters(scored_data: Dict) -> List[Dict]:
         best_format = "Comparison video" if source_count >= 3 else "Explainer"
         if cluster["demoable"] and avg_creator >= 70:
             best_format = "Tutorial"
-        clusters.append({
+
+        # Trend time-series fields (Phase 1).
+        history = intel_db.read_cluster_history(topic, hours=168) if intel_db else []
+        cluster_out = {
             "topic": topic,
+            "slug": slugify_topic(topic),
             "source_count": source_count,
             "sources": sorted(cluster["sources"]),
             "related_items": related_items[:6],
@@ -179,9 +196,111 @@ def build_topic_clusters(scored_data: Dict) -> List[Dict]:
             "recommended_angle": "Show what changed, who it matters for, and the fastest concrete demo." if cluster["demoable"] else "Explain the shift, show supporting evidence, and call out what is still uncertain.",
             "best_content_format": best_format,
             "has_demoable_item": cluster["demoable"],
-        })
+            "momentum_24h_pct": _momentum_pct(history),
+            "first_seen_hrs": _first_seen_hrs(history, now_hour),
+            "pulse_24h": _pulse_24h(history, now_hour),
+            "radar_coords": _radar_coords(cluster["raw_items"], source_count),
+        }
+        clusters.append(cluster_out)
     clusters.sort(key=lambda row: (row["source_count"], row["creator_score"], row["average_signal_score"]), reverse=True)
     return clusters
+
+
+# ── Phase 1: trend math ──────────────────────────────────────────────────
+
+def _momentum_pct(history: List[tuple], lookback_hrs: int = 24) -> int:
+    """((sum_recent / sum_prior) - 1) * 100, clamped to [-99, +200].
+
+    ``history`` is the list of (hour_bucket, item_count, signal_sum) rows,
+    oldest-first, as returned by ``read_cluster_history``.
+    """
+    if not history:
+        return 0
+    counts = [row[1] for row in history]
+    recent = counts[-lookback_hrs:]
+    prior = counts[-2 * lookback_hrs:-lookback_hrs]
+    sum_recent = sum(recent)
+    sum_prior = sum(prior)
+    if sum_prior <= 0:
+        return 200 if sum_recent > 0 else 0
+    pct = ((sum_recent / sum_prior) - 1.0) * 100.0
+    return int(max(-99, min(200, round(pct))))
+
+
+def _first_seen_hrs(history: List[tuple], now_hour: int) -> int:
+    """now_hour - earliest hour with items, or 168+ if absent."""
+    for hour_bucket, item_count, _signal in history:
+        if item_count > 0:
+            return max(0, int(now_hour - hour_bucket))
+    return 168
+
+
+def _pulse_24h(history: List[tuple], now_hour: int) -> List[float]:
+    """Length-24 array of item_count, oldest-first, normalized to peak=1.
+
+    Empty hours fill as 0. Returns floats in [0, 1].
+    """
+    by_hour = {int(hb): int(cnt) for hb, cnt, _s in history}
+    raw = [by_hour.get(now_hour - (23 - i), 0) for i in range(24)]
+    peak = max(raw) if raw else 0
+    if peak <= 0:
+        return [0.0] * 24
+    return [round(v / peak, 3) for v in raw]
+
+
+def _radar_coords(raw_items: List[tuple], source_count: int) -> Dict[str, float]:
+    """Deterministic {x, y} in [-1, 1]^2 from averaged creator factors.
+
+    X axis: visual (-1) ↔ demo (+1)  -> practical_demo_value vs visual_potential
+    Y axis: explainer (-1) ↔ cultural (+1) -> credibility vs story_tension
+    """
+    if not raw_items:
+        return {"x": 0.0, "y": 0.0}
+    support = {"source_count": source_count}
+    sums = defaultdict(float)
+    for item, source_type in raw_items:
+        factors = _creator_factors(item, source_type, support)
+        for key in ("visual_potential", "practical_demo_value", "credibility", "story_tension"):
+            sums[key] += factors[key]
+    n = len(raw_items)
+    visual = sums["visual_potential"] / n
+    demo = sums["practical_demo_value"] / n
+    credibility = sums["credibility"] / n
+    tension = sums["story_tension"] / n
+    # Normalize each opposed pair to a [-1, 1] axis.
+    x = (demo - visual) / 100.0
+    y = (tension - credibility) / 100.0
+    return {"x": round(max(-1.0, min(1.0, x)), 3), "y": round(max(-1.0, min(1.0, y)), 3)}
+
+
+def snapshot_clusters(scored_data: Dict, intel_db, now_ts: Optional[float] = None) -> int:
+    """Group the current scored items by topic; upsert one row per topic into
+    cluster_snapshots at the current hour bucket. Returns rows written."""
+    if intel_db is None:
+        return 0
+    now_ts = now_ts or time.time()
+    bucket = int(now_ts // 3600)
+    by_topic = defaultdict(lambda: {"items": 0, "signal": 0, "sources": set()})
+    for source_type in ("github", "huggingface", "youtube", "blogs", "papers"):
+        for item in scored_data.get(source_type, []) or []:
+            topic = primary_topic(item)
+            by_topic[topic]["items"] += 1
+            by_topic[topic]["signal"] += int(item.get("signal_score") or 0)
+            by_topic[topic]["sources"].add(source_type)
+    written = 0
+    for topic, agg in by_topic.items():
+        intel_db.write_cluster_snapshot(
+            topic, bucket, agg["items"], agg["signal"],
+            json.dumps(sorted(agg["sources"])),
+        )
+        written += 1
+    # Retention trim.
+    try:
+        retention = int(os.environ.get("CLUSTER_HISTORY_RETENTION_HRS", "336"))
+        intel_db.trim_cluster_snapshots(bucket - retention)
+    except Exception:
+        pass
+    return written
 
 
 def _format_for_item(item: Dict, source_type: str, factors: Dict, support: Dict) -> str:
@@ -712,3 +831,106 @@ def build_creator_digest(brief: Dict, saved_items: List[Dict], date: str | None 
             lines.append(f"- {item.get('working_title') or item.get('title', '')} - {item.get('status', 'idea')}")
     lines.append("")
     return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Phase 5: thumbnail variant stub generator
+# ─────────────────────────────────────────────────────────────────────────
+
+THUMBNAIL_KINDS = ("face-zoom", "before-after", "headline", "vs-hero", "race")
+
+# Hand-tuned per-kind CTR weights (multiplied against visual_potential signal).
+_KIND_CTR_WEIGHT = {
+    "face-zoom": 1.12,
+    "before-after": 1.06,
+    "headline": 0.94,
+    "vs-hero": 1.0,
+    "race": 0.9,
+}
+
+_KIND_SUBTEXT = {
+    "face-zoom": "I tried it so you don't have to",
+    "before-after": "before → after",
+    "headline": "what nobody tells you",
+    "vs-hero": "head to head",
+    "race": "who wins?",
+}
+
+
+def _deterministic_jitter(seed: str) -> float:
+    """Stable [-1.5, +1.5] jitter from a seed string."""
+    h = int(hashlib.sha1(seed.encode("utf-8")).hexdigest()[:8], 16)
+    return ((h % 300) / 100.0) - 1.5
+
+
+def _ctr_for_kind(visual_potential: int, kind: str, seed: str) -> float:
+    """Deterministic CTR prediction (percent) from visual_potential + kind."""
+    base = 3.5 + (visual_potential / 100.0) * 7.0  # 3.5%..10.5%
+    pred = base * _KIND_CTR_WEIGHT.get(kind, 1.0) + _deterministic_jitter(seed)
+    return round(max(1.0, min(14.0, pred)), 1)
+
+
+def generate_thumbnail_variants(intel_db, content_hash: str, topic: str = None,
+                                count: int = 6, base_item: Dict = None) -> List[Dict]:
+    """Create `count` thumbnail_variants rows for one item and return them.
+
+    Mirrors the design's FakeThumb fields — no PNG produced. CTR is a
+    deterministic function of visual_potential + kind (v1 stub).
+    """
+    if intel_db is None:
+        return []
+    visual_potential = 70
+    text_lines = None
+    if base_item is not None:
+        try:
+            factors = _creator_factors(base_item, base_item.get("source_type", "github"),
+                                       {"source_count": 1})
+            visual_potential = factors["visual_potential"]
+            text_lines = _thumbnail_text(topic or primary_topic(base_item), base_item)
+        except Exception:
+            pass
+    if not text_lines:
+        base = (topic or "AI STORY").upper()
+        text_lines = [base, f"{base} EXPLAINED", "YOU'RE NOT READY"]
+
+    now = time.time()
+    variants = []
+    for i in range(count):
+        kind = THUMBNAIL_KINDS[i % len(THUMBNAIL_KINDS)]
+        primary = text_lines[i % len(text_lines)]
+        seed = f"{content_hash}:{kind}:{i}"
+        hue = int(hashlib.sha1(seed.encode("utf-8")).hexdigest()[8:12], 16) % 360
+        variant = {
+            "id": f"tb-{uuid.uuid4().hex[:12]}",
+            "content_hash": content_hash,
+            "topic": slugify_topic(topic) if topic else None,
+            "kind": kind,
+            "text_primary": primary,
+            "text_secondary": _KIND_SUBTEXT.get(kind, ""),
+            "hue": hue,
+            "image_path": None,
+            "ctr_pred": _ctr_for_kind(visual_potential, kind, seed),
+            "picked": 0,
+            "generated_by": "stub",
+            "created_at": now,
+        }
+        intel_db.insert_thumbnail_variant(variant)
+        variants.append(serialize_thumbnail_variant(variant))
+    variants.sort(key=lambda v: v["ctr_pred"], reverse=True)
+    return variants
+
+
+def serialize_thumbnail_variant(row: Dict) -> Dict:
+    """DB row -> API shape (MOCK_DATA_REFERENCE thumbnails[])."""
+    return {
+        "id": row["id"],
+        "content_hash": row["content_hash"],
+        "topic": row.get("topic"),
+        "kind": row["kind"],
+        "text": row.get("text_primary"),
+        "subtext": row.get("text_secondary"),
+        "hue": row.get("hue"),
+        "ctr_pred": row.get("ctr_pred"),
+        "image_path": row.get("image_path"),
+        "picked": bool(row.get("picked")),
+    }
