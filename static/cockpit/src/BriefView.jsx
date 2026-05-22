@@ -131,6 +131,7 @@ const BriefView = ({ onJump }) => {
           meta={[["Effort","medium"],["Est. retention","61%"],["Best post-time","Wed 6pm"]]}
           cta="Draft a script"
           onJump={onJump}
+          action={() => { if (window.DDX) window.DDX.dispatch("script_writer", hero.topic, hero.slug); alert("Script Writer dispatched — see the agent rail."); }}
         />
         <FormatCard
           tag="SHORT" tagColor="var(--src-youtube)"
@@ -139,6 +140,7 @@ const BriefView = ({ onJump }) => {
           body="One-take screen capture. Hook in 1.2s: 'Anthropic shipped this in October. Eight days later the open-source version was free.'"
           meta={[["Effort","low"],["Tension","88"],["Vertical","ready"]]}
           cta="Preview shorts deck"
+          action={() => { const el = document.getElementById("shorts-reel"); if (el) el.scrollIntoView({ behavior: "smooth" }); }}
         />
         <FormatCard
           tag="CAROUSEL" tagColor="var(--src-blogs)"
@@ -147,6 +149,7 @@ const BriefView = ({ onJump }) => {
           body="Slide-1 hook, 5 evidence slides (each a source family), 1 contrarian, 1 CTA. Adapted to LinkedIn-voice — punchy and pragmatic."
           meta={[["Effort","low"],["Tone","pragmatic"],["Length","~480w"]]}
           cta="Build carousel"
+          action={() => { if (window.DDX) window.DDX.dispatch("cross_poster", hero.topic, hero.slug); alert("Cross-Poster dispatched — see the agent rail."); }}
         />
       </div>
 
@@ -180,7 +183,7 @@ const FactorRow = ({ k, v, dim }) => (
   </div>
 );
 
-const FormatCard = ({ tag, tagColor, eyebrow, title, body, meta, cta, onJump }) => (
+const FormatCard = ({ tag, tagColor, eyebrow, title, body, meta, cta, onJump, action }) => (
   <div className="panel" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10, minHeight: 240 }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <span className="mono" style={{
@@ -199,7 +202,7 @@ const FormatCard = ({ tag, tagColor, eyebrow, title, body, meta, cta, onJump }) 
         </div>
       ))}
     </div>
-    <button className="btn ghost" style={{ alignSelf: "flex-start" }}>{cta} <I.ArrowR size={11}/></button>
+    <button className="btn ghost" style={{ alignSelf: "flex-start" }} onClick={action}>{cta} <I.ArrowR size={11}/></button>
   </div>
 );
 
@@ -222,14 +225,14 @@ const ShortsReel = () => {
   };
 
   return (
-    <div className="panel" style={{ overflow: "hidden" }}>
+    <div className="panel" id="shorts-reel" style={{ overflow: "hidden" }}>
       <PanelHeader no="02"
         actions={
           <>
             <span className="mono" style={{ fontSize: 10, color: "var(--text-lo)", letterSpacing: "0.06em" }}>
               {idx + 1}/{SHORTS.length}
             </span>
-            <button className="btn ghost">Reset</button>
+            <button className="btn ghost" onClick={() => { setIdx(0); setDecision({}); }}>Reset</button>
           </>
         }>
         Shorts deck · swipe to pick

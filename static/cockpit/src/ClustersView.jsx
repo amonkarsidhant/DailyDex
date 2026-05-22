@@ -84,10 +84,10 @@ const ClusterCard = ({ c, expanded, onToggle }) => {
           <div>
             <div className="label" style={{ marginBottom: 8 }}>Make this into</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <ActionTile label="Long-form" icon={<I.YT size={14}/>} sub="14–18 min" hot/>
-              <ActionTile label="Short" icon={<I.Play size={11}/>} sub="< 60s"/>
-              <ActionTile label="Carousel" icon={<I.Doc size={14}/>} sub="LinkedIn · 8 slides"/>
-              <ActionTile label="Newsletter" icon={<I.Paper size={14}/>} sub="~1,200w"/>
+              <ActionTile label="Long-form" icon={<I.YT size={14}/>} sub="14–18 min" hot onClick={() => makeInto(c, "YouTube long-form")}/>
+              <ActionTile label="Short" icon={<I.Play size={11}/>} sub="< 60s" onClick={() => makeInto(c, "YouTube short")}/>
+              <ActionTile label="Carousel" icon={<I.Doc size={14}/>} sub="LinkedIn · 8 slides" onClick={() => makeInto(c, "LinkedIn carousel")}/>
+              <ActionTile label="Newsletter" icon={<I.Paper size={14}/>} sub="~1,200w" onClick={() => makeInto(c, "Newsletter")}/>
             </div>
 
             <div className="label" style={{ marginTop: 18, marginBottom: 8 }}>Auto-actions</div>
@@ -122,8 +122,17 @@ const ClusterCard = ({ c, expanded, onToggle }) => {
   );
 };
 
-const ActionTile = ({ label, icon, sub, hot }) => (
-  <button style={{
+const makeInto = (c, format) => {
+  if (!window.DDX) return;
+  window.DDX.saveToPipeline({
+    title: c.topic, working_title: c.topic, topic: c.topic, category: c.topic,
+    format, creator_score: c.creator_score, signal_score: c.average_signal_score,
+    pipeline_type: "creator", status: "idea",
+  }).then(() => { alert(`Saved "${c.topic}" as ${format} idea.`); window.DDX.reload(); });
+};
+
+const ActionTile = ({ label, icon, sub, hot, onClick }) => (
+  <button onClick={onClick} style={{
     display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
     background: hot ? "rgba(240,183,47,0.06)" : "var(--bg-2)",
     border: `1px solid ${hot ? "rgba(240,183,47,0.45)" : "var(--line-2)"}`,

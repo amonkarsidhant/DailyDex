@@ -155,7 +155,11 @@ const Topbar = ({ now, onOpenTweaks, onRefresh, refreshing }) => {
                 style={{ opacity: refreshing ? 0.6 : 1 }}>
           <I.Refresh size={13}/> {refreshing ? "Refreshing…" : "Refresh"}
         </button>
-        <button className="btn ghost icon" aria-label="notifications"><I.Bell size={14}/></button>
+        <button className="btn ghost icon" aria-label="notifications" onClick={() => {
+          const sh = window.DD_DATA.sourceHealth || {};
+          const lines = Object.entries(sh).map(([k, v]) => `${k}: ${v.items_24h} items${v.error ? " ⚠ " + v.error : ""}`);
+          alert("Fetch status (24h):\n\n" + lines.join("\n"));
+        }}><I.Bell size={14}/></button>
         <button className="btn ghost icon" onClick={onOpenTweaks} aria-label="settings"><I.Settings size={14}/></button>
         <span style={{ width: 1, height: 22, background: "var(--line)", margin: "0 4px" }}/>
         <div style={{

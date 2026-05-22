@@ -5,6 +5,32 @@ const ResearchView = ({ onJump }) => {
   const [topic, setTopic] = useState((clusters[0] && clusters[0].slug) || "");
   const cluster = clusters.find(c => c.slug === topic) || clusters[0];
 
+  const buildMD = (c) => {
+    if (!c) return "";
+    const ev = (c.related_items || []).map((it, i) =>
+      `${i + 1}. **${it.title}** — ${it.source_type} · signal ${it.signal_score}${it.url && it.url !== "#" ? ` — ${it.url}` : ""}`
+    ).join("\n");
+    return [
+      `# Research Pack — ${c.topic}`, "",
+      `Creator score: ${c.creator_score} · Signal: ${c.average_signal_score} · Momentum: ${c.momentum}% · Sources: ${(c.sources || []).join(", ")}`, "",
+      `## 01 Core angle`, c.recommended_angle || "", "",
+      `## 02 Why this is a story`, c.why_this_is_a_story || "", "",
+      `## 03 Source evidence`, ev || "_none_", "",
+      `## 04 Recommended format`, c.best_content_format || "", "",
+    ].join("\n");
+  };
+  const exportMD = () => {
+    const blob = new Blob([buildMD(cluster)], { type: "text/markdown" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${cluster ? cluster.slug : "research"}-pack.md`;
+    a.click();
+  };
+  const openFile = () => {
+    const blob = new Blob([buildMD(cluster)], { type: "text/markdown" });
+    window.open(URL.createObjectURL(blob), "_blank");
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div className="panel crosshair" style={{ overflow: "hidden" }}>
@@ -12,8 +38,8 @@ const ResearchView = ({ onJump }) => {
         <PanelHeader no="01"
           actions={
             <>
-              <button className="btn ghost"><I.Doc size={12}/> Export MD</button>
-              <button className="btn ghost">Open file</button>
+              <button className="btn ghost" onClick={exportMD}><I.Doc size={12}/> Export MD</button>
+              <button className="btn ghost" onClick={openFile}>Open file</button>
               <button className="btn primary" onClick={() => {
                 if (cluster && window.DDX) { window.DDX.dispatch("topic_researcher", cluster.topic, cluster.slug); alert("Topic Researcher dispatched — watch the agent rail."); }
               }}><I.Spark size={11}/> Re-research</button>

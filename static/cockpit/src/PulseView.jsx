@@ -193,17 +193,34 @@ const PulseDetail = ({ cluster, onJump }) => {
   );
 };
 
+const PULSE_SORTS = [
+  ["momentum", "Momentum", (a, b) => b.momentum - a.momentum],
+  ["creator", "Creator score", (a, b) => b.creator_score - a.creator_score],
+  ["signal", "Signal", (a, b) => b.average_signal_score - a.average_signal_score],
+  ["fresh", "First seen", (a, b) => a.first_seen_hrs - b.first_seen_hrs],
+];
+
 const PulseTable = ({ clusters, picked, onPick }) => {
+  const [sortIdx, setSortIdx] = useState(0);
+  const [demoOnly, setDemoOnly] = useState(false);
+  const [, label, cmp] = PULSE_SORTS[sortIdx];
+  let rows = demoOnly ? clusters.filter(c => c.has_demoable_item) : clusters.slice();
+  rows = rows.sort(cmp);
   return (
     <div className="panel" style={{ overflow: "hidden" }}>
       <PanelHeader no="02"
         actions={
           <>
-            <button className="btn ghost"><I.Filter size={12}/> Filter</button>
-            <button className="btn ghost">Sort · Momentum</button>
+            <button className="btn ghost" onClick={() => setDemoOnly(v => !v)}
+                    style={{ color: demoOnly ? "var(--signal)" : undefined }}>
+              <I.Filter size={12}/> {demoOnly ? "Demoable only" : "Filter"}
+            </button>
+            <button className="btn ghost" onClick={() => setSortIdx(i => (i + 1) % PULSE_SORTS.length)}>
+              Sort · {label}
+            </button>
           </>
         }>
-        Momentum board · 8 active topics
+        Momentum board · {rows.length} active topics
       </PanelHeader>
       <div style={{
         display: "grid",
@@ -221,7 +238,7 @@ const PulseTable = ({ clusters, picked, onPick }) => {
         <span style={{ textAlign: "right" }}>Δ24h</span>
         <span style={{ textAlign: "right" }}>First Seen</span>
       </div>
-      {clusters.map((c, i) => {
+      {rows.map((c, i) => {
         const S = window.DD_DATA.SOURCES;
         const isPicked = picked === c.slug;
         return (
@@ -278,8 +295,8 @@ const PulseView = ({ onJump }) => {
                 <span style={{ width: 5, height: 5, borderRadius: 999, background: "var(--signal-up)" }}/>
                 3 emerging now
               </span>
-              <button className="btn ghost">Last 7d</button>
-              <button className="btn ghost">Reset</button>
+              <button className="btn ghost" onClick={() => window.DDX && window.DDX.refresh()}>Last 7d</button>
+              <button className="btn ghost" onClick={() => setPicked(clusters[0].slug)}>Reset</button>
             </>
           }>
           Trend pulse · cross-source emergence radar

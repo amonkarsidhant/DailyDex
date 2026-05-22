@@ -2,6 +2,34 @@
 
 const PipelineView = ({ onJump }) => {
   const { pipeline, calendar } = window.DD_DATA;
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [cal, setCal] = useState(calendar);
+  const [fmtFilter, setFmtFilter] = useState("");   // "" = all formats
+  const [groupByScore, setGroupByScore] = useState(false);
+
+  // Page the calendar by fetching the schedule for the chosen week.
+  useEffect(() => {
+    if (weekOffset === 0) { setCal(calendar); return; }
+    const base = new Date(); base.setDate(base.getDate() + weekOffset * 7);
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(base); d.setDate(base.getDate() + i); return d;
+    });
+    const iso = d => d.toISOString().slice(0, 10);
+    fetch(`/api/schedule?start=${iso(days[0])}&end=${iso(days[6])}`)
+      .then(r => r.json())
+      .then(rows => {
+        const byDay = {};
+        (rows || []).forEach(r => {
+          (byDay[r.day] = byDay[r.day] || []).push({ ref: r.item_id, time: r.time || "—", kind: r.kind });
+        });
+        setCal(days.map(d => ({
+          day: d.toLocaleDateString("en", { weekday: "short" }),
+          date: d.getDate(), items: byDay[iso(d)] || [],
+        })));
+      })
+      .catch(() => {});
+  }, [weekOffset]);
+
   const addToLane = (status) => {
     const title = window.prompt(`New ${status} title:`);
     if (!title || !window.DDX) return;
@@ -9,6 +37,14 @@ const PipelineView = ({ onJump }) => {
       title, working_title: title, topic: title, category: title,
       pipeline_type: "creator", status,
     }).then(() => window.DDX.reload());
+  };
+  const FORMATS = ["", "YouTube long-form", "YouTube short", "Comparison video", "Tutorial", "Explainer", "LinkedIn post", "LinkedIn carousel"];
+  const cycleFmt = () => setFmtFilter(f => FORMATS[(FORMATS.indexOf(f) + 1) % FORMATS.length]);
+  const laneItems = (key) => {
+    let items = (pipeline[key] || []);
+    if (fmtFilter) items = items.filter(i => (i.format || "") === fmtFilter);
+    if (groupByScore) items = items.slice().sort((a, b) => (b.creator_score || 0) - (a.creator_score || 0));
+    return items;
   };
   const lanes = [
     { key: "idea",         label: "Idea",         tone: "var(--text-mid)" },
@@ -25,8 +61,12 @@ const PipelineView = ({ onJump }) => {
         <PanelHeader no="01"
           actions={
             <>
-              <button className="btn ghost">Filter · format</button>
-              <button className="btn ghost">Group · creator</button>
+              <button className="btn ghost" onClick={cycleFmt} style={{ color: fmtFilter ? "var(--signal)" : undefined }}>
+                Filter · {fmtFilter || "format"}
+              </button>
+              <button className="btn ghost" onClick={() => setGroupByScore(v => !v)} style={{ color: groupByScore ? "var(--signal)" : undefined }}>
+                {groupByScore ? "Sorted · score" : "Group · creator"}
+              </button>
               <button className="btn primary" onClick={() => addToLane("idea")}><I.Plus size={12}/> New idea</button>
             </>
           }>
@@ -39,7 +79,7 @@ const PipelineView = ({ onJump }) => {
           padding: "0", gap: 1, background: "var(--line)", borderTop: "1px solid var(--line)",
         }}>
           {lanes.map(l => {
-            const items = pipeline[l.key] || [];
+            const items = laneItems(l.key);
             return (
               <div key={l.key} style={{ background: "var(--bg-1)", padding: "12px 12px 16px", minHeight: 480 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -66,16 +106,16 @@ const PipelineView = ({ onJump }) => {
         <PanelHeader no="02"
           actions={
             <>
-              <button className="btn ghost">‹ Last week</button>
-              <button className="btn ghost">This week</button>
-              <button className="btn ghost">Next week ›</button>
+              <button className="btn ghost" onClick={() => setWeekOffset(o => o - 1)}>‹ Last week</button>
+              <button className="btn ghost" onClick={() => setWeekOffset(0)} style={{ color: weekOffset === 0 ? "var(--signal)" : undefined }}>This week</button>
+              <button className="btn ghost" onClick={() => setWeekOffset(o => o + 1)}>Next week ›</button>
             </>
           }>
-          Publishing calendar · week of May 26
+          Publishing calendar · {weekOffset === 0 ? "this week" : (weekOffset < 0 ? `${-weekOffset}w ago` : `+${weekOffset}w`)}
         </PanelHeader>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, background: "var(--line)", padding: "0 1px 1px" }}>
-          {calendar.map((day, i) => (
-            <DayCol key={day.day} day={day} isToday={i === 0}/>
+          {cal.map((day, i) => (
+            <DayCol key={day.day + i} day={day} isToday={weekOffset === 0 && i === 0}/>
           ))}
         </div>
       </div>
@@ -83,7 +123,7 @@ const PipelineView = ({ onJump }) => {
       {/* Published performance */}
       <div className="panel" style={{ overflow: "hidden" }}>
         <PanelHeader no="03"
-          actions={<button className="btn ghost"><I.Trend size={12}/> Full analytics</button>}>
+          actions={<button className="btn ghost" onClick={() => window.open("/classic", "_blank")}><I.Trend size={12}/> Full analytics</button>}>
           Just published · last 7 days
         </PanelHeader>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, background: "var(--line)", padding: "0 1px 1px" }}>

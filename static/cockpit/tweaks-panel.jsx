@@ -381,7 +381,8 @@ function TweakRadio({ label, value, options, onChange }) {
              style={{ left: `calc(2px + ${idx} * (100% - 4px) / ${n})`,
                       width: `calc((100% - 4px) / ${n})` }} />
         {opts.map((o) => (
-          <button key={o.value} type="button" role="radio" aria-checked={o.value === value}>
+          <button key={o.value} type="button" role="radio" aria-checked={o.value === value}
+                  onClick={() => onChange && onChange(o.value)}>
             {o.label}
           </button>
         ))}
