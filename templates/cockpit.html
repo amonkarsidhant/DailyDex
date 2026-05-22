@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>DailyDex Cockpit — Creator Mode</title>
+<meta name="viewport" content="width=1440" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="{{ url_for('static', filename='cockpit/cockpit.css') }}" />
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- Live data injected server-side (matches prototype DD_DATA shape) -->
+  <script>window.DD_DATA = {{ dd_data | tojson }};</script>
+
+  <!-- React + Babel (CDN) -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+  <!-- Tweaks shell + components -->
+  <script type="text/babel" src="{{ url_for('static', filename='cockpit/tweaks-panel.jsx') }}"></script>
+  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/icons.jsx') }}"></script>
+  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/shared.jsx') }}"></script>
+  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/AppShell.jsx') }}"></script>
+  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/PulseView.jsx') }}"></script>
+  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/BriefView.jsx') }}"></script>
+  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/ClustersView.jsx') }}"></script>
+  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/ThumbsView.jsx') }}"></script>
+  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/ResearchView.jsx') }}"></script>
+  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/PipelineView.jsx') }}"></script>
+  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/App.jsx') }}"></script>
+</body>
+</html>

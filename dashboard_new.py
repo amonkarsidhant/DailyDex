@@ -22,6 +22,7 @@ from creator_intelligence import (
     build_topic_clusters,
     enrich_scored_data_with_creator_fields,
     snapshot_clusters,
+    slugify_topic as _ci_slug,
 )
 
 # Add current directory to path for imports
@@ -648,6 +649,244 @@ def build_status_warning(source_cards):
     return ""
 
 
+COCKPIT_SOURCES = {
+    "github":      {"key": "github",      "label": "GitHub",       "color": "#7DDE5B", "abbr": "GH"},
+    "huggingface": {"key": "huggingface", "label": "Hugging Face", "color": "#FFD021", "abbr": "HF"},
+    "youtube":     {"key": "youtube",     "label": "YouTube",      "color": "#FF5A5A", "abbr": "YT"},
+    "blogs":       {"key": "blogs",       "label": "Blogs / News", "color": "#62A8FF", "abbr": "BL"},
+    "papers":      {"key": "papers",      "label": "arXiv",        "color": "#B084F2", "abbr": "AX"},
+}
+
+COCKPIT_PERSONAS = {
+    "multi": {"label": "Multi-format", "sub": "YouTube · LinkedIn · Newsletter",
+              "hero_title": "What to make today",
+              "hero_sub": "Across long-form, shorts, and a LinkedIn carousel — one signal, three surfaces.",
+              "cta": "Open today's brief", "kpi_label": "Cross-format opportunities"},
+    "shorts": {"label": "Shorts-first", "sub": "TikTok · Reels · YT Shorts",
+               "hero_title": "Shorts to film this hour",
+               "hero_sub": "Five hooks ranked by tension. Vertical thumbnails ready. Script under 90 words.",
+               "cta": "Pick a hook", "kpi_label": "Hooks with > 70 tension score"},
+    "newsletter": {"label": "Newsletter writer", "sub": "Substack · Beehiiv · personal blog",
+                   "hero_title": "This week's lead story",
+                   "hero_sub": "One angle worth 1,200 words, with sourcing and counterpoints already pulled.",
+                   "cta": "Open story brief", "kpi_label": "Stories with cross-source proof"},
+    "educator": {"label": "Educator", "sub": "Course · workshop · cohort",
+                 "hero_title": "Today's teachable moment",
+                 "hero_sub": "An idea with shelf-life > 90 days, a demo your students can rebuild, and a clean explainer arc.",
+                 "cta": "Open lesson brief", "kpi_label": "Evergreen lessons forming"},
+}
+
+_COCKPIT_PIPELINE_LANES = ["idea", "researching", "script_ready", "recording", "published"]
+
+
+def _cockpit_clusters(scored_data):
+    """build_topic_clusters output mapped to the prototype's DD_DATA.clusters shape."""
+    clusters = build_topic_clusters(scored_data, intel_db=intel_db)
+    out = []
+    for c in clusters:
+        radar = c.get("radar_coords") or {"x": 0, "y": 0}
+        out.append({
+            "topic": c["topic"],
+            "slug": c.get("slug") or "",
+            "source_count": c.get("source_count", 0),
+            "sources": c.get("sources", []),
+            "average_signal_score": c.get("average_signal_score", 0),
+            "creator_score": c.get("creator_score", 0),
+            "momentum": c.get("momentum_24h_pct", 0),
+            "first_seen_hrs": c.get("first_seen_hrs", 0),
+            "angle_x": radar.get("x", 0),
+            "angle_y": radar.get("y", 0),
+            "pulse": c.get("pulse_24h", [0] * 24),
+            "recommended_angle": c.get("recommended_angle", ""),
+            "best_content_format": c.get("best_content_format", ""),
+            "has_demoable_item": c.get("has_demoable_item", False),
+            "why_this_is_a_story": c.get("why_this_is_a_story", ""),
+            "related_items": c.get("related_items", []),
+        })
+    return out
+
+
+def _synth_titles(cluster):
+    """Deterministic title fallback when no opportunity titles exist."""
+    topic = cluster.get("topic", "this story")
+    return {
+        "curiosity": f"What's really happening with {topic}",
+        "practical": f"I tested {topic} so you don't have to",
+        "contrarian": f"{topic} is not what you think",
+        "tutorial": f"Get started with {topic} in 30 minutes",
+    }
+
+
+def _cockpit_title_sets(clusters, opp_by_slug):
+    """Title sets keyed by cluster slug so every visible cluster has titles."""
+    sets = {}
+    for c in clusters[:8]:
+        slug = c.get("slug")
+        if not slug:
+            continue
+        opp = opp_by_slug.get(slug)
+        titles = (opp or {}).get("suggested_titles") or {}
+        if not any(titles.values()):
+            titles = _synth_titles(c)
+        sets[slug] = {
+            "curiosity": titles.get("curiosity", ""),
+            "practical": titles.get("practical", ""),
+            "contrarian": titles.get("contrarian", ""),
+            "tutorial": titles.get("tutorial", ""),
+        }
+    return sets
+
+
+def _cockpit_source_health():
+    rows = {}
+    if intel_db:
+        try:
+            for r in intel_db.get_source_health():
+                rows[r.get("source_name")] = r
+        except Exception:
+            rows = {}
+    out = {}
+    for key in COCKPIT_SOURCES:
+        r = rows.get(key) or {}
+        status = r.get("status", "unknown")
+        last_min = None
+        stamp = r.get("last_attempt") or r.get("last_success")
+        if stamp:
+            try:
+                dt = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+                if dt.tzinfo:
+                    dt = dt.replace(tzinfo=None)
+                last_min = max(0, int((datetime.now() - dt).total_seconds() // 60))
+            except Exception:
+                last_min = None
+        out[key] = {
+            "fresh": status == "ok" and (last_min is None or last_min < 30),
+            "last_fetch_min": last_min if last_min is not None else 99,
+            "items_24h": r.get("item_count", 0),
+            "delta": 0,
+            "error": r.get("failure_reason") if status in ("failed", "stale", "cache") else None,
+        }
+    return out
+
+
+def _cockpit_pipeline(saved_items):
+    lanes = {k: [] for k in _COCKPIT_PIPELINE_LANES}
+    for item in saved_items:
+        status = item.get("status")
+        if status not in lanes:
+            continue
+        lanes[status].append({
+            "id": str(item.get("id")),
+            "topic": item.get("category") or item.get("topic") or "",
+            "working_title": item.get("working_title") or item.get("title") or "",
+            "format": item.get("format") or "",
+            "effort": item.get("priority") or "medium",
+            "creator_score": item.get("creator_score") or item.get("signal_score") or 0,
+            "due": item.get("due") or "—",
+            "research_pct": item.get("research_pct"),
+            "published_at": item.get("published_at"),
+            "views": item.get("views"),
+            "retention": item.get("retention"),
+        })
+    return lanes
+
+
+def _cockpit_calendar():
+    """Next 7 days of schedule grouped into the prototype's calendar shape."""
+    out = []
+    if intel_db is None:
+        return out
+    today = datetime.now()
+    start = today.strftime("%Y-%m-%d")
+    end = (today + timedelta(days=6)).strftime("%Y-%m-%d")
+    try:
+        rows = intel_db.get_schedule_range(start, end)
+    except Exception:
+        rows = []
+    by_day = defaultdict(list)
+    for r in rows:
+        by_day[r["day"]].append({"ref": str(r.get("item_id")), "time": r.get("time") or "—",
+                                  "kind": r.get("kind")})
+    for offset in range(7):
+        d = today + timedelta(days=offset)
+        key = d.strftime("%Y-%m-%d")
+        out.append({"day": d.strftime("%a"), "date": d.day, "items": by_day.get(key, [])})
+    return out
+
+
+def _cockpit_agents():
+    if agent_runner is None:
+        return []
+    snap = agent_runner.snapshot()
+    return [{
+        "id": a["id"], "name": a["name"], "task": a.get("task", ""),
+        "stage": a.get("stage", ""), "progress": a.get("progress", 0),
+        "icon": a.get("icon", "⚙️"), "eta_sec": a.get("eta_sec"),
+        "logs": a.get("logs", []),
+    } for a in snap.get("active", [])]
+
+
+def _cockpit_thumbnails(clusters, opp_by_slug):
+    """Variants for the top clusters (keyed by cluster slug), generated on demand."""
+    import hashlib
+    from creator_intelligence import generate_thumbnail_variants, serialize_thumbnail_variant
+    if intel_db is None:
+        return []
+    out = []
+    for c in clusters[:4]:
+        slug = c.get("slug")
+        if not slug:
+            continue
+        opp = opp_by_slug.get(slug)
+        if opp and creator_content_hash is not None:
+            chash = creator_content_hash(opp)
+        else:
+            chash = hashlib.sha1(slug.encode("utf-8")).hexdigest()
+        existing = intel_db.get_thumbnail_variants(chash)
+        if not existing:
+            generate_thumbnail_variants(intel_db, chash, topic=c.get("topic"),
+                                        count=6, base_item=opp)
+            existing = intel_db.get_thumbnail_variants(chash)
+        for r in existing:
+            v = serialize_thumbnail_variant(r)
+            out.append({"id": v["id"], "topic": slug, "text": v["text"],
+                        "subtext": v["subtext"], "hue": v["hue"],
+                        "ctr": v["ctr_pred"], "kind": v["kind"]})
+    return out
+
+
+def build_cockpit_data():
+    """Server-side DD_DATA payload matching prototype/src/data.js shape."""
+    scored_data = load_scored_data()
+    if intel_db:
+        try:
+            snapshot_clusters(scored_data, intel_db)
+        except Exception:
+            pass
+    clusters_raw = build_topic_clusters(scored_data, intel_db=intel_db)
+    opportunities = build_content_opportunities(scored_data, clusters_raw)
+    opp_by_slug = {}
+    for opp in opportunities:
+        slug = opp.get("slug") or _ci_slug(opp.get("topic", ""))
+        opp_by_slug.setdefault(slug, opp)
+    clusters = _cockpit_clusters(scored_data)
+    saved_items = intel_db.get_saved_items(pipeline_type="creator") if intel_db else []
+    profile = _load_creator_profile_safe()
+    persona = profile.get("persona", "multi")
+    return {
+        "SOURCES": COCKPIT_SOURCES,
+        "personas": COCKPIT_PERSONAS,
+        "persona": persona if persona in COCKPIT_PERSONAS else "multi",
+        "clusters": clusters,
+        "titleSets": _cockpit_title_sets(clusters, opp_by_slug),
+        "sourceHealth": _cockpit_source_health(),
+        "agents": _cockpit_agents(),
+        "pipeline": _cockpit_pipeline(saved_items),
+        "calendar": _cockpit_calendar(),
+        "thumbnails": _cockpit_thumbnails(clusters, opp_by_slug),
+    }
+
+
 def build_chart_payload(scored_data, saved_items, source_status_cards):
     """Build chart data from live dashboard content instead of mock values."""
     source_labels = [label for _, label in SOURCE_META]
@@ -948,6 +1187,26 @@ def api_variant():
 def home():
     """Main dashboard page"""
     return render_template("dashboard.html", **build_dashboard_context())
+
+
+@app.route("/cockpit")
+def cockpit():
+    """Creator Cockpit — new React UI mounted via CDN, hydrated server-side."""
+    try:
+        dd_data = build_cockpit_data()
+    except Exception as e:
+        print(f"Warning: cockpit data build failed: {e}")
+        dd_data = {"SOURCES": COCKPIT_SOURCES, "personas": COCKPIT_PERSONAS,
+                   "persona": "multi", "clusters": [], "titleSets": {},
+                   "sourceHealth": {}, "agents": [], "pipeline": {},
+                   "calendar": [], "thumbnails": []}
+    return render_template("cockpit.html", dd_data=dd_data)
+
+
+@app.route("/api/cockpit-data")
+def api_cockpit_data():
+    """JSON DD_DATA payload — lets the UI refresh without a full reload."""
+    return jsonify(build_cockpit_data())
 
 
 @app.route("/health")
