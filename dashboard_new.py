@@ -1448,6 +1448,44 @@ def _load_creator_profile_safe():
         return {}
 
 
+def _copilot_live_context(max_clusters=8, max_items=3):
+    """Compact snapshot of what DailyDex actually fetched, for the copilot."""
+    try:
+        scored = load_scored_data()
+    except Exception:
+        scored = {}
+    ctx = {"generated_at": datetime.now().isoformat(timespec="minutes")}
+
+    # Per-source freshness + 24h counts.
+    sources = {}
+    for key in ("github", "huggingface", "youtube", "blogs", "papers"):
+        items = scored.get(key, []) or []
+        sources[key] = len(items)
+    ctx["items_by_source"] = sources
+
+    # Top clusters with the signal the user reasons about.
+    try:
+        clusters = build_topic_clusters(scored, intel_db=intel_db)
+    except Exception:
+        clusters = []
+    ctx["clusters"] = [{
+        "topic": c.get("topic"),
+        "creator_score": c.get("creator_score"),
+        "signal": c.get("average_signal_score"),
+        "momentum_24h_pct": c.get("momentum_24h_pct"),
+        "first_seen_hrs": c.get("first_seen_hrs"),
+        "sources": c.get("sources"),
+        "best_format": c.get("best_content_format"),
+        "why": (c.get("why_this_is_a_story") or "")[:160],
+        "top_items": [
+            {"title": (it.get("title") or "")[:110], "source": it.get("source_type"),
+             "signal": it.get("signal_score")}
+            for it in (c.get("related_items") or [])[:max_items]
+        ],
+    } for c in clusters[:max_clusters]]
+    return ctx
+
+
 @app.route("/api/copilot", methods=["POST"])
 def api_copilot():
     body = request.get_json(silent=True) or {}
@@ -1456,6 +1494,9 @@ def api_copilot():
     context = body.get("context") or {}
     if not question:
         return jsonify({"error": "question required"}), 400
+
+    # Ground the answer in what DailyDex actually fetched.
+    context = {"client": context, "dailydex": _copilot_live_context()}
 
     # Per-IP rate limit.
     limit = int(os.environ.get("COPILOT_RATE_LIMIT_PER_MIN", "12"))
@@ -1470,9 +1511,15 @@ def api_copilot():
     profile = _load_creator_profile_safe()
     cop_cfg = profile.get("copilot") or {}
     system = (
-        f"You are DailyDex's creator copilot. The user is on the \"{view}\" screen of a "
-        f"multi-format AI creator's dashboard. Current context: {json.dumps(context)[:1500]}. "
-        f"Answer in 1-2 sentences, punchy, opinionated. No preamble."
+        "You are DailyDex's creator copilot. DailyDex is a trend-intelligence dashboard that "
+        "fetches AI news from GitHub, Hugging Face, YouTube, blogs, and arXiv, then groups it into "
+        "cross-source story clusters with creator/signal scores and 24h momentum.\n"
+        f"The user is on the \"{view}\" screen. Answer ONLY from the live DailyDex data below — "
+        "reference real topics, scores, sources, and items. Never say you lack access to history or "
+        "data; the data is right here. If the question can't be answered from it, say what IS trending instead.\n"
+        f"LIVE DATA (JSON):\n{json.dumps(context)[:6000]}\n"
+        "Output ONLY the final answer — no reasoning, no planning, no 'Okay, the user wants'. "
+        "1-3 punchy, opinionated sentences. Cite specific topics/numbers. No preamble."
     )
     started = time.time()
     answer = None
@@ -1485,7 +1532,7 @@ def api_copilot():
             model = cop_cfg.get("model") or llm_summary.NVIDIA_MODEL
             # Reasoning models (e.g. minimax) spend tokens thinking — give headroom
             # so the final answer isn't truncated; the display cap below trims it.
-            gen_tokens = max(max_tokens, int(cop_cfg.get("nvidia_max_tokens", 1024)))
+            gen_tokens = max(max_tokens, int(cop_cfg.get("nvidia_max_tokens", 2048)))
             answer = llm_summary.query_nvidia(question, system_prompt=system,
                                               model=model, max_tokens=gen_tokens)
         else:

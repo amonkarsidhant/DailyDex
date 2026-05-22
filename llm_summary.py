@@ -182,10 +182,30 @@ def query_nvidia(prompt: str, system_prompt: Optional[str] = None,
             return None
         choices = resp.json().get("choices") or []
         if choices:
-            return (choices[0].get("message", {}).get("content") or "").strip()
+            msg = choices[0].get("message", {}) or {}
+            text = (msg.get("content") or "").strip()
+            # Some NIM reasoning models (step, minimax) place the answer in
+            # reasoning_content and leave content empty when token budget is tight.
+            if not text:
+                text = (msg.get("reasoning_content") or "").strip()
+            return _strip_think(text) or None
     except Exception as exc:
         print(f"NVIDIA NIM error: {exc}")
     return None
+
+
+def _strip_think(text: str) -> str:
+    """Remove <think>...</think> reasoning blocks; if only an unclosed think
+    block exists, keep what's after the last tag."""
+    if not text:
+        return text
+    import re as _re
+    text = _re.sub(r"<think>.*?</think>", "", text, flags=_re.S).strip()
+    if "</think>" in text:
+        text = text.split("</think>")[-1].strip()
+    if text.startswith("<think>"):
+        text = text[len("<think>"):].strip()
+    return text
 
 
 def query_llm(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:

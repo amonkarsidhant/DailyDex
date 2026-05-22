@@ -68,8 +68,8 @@
     "max_tokens": 200,
     "system_voice": "punchy-pragmatic",
     "provider": "nvidia",
-    "model": "minimaxai/minimax-m2.7",
-    "fallback_model": "stepfun-ai/step-3.5-flash"
+    "model": "stepfun-ai/step-3.5-flash",
+    "fallback_model": "minimaxai/minimax-m2.7"
   },
   "agents": {
     "max_concurrent_per_type": 1,
