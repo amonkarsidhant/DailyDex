@@ -30,6 +30,11 @@ GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "600"))
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/generate")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "phi3:mini")
 
+# NVIDIA NIM — OpenAI-compatible endpoint (build.nvidia.com).
+NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", "")
+NVIDIA_BASE_URL = os.environ.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
+NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", "minimaxai/minimax-m2.7")
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CREATOR_PROFILE_PATH = os.environ.get(
     "CREATOR_PROFILE_PATH",
@@ -146,15 +151,56 @@ def query_ollama(prompt: str, system_prompt: Optional[str] = None) -> Optional[s
     return None
 
 
+def query_nvidia(prompt: str, system_prompt: Optional[str] = None,
+                 model: Optional[str] = None, max_tokens: int = 1024,
+                 api_key: Optional[str] = None) -> Optional[str]:
+    """Call an NVIDIA NIM OpenAI-compatible chat endpoint."""
+    if requests is None:
+        return None
+    key = api_key or NVIDIA_API_KEY
+    if not key:
+        print("NVIDIA NIM: no API key set (NVIDIA_API_KEY)")
+        return None
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+    try:
+        resp = requests.post(
+            f"{NVIDIA_BASE_URL}/chat/completions",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={
+                "model": model or NVIDIA_MODEL,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": 0.4,
+            },
+            timeout=60,
+        )
+        if resp.status_code != 200:
+            print(f"NVIDIA NIM error {resp.status_code}: {resp.text[:200]}")
+            return None
+        choices = resp.json().get("choices") or []
+        if choices:
+            return (choices[0].get("message", {}).get("content") or "").strip()
+    except Exception as exc:
+        print(f"NVIDIA NIM error: {exc}")
+    return None
+
+
 def query_llm(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:
     if PROVIDER == "ollama":
         return query_ollama(prompt, system_prompt)
+    if PROVIDER == "nvidia":
+        return query_nvidia(prompt, system_prompt)
     return query_gemini_cli(prompt, system_prompt)
 
 
 def llm_provider_label() -> str:
     if PROVIDER == "ollama":
         return f"ollama:{OLLAMA_MODEL}"
+    if PROVIDER == "nvidia":
+        return f"nvidia:{NVIDIA_MODEL}"
     return f"gemini:{GEMINI_MODEL or 'default'}"
 
 

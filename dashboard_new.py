@@ -874,10 +874,12 @@ def build_cockpit_data():
     saved_items = intel_db.get_saved_items(pipeline_type="creator") if intel_db else []
     profile = _load_creator_profile_safe()
     persona = profile.get("persona", "multi")
+    cop_cfg = profile.get("copilot") or {}
     return {
         "SOURCES": COCKPIT_SOURCES,
         "personas": COCKPIT_PERSONAS,
         "persona": persona if persona in COCKPIT_PERSONAS else "multi",
+        "copilotModel": cop_cfg.get("model", ""),
         "clusters": clusters,
         "titleSets": _cockpit_title_sets(clusters, opp_by_slug),
         "sourceHealth": _cockpit_source_health(),
@@ -1475,10 +1477,20 @@ def api_copilot():
     started = time.time()
     answer = None
     model = "unknown"
+    max_tokens = int(cop_cfg.get("max_tokens", 200))
+    provider = cop_cfg.get("provider") or os.environ.get("LLM_PROVIDER", "gemini")
     try:
         import llm_summary
-        model = llm_summary.llm_provider_label()
-        answer = llm_summary.query_llm(question, system_prompt=system)
+        if provider == "nvidia":
+            model = cop_cfg.get("model") or llm_summary.NVIDIA_MODEL
+            # Reasoning models (e.g. minimax) spend tokens thinking — give headroom
+            # so the final answer isn't truncated; the display cap below trims it.
+            gen_tokens = max(max_tokens, int(cop_cfg.get("nvidia_max_tokens", 1024)))
+            answer = llm_summary.query_nvidia(question, system_prompt=system,
+                                              model=model, max_tokens=gen_tokens)
+        else:
+            model = llm_summary.llm_provider_label()
+            answer = llm_summary.query_llm(question, system_prompt=system)
     except Exception as e:
         print(f"Copilot LLM error: {e}")
     if not answer:

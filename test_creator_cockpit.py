@@ -164,6 +164,8 @@ def test_schedule_create_requires_fields(client):
 def test_copilot_mocked_llm(app_env, monkeypatch):
     import llm_summary
     monkeypatch.setattr(llm_summary, "query_llm", lambda q, system_prompt=None: "Demo first.")
+    monkeypatch.setattr(app_env["module"], "_load_creator_profile_safe",
+                        lambda: {"copilot": {"provider": "gemini", "max_tokens": 200}})
     client = app_env["module"].app.test_client()
     resp = client.post("/api/copilot",
                        json={"view": "pulse", "context": {}, "question": "rank clusters"})
@@ -175,6 +177,38 @@ def test_copilot_mocked_llm(app_env, monkeypatch):
 
 def test_copilot_requires_question(client):
     assert client.post("/api/copilot", json={"view": "pulse"}).status_code == 400
+
+
+def test_copilot_nvidia_provider(app_env, monkeypatch):
+    """When copilot config provider=nvidia, the NIM path is used."""
+    module = app_env["module"]
+    import llm_summary
+    captured = {}
+
+    def fake_nvidia(prompt, system_prompt=None, model=None, max_tokens=1024, api_key=None):
+        captured["model"] = model
+        captured["max_tokens"] = max_tokens
+        return "Coding AI wins."
+
+    monkeypatch.setattr(llm_summary, "query_nvidia", fake_nvidia)
+    monkeypatch.setattr(module, "_load_creator_profile_safe",
+                        lambda: {"copilot": {"provider": "nvidia",
+                                             "model": "minimaxai/minimax-m2.7",
+                                             "max_tokens": 200}})
+    client = module.app.test_client()
+    resp = client.post("/api/copilot", json={"view": "clusters", "question": "best demo?"})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["answer"] == "Coding AI wins."
+    assert data["model"] == "minimaxai/minimax-m2.7"
+    assert captured["model"] == "minimaxai/minimax-m2.7"
+    assert captured["max_tokens"] >= 1024  # reasoning headroom
+
+
+def test_query_nvidia_no_key_returns_none(monkeypatch):
+    import llm_summary
+    monkeypatch.setattr(llm_summary, "NVIDIA_API_KEY", "")
+    assert llm_summary.query_nvidia("hi", api_key="") is None
 
 
 # ── Phase 5: thumbnails ───────────────────────────────────────────────────

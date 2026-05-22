@@ -337,6 +337,7 @@ const CopilotDock = ({ context }) => {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [answer, setAnswer] = useState("");
+  const [model, setModel] = useState("");
   const submit = async () => {
     if (!q.trim()) return;
     setBusy(true); setAnswer("");
@@ -344,10 +345,13 @@ const CopilotDock = ({ context }) => {
       const focused = (window.DD_DATA.clusters[0] || {}).slug;
       const r = await window.DDX.copilot(context, q, { focused_cluster: focused });
       setAnswer(r.answer || "No answer.");
+      if (r.model) setModel(r.model);
     } catch (e) {
-      setAnswer("Copilot is offline — set GEMINI_API_KEY on the server.");
+      setAnswer("Copilot is offline — check the LLM provider on the server.");
     } finally { setBusy(false); }
   };
+  const modelLabel = (model || (window.DD_DATA.copilotModel) || "minimaxai/minimax-m2.7")
+    .split("/").pop().replace(/-/g, " ").toUpperCase();
   const suggestions = {
     pulse: ["rank clusters by momentum", "which topic peaks tonight?", "what did I miss yesterday?"],
     brief: ["rewrite the hook punchier", "generate 3 contrarian titles", "what's the strongest counterpoint?"],
@@ -418,7 +422,7 @@ const CopilotDock = ({ context }) => {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span className="mono" style={{ fontSize: 10, color: "var(--text-lo)", letterSpacing: "0.06em" }}>HAIKU 4.5</span>
+        <span className="mono" style={{ fontSize: 10, color: "var(--text-lo)", letterSpacing: "0.06em" }}>{modelLabel}</span>
         <span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--signal-up)", boxShadow: "0 0 4px var(--signal-up)" }}/>
       </div>
     </div>
