@@ -58,6 +58,25 @@
     "max_auto_promotions_per_day": 5,
     "enrichment_wait_seconds": 180
   },
+  "persona": "multi",
+  "schedule": {
+    "preferred_record_window": "10:00-12:00",
+    "publish_days": ["Sat", "Sun"],
+    "linkedin_time": "10:00"
+  },
+  "copilot": {
+    "max_tokens": 200,
+    "system_voice": "punchy-pragmatic"
+  },
+  "agents": {
+    "max_concurrent_per_type": 1,
+    "default_eta_sec": {
+      "topic_researcher": 90,
+      "script_writer": 150,
+      "thumbnail_director": 45,
+      "cross_poster": 180
+    }
+  },
   "examples": [
     {
       "input_title": "Llamafile 0.9 ships single-binary distribution for tiny LLMs",

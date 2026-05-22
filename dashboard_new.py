@@ -4,10 +4,13 @@
 import json
 import os
 import sys
+import time
+import uuid
+import queue
 import hashlib
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context
 
 from creator_intelligence import (
     CREATOR_STATUS_ORDER,
@@ -18,6 +21,7 @@ from creator_intelligence import (
     build_research_pack,
     build_topic_clusters,
     enrich_scored_data_with_creator_fields,
+    snapshot_clusters,
 )
 
 # Add current directory to path for imports
@@ -88,6 +92,14 @@ except Exception as e:
     print(f"Warning: Could not start creator enrichment worker: {e}")
     enrichment_service = None
     creator_content_hash = None
+
+# Phase 2: typed multi-agent runner with live SSE event stream.
+try:
+    from creator_enricher import AgentRunner
+    agent_runner = AgentRunner(intel_db) if intel_db is not None else None
+except Exception as e:
+    print(f"Warning: Could not start agent runner: {e}")
+    agent_runner = None
 
 
 def _top_items_for_enrichment(scored_data, limit: int = 20):
@@ -851,7 +863,12 @@ def build_dashboard_context():
     correlations = find_correlations(scored_data)
     topic_heatmap = build_topic_heatmap(scored_data)
     saved_groups = build_saved_groups(saved_items)
-    creator_clusters = build_topic_clusters(scored_data)
+    if intel_db:
+        try:
+            snapshot_clusters(scored_data, intel_db)
+        except Exception as e:
+            print(f"Warning: cluster snapshot failed: {e}")
+    creator_clusters = build_topic_clusters(scored_data, intel_db=intel_db)
     creator_opportunities = build_content_opportunities(scored_data, creator_clusters)
     creator_brief = build_creator_brief(creator_opportunities, creator_clusters, saved_items)
     creator_saved_groups = build_creator_pipeline_groups(saved_items)
@@ -949,6 +966,334 @@ def api_data():
 def api_scored():
     """API endpoint for scored data"""
     return jsonify(load_scored_data())
+
+
+@app.route("/api/clusters")
+def api_clusters():
+    """Creator-cockpit clusters with Phase-1 trend fields (pulse/momentum/radar)."""
+    scored_data = load_scored_data()
+    if intel_db:
+        try:
+            snapshot_clusters(scored_data, intel_db)
+        except Exception as e:
+            print(f"Warning: cluster snapshot failed: {e}")
+    clusters = build_topic_clusters(scored_data, intel_db=intel_db)
+    return jsonify({"clusters": clusters})
+
+
+# ── Phase 2: agents ──────────────────────────────────────────────────────
+
+@app.route("/api/agents/dispatch", methods=["POST"])
+def api_agents_dispatch():
+    if agent_runner is None:
+        return jsonify({"error": "agent runner unavailable"}), 503
+    body = request.get_json(silent=True) or {}
+    agent_type = body.get("agent_type")
+    if agent_type not in AgentRunner.AGENT_TYPES:
+        return jsonify({"error": "invalid agent_type"}), 400
+    try:
+        run_id = agent_runner.dispatch(
+            agent_type,
+            topic=body.get("topic"),
+            target_id=body.get("target_id"),
+            payload=body.get("payload"),
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"run_id": run_id})
+
+
+@app.route("/api/agents")
+def api_agents():
+    if agent_runner is None:
+        return jsonify({"active": [], "recent_done": []})
+    return jsonify(agent_runner.snapshot())
+
+
+@app.route("/api/agents/<run_id>/logs")
+def api_agent_logs(run_id):
+    if intel_db is None:
+        return jsonify({"logs": []})
+    return jsonify({"run_id": run_id, "logs": intel_db.get_agent_logs(run_id)})
+
+
+@app.route("/api/agents/stream")
+def api_agents_stream():
+    if agent_runner is None:
+        return jsonify({"error": "agent runner unavailable"}), 503
+
+    def gen():
+        q = agent_runner.subscribe()
+        try:
+            yield "retry: 5000\n\n"
+            while True:
+                try:
+                    ev = q.get(timeout=15)
+                    yield f"data: {json.dumps(ev)}\n\n"
+                except queue.Empty:
+                    yield ": keepalive\n\n"
+        finally:
+            agent_runner.unsubscribe(q)
+
+    return Response(stream_with_context(gen()), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ── Phase 3: schedule ────────────────────────────────────────────────────
+
+def _schedule_item_payload(item_id):
+    """Denormalized item fields for a calendar cell."""
+    if intel_db is None:
+        return {}
+    try:
+        item = intel_db.get_saved_item(int(item_id))
+    except (ValueError, TypeError):
+        item = None
+    if not item:
+        return {}
+    return {
+        "working_title": item.get("working_title") or item.get("title"),
+        "topic": item.get("category") or item.get("topic"),
+        "format": item.get("format"),
+        "creator_score": item.get("creator_score"),
+    }
+
+
+@app.route("/api/schedule", methods=["GET"])
+def api_schedule_list():
+    if intel_db is None:
+        return jsonify([])
+    start = request.args.get("start")
+    end = request.args.get("end")
+    if not start or not end:
+        today = datetime.now()
+        start = start or today.strftime("%Y-%m-%d")
+        end = end or (today + timedelta(days=6)).strftime("%Y-%m-%d")
+    rows = intel_db.get_schedule_range(start, end)
+    for row in rows:
+        row["item"] = _schedule_item_payload(row.get("item_id"))
+    return jsonify(rows)
+
+
+@app.route("/api/schedule", methods=["POST"])
+def api_schedule_create():
+    if intel_db is None:
+        return jsonify({"error": "db unavailable"}), 503
+    body = request.get_json(silent=True) or {}
+    if not body.get("item_id") or not body.get("day") or not body.get("kind"):
+        return jsonify({"error": "item_id, day, kind required"}), 400
+    sched_id = f"sched-{uuid.uuid4().hex[:12]}"
+    intel_db.insert_schedule(sched_id, str(body["item_id"]), body["day"],
+                             body["kind"], time=body.get("time"))
+    row = intel_db.get_schedule_entry(sched_id)
+    row["item"] = _schedule_item_payload(row.get("item_id"))
+    return jsonify(row), 201
+
+
+@app.route("/api/schedule/<sched_id>", methods=["PUT"])
+def api_schedule_update(sched_id):
+    if intel_db is None:
+        return jsonify({"error": "db unavailable"}), 503
+    body = request.get_json(silent=True) or {}
+    ok = intel_db.update_schedule(sched_id, **body)
+    if not ok:
+        return jsonify({"error": "not found"}), 404
+    row = intel_db.get_schedule_entry(sched_id)
+    row["item"] = _schedule_item_payload(row.get("item_id"))
+    return jsonify(row)
+
+
+@app.route("/api/schedule/<sched_id>", methods=["DELETE"])
+def api_schedule_delete(sched_id):
+    if intel_db is None:
+        return jsonify({"error": "db unavailable"}), 503
+    ok = intel_db.delete_schedule(sched_id)
+    return jsonify({"success": ok})
+
+
+@app.route("/api/schedule/<sched_id>/complete", methods=["POST"])
+def api_schedule_complete(sched_id):
+    if intel_db is None:
+        return jsonify({"error": "db unavailable"}), 503
+    ok = intel_db.update_schedule(sched_id, status="done")
+    if not ok:
+        return jsonify({"error": "not found"}), 404
+    return jsonify({"success": True})
+
+
+@app.route("/api/schedule/auto", methods=["POST"])
+def api_schedule_auto():
+    """Drop top brief items into the next available week (simple heuristic)."""
+    if intel_db is None:
+        return jsonify({"error": "db unavailable"}), 503
+    try:
+        scored_data = load_scored_data()
+        clusters = build_topic_clusters(scored_data, intel_db=intel_db)
+        opportunities = build_content_opportunities(scored_data, clusters)
+        brief = build_creator_brief(opportunities, clusters, intel_db.get_saved_items())
+    except Exception as e:
+        return jsonify({"error": f"brief unavailable: {e}"}), 500
+
+    profile = _load_creator_profile_safe()
+    publish_days = (profile.get("schedule") or {}).get("publish_days", ["Sat", "Sun"])
+    record_window = (profile.get("schedule") or {}).get("preferred_record_window", "10:00-12:00")
+    record_time = record_window.split("-")[0]
+
+    picks = []
+    if brief.get("best_video_idea"):
+        picks.append(brief["best_video_idea"])
+    picks.extend(brief.get("long_form_candidates", [])[:2])
+
+    created = []
+    base = datetime.now()
+    day_idx = 0
+    for opp in picks:
+        item_id = opp.get("id") or opp.get("url") or opp.get("topic")
+        # advance to next weekday
+        while (base + timedelta(days=day_idx)).weekday() >= 5:
+            day_idx += 1
+        rec_day = (base + timedelta(days=day_idx)).strftime("%Y-%m-%d")
+        sid = f"sched-{uuid.uuid4().hex[:12]}"
+        intel_db.insert_schedule(sid, str(item_id), rec_day, "record", time=record_time)
+        created.append(sid)
+        # publish on next configured publish day
+        pub_offset = day_idx + 1
+        for _ in range(7):
+            cand = base + timedelta(days=pub_offset)
+            if cand.strftime("%a") in publish_days:
+                break
+            pub_offset += 1
+        pub_day = (base + timedelta(days=pub_offset)).strftime("%Y-%m-%d")
+        psid = f"sched-{uuid.uuid4().hex[:12]}"
+        intel_db.insert_schedule(psid, str(item_id), pub_day, "publish", time="10:00")
+        created.append(psid)
+        day_idx += 1
+    return jsonify({"created": created, "count": len(created)})
+
+
+# ── Phase 4: copilot ─────────────────────────────────────────────────────
+
+_COPILOT_HITS = defaultdict(list)
+
+
+def _load_creator_profile_safe():
+    try:
+        import llm_summary
+        return llm_summary.load_creator_profile()
+    except Exception:
+        return {}
+
+
+@app.route("/api/copilot", methods=["POST"])
+def api_copilot():
+    body = request.get_json(silent=True) or {}
+    question = (body.get("question") or "").strip()
+    view = body.get("view") or "pulse"
+    context = body.get("context") or {}
+    if not question:
+        return jsonify({"error": "question required"}), 400
+
+    # Per-IP rate limit.
+    limit = int(os.environ.get("COPILOT_RATE_LIMIT_PER_MIN", "12"))
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "local").split(",")[0].strip()
+    now = time.time()
+    hits = [t for t in _COPILOT_HITS[ip] if now - t < 60]
+    if len(hits) >= limit:
+        return jsonify({"error": "rate limited"}), 429
+    hits.append(now)
+    _COPILOT_HITS[ip] = hits
+
+    profile = _load_creator_profile_safe()
+    cop_cfg = profile.get("copilot") or {}
+    system = (
+        f"You are DailyDex's creator copilot. The user is on the \"{view}\" screen of a "
+        f"multi-format AI creator's dashboard. Current context: {json.dumps(context)[:1500]}. "
+        f"Answer in 1-2 sentences, punchy, opinionated. No preamble."
+    )
+    started = time.time()
+    answer = None
+    model = "unknown"
+    try:
+        import llm_summary
+        model = llm_summary.llm_provider_label()
+        answer = llm_summary.query_llm(question, system_prompt=system)
+    except Exception as e:
+        print(f"Copilot LLM error: {e}")
+    if not answer:
+        answer = "Copilot is offline right now — check the LLM provider config."
+    # Cap length defensively (~max_tokens proxy).
+    max_chars = int(cop_cfg.get("max_tokens", 200)) * 6
+    answer = answer.strip()[:max_chars]
+    return jsonify({
+        "answer": answer,
+        "model": model,
+        "elapsed_ms": int((time.time() - started) * 1000),
+    })
+
+
+# ── Phase 5: thumbnails ──────────────────────────────────────────────────
+
+@app.route("/api/thumbnails/generate", methods=["POST"])
+def api_thumbnails_generate():
+    if intel_db is None:
+        return jsonify({"error": "db unavailable"}), 503
+    from creator_intelligence import generate_thumbnail_variants
+    body = request.get_json(silent=True) or {}
+    content_hash = body.get("content_hash")
+    if not content_hash:
+        return jsonify({"error": "content_hash required"}), 400
+    count = int(body.get("count", 6))
+    variants = generate_thumbnail_variants(
+        intel_db, content_hash, topic=body.get("topic"),
+        count=count, base_item=body.get("item"),
+    )
+    return jsonify(variants), 201
+
+
+@app.route("/api/thumbnails/<content_hash>")
+def api_thumbnails_get(content_hash):
+    if intel_db is None:
+        return jsonify([])
+    from creator_intelligence import serialize_thumbnail_variant
+    rows = intel_db.get_thumbnail_variants(content_hash)
+    return jsonify([serialize_thumbnail_variant(r) for r in rows])
+
+
+@app.route("/api/thumbnails/<variant_id>", methods=["PUT"])
+def api_thumbnails_update(variant_id):
+    if intel_db is None:
+        return jsonify({"error": "db unavailable"}), 503
+    from creator_intelligence import serialize_thumbnail_variant
+    body = request.get_json(silent=True) or {}
+    fields = {}
+    if "text" in body:
+        fields["text_primary"] = body["text"]
+    if "subtext" in body:
+        fields["text_secondary"] = body["subtext"]
+    for k in ("hue", "kind", "ctr_pred"):
+        if k in body:
+            fields[k] = body[k]
+    ok = intel_db.update_thumbnail_variant(variant_id, **fields)
+    if not ok:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(serialize_thumbnail_variant(intel_db.get_thumbnail_variant(variant_id)))
+
+
+@app.route("/api/thumbnails/<variant_id>", methods=["DELETE"])
+def api_thumbnails_delete(variant_id):
+    if intel_db is None:
+        return jsonify({"error": "db unavailable"}), 503
+    return jsonify({"success": intel_db.delete_thumbnail_variant(variant_id)})
+
+
+@app.route("/api/thumbnails/<variant_id>/pick", methods=["POST"])
+def api_thumbnails_pick(variant_id):
+    if intel_db is None:
+        return jsonify({"error": "db unavailable"}), 503
+    ok = intel_db.pick_thumbnail_variant(variant_id)
+    if not ok:
+        return jsonify({"error": "not found"}), 404
+    return jsonify({"success": True})
 
 
 @app.route("/api/save", methods=["POST"])
