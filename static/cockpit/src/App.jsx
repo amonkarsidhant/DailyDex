@@ -73,7 +73,7 @@ const App = () => {
   return (
     <div className="app">
       <Nav view={view} setView={setView}/>
-      <Topbar now={now} onOpenTweaks={() => {/* host controls */}}
+      <Topbar now={now} onOpenTweaks={() => window.__toggleTweaks && window.__toggleTweaks()}
               onRefresh={onRefresh} refreshing={refreshing}/>
       <main className="main">
         <div className="main-scroll" key={view}>

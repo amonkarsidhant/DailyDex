@@ -223,6 +223,9 @@ function TweaksPanel({ title = 'Tweaks', children }) {
     };
     window.addEventListener('message', onMsg);
     window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    // Standalone opener so the Topbar settings gear can toggle the panel.
+    window.__openTweaks = () => setOpen(true);
+    window.__toggleTweaks = () => setOpen(v => !v);
     return () => window.removeEventListener('message', onMsg);
   }, []);
 
