@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.dailydex.refresh</string>
+
+    <!-- Hourly fetch -> score -> cluster snapshot, straight to the data files
+         and SQLite DB. Runs whether or not the web server is up. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>__APP_DIR__/.venv-cockpit/bin/python</string>
+        <string>__APP_DIR__/refresh_job.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__APP_DIR__</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- No live LLM in the cron path; set GEMINI_API_KEY and flip these
+             to enable creator-pack enrichment during refresh. -->
+        <key>LLM_PROVIDER</key><string>none</string>
+        <key>CREATOR_ENRICHER_PRIMARY</key><string>0</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StartInterval</key>
+    <integer>3600</integer>
+
+    <key>StandardOutPath</key>
+    <string>__APP_DIR__/data/logs/refresh.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__APP_DIR__/data/logs/refresh.err.log</string>
+</dict>
+</plist>

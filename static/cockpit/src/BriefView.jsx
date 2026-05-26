@@ -5,11 +5,29 @@ const BriefView = ({ onJump }) => {
   const { clusters, titleSets, thumbnails } = window.DD_DATA;
   const persona = window.__tweaks?.persona || "multi";
   const P = window.DD_DATA.personas[persona];
-  const hero = clusters[0]; // Computer Use Agents
-  const titles = titleSets[hero.slug] || {};
-  const heroThumb = thumbnails.find(t => t.topic === hero.slug);
+  const hero = clusters[0] || null; // Computer Use Agents
+  const titles = hero ? (titleSets[hero.slug] || {}) : {};
+  const heroThumb = hero ? thumbnails.find(t => t.topic === hero.slug) : null;
 
   const [titleKey, setTitleKey] = useState("practical");
+
+  if (!hero) {
+    return (
+      <div className="panel crosshair" style={{ padding: "48px 22px", textAlign: "center" }}>
+        <span className="ch-bl"/><span className="ch-br"/>
+        <div className="label" style={{ marginBottom: 10 }}>Today's brief</div>
+        <h1 className="serif" style={{ fontSize: 26, color: "var(--text-hi)", margin: "0 0 12px", fontWeight: 600 }}>
+          Nothing to make yet
+        </h1>
+        <p style={{ color: "var(--text-mid)", maxWidth: 420, margin: "0 auto 18px" }}>
+          The brief picks today's top cross-source story. Fetch sources to populate it.
+        </p>
+        <button className="btn primary" onClick={() => window.DDX && window.DDX.refresh()}>
+          Fetch sources now
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

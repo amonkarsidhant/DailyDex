@@ -175,8 +175,26 @@ const AutoRow = ({ icon, label, desc, agent, c }) => {
 
 const ClustersView = ({ onJump }) => {
   const { clusters } = window.DD_DATA;
-  const [expandedId, setExpandedId] = useState(clusters[0].slug);
+  const [expandedId, setExpandedId] = useState(clusters[0] ? clusters[0].slug : null);
   const [sortMode, setSortMode] = useState("momentum");
+
+  if (!clusters.length) {
+    return (
+      <div className="panel crosshair" style={{ padding: "48px 22px", textAlign: "center" }}>
+        <span className="ch-bl"/><span className="ch-br"/>
+        <div className="label" style={{ marginBottom: 10 }}>Clusters</div>
+        <h1 className="serif" style={{ fontSize: 26, color: "var(--text-hi)", margin: "0 0 12px", fontWeight: 600 }}>
+          No cross-source stories yet
+        </h1>
+        <p style={{ color: "var(--text-mid)", maxWidth: 420, margin: "0 auto 18px" }}>
+          Clusters appear once sources are fetched and the same topic shows up across families.
+        </p>
+        <button className="btn primary" onClick={() => window.DDX && window.DDX.refresh()}>
+          Fetch sources now
+        </button>
+      </div>
+    );
+  }
 
   const sorted = [...clusters].sort((a, b) => {
     if (sortMode === "score") return b.creator_score - a.creator_score;

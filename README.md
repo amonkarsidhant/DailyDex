@@ -100,8 +100,47 @@ Open `http://localhost:8888`.
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python3 dashboard_new.py
+python3 dashboard_new.py            # http://127.0.0.1:8888
 ```
+
+The entrypoint reads `HOST` (default `127.0.0.1`), `PORT` (default `8888`), and
+`DEBUG` (`1` to enable the reloader/debugger).
+
+### macOS app (always-on, recommended for daily use)
+
+Installs DailyDex as two `launchd` agents so the cockpit is always running and the
+content refreshes itself hourly — no terminal left open.
+
+```bash
+scripts/macos/install.sh
+```
+
+This builds a local `.venv-cockpit`, installs requirements, and loads:
+
+| Agent | What it does |
+|---|---|
+| `com.dailydex.app` | Flask server on `http://127.0.0.1:8888`, `KeepAlive` (restarts on crash) + starts at login. |
+| `com.dailydex.refresh` | Runs `refresh_job.py` (fetch → score → cluster snapshot) at load and every 60 min, straight to the data files + SQLite — works whether or not the server is up. |
+
+Open `http://127.0.0.1:8888`.
+
+```bash
+# Manage
+launchctl kickstart -k gui/$(id -u)/com.dailydex.app       # restart server now
+launchctl kickstart -p gui/$(id -u)/com.dailydex.refresh   # refresh content now
+tail -f data/logs/app.err.log                              # server log
+tail -f data/logs/refresh.out.log                          # refresh log
+
+scripts/macos/uninstall.sh                                 # remove both agents (keeps venv + data)
+```
+
+Notes:
+- The app runs via the venv `python` (Flask `threaded=True`), **not** gunicorn —
+  gunicorn's startup re-exec trips macOS TCC when the venv lives under `~/Documents`.
+- Live creator-pack enrichment and the copilot need a Gemini key: set `GEMINI_API_KEY`,
+  then flip `LLM_PROVIDER`/`CREATOR_ENRICHER_PRIMARY` in
+  `scripts/macos/com.dailydex.refresh.plist.template` and re-run `install.sh`.
+- Trend `momentum`/`pulse` fill in as hourly snapshots accumulate (≈24h for full 24h momentum).
 
 ### Telegram Bot (optional)
 

@@ -280,8 +280,27 @@ const PulseTable = ({ clusters, picked, onPick }) => {
 
 const PulseView = ({ onJump }) => {
   const { clusters } = window.DD_DATA;
-  const [picked, setPicked] = useState(clusters[0].slug);
-  const focused = clusters.find(c => c.slug === picked);
+  const [picked, setPicked] = useState(clusters[0] ? clusters[0].slug : null);
+
+  if (!clusters.length) {
+    return (
+      <div className="panel crosshair" style={{ padding: "48px 22px", textAlign: "center" }}>
+        <span className="ch-bl"/><span className="ch-br"/>
+        <div className="label" style={{ marginBottom: 10 }}>Trend pulse</div>
+        <h1 className="serif" style={{ fontSize: 26, color: "var(--text-hi)", margin: "0 0 12px", fontWeight: 600 }}>
+          No clusters yet
+        </h1>
+        <p style={{ color: "var(--text-mid)", maxWidth: 420, margin: "0 auto 18px" }}>
+          The radar fills in once sources have been fetched and grouped into cross-source topics.
+        </p>
+        <button className="btn primary" onClick={() => window.DDX && window.DDX.refresh()}>
+          Fetch sources now
+        </button>
+      </div>
+    );
+  }
+
+  const focused = clusters.find(c => c.slug === picked) || clusters[0];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

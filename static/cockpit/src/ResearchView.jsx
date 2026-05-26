@@ -5,6 +5,24 @@ const ResearchView = ({ onJump }) => {
   const [topic, setTopic] = useState((clusters[0] && clusters[0].slug) || "");
   const cluster = clusters.find(c => c.slug === topic) || clusters[0];
 
+  if (!cluster) {
+    return (
+      <div className="panel crosshair" style={{ padding: "48px 22px", textAlign: "center" }}>
+        <span className="ch-bl"/><span className="ch-br"/>
+        <div className="label" style={{ marginBottom: 10 }}>Research</div>
+        <h1 className="serif" style={{ fontSize: 26, color: "var(--text-hi)", margin: "0 0 12px", fontWeight: 600 }}>
+          No research packs yet
+        </h1>
+        <p style={{ color: "var(--text-mid)", maxWidth: 420, margin: "0 auto 18px" }}>
+          Packs are built from clusters. Fetch sources to populate topics, then dispatch the researcher.
+        </p>
+        <button className="btn primary" onClick={() => window.DDX && window.DDX.refresh()}>
+          Fetch sources now
+        </button>
+      </div>
+    );
+  }
+
   const buildMD = (c) => {
     if (!c) return "";
     const ev = (c.related_items || []).map((it, i) =>
