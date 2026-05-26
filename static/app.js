@@ -1480,6 +1480,85 @@ function buildResearchPack(item, btn) {
     });
 }
 
+async function toggleResearchPackEdit(btn) {
+    const card = btn.closest('.creator-research-card');
+    const editor = card.querySelector('.research-pack-editor');
+    const isOpen = editor.style.display !== 'none';
+    if (isOpen) {
+        editor.style.display = 'none';
+        btn.textContent = 'Edit';
+        return;
+    }
+    const filename = card.dataset.filename;
+    const textarea = editor.querySelector('.research-pack-content');
+    textarea.value = 'Loading...';
+    editor.style.display = 'block';
+    btn.textContent = 'Close';
+    try {
+        const res = await fetch(`/api/research-pack/${encodeURIComponent(filename)}`);
+        const data = await res.json();
+        textarea.value = data.content || '';
+    } catch (e) {
+        textarea.value = 'Failed to load content.';
+    }
+}
+
+async function saveResearchPack(btn) {
+    const card = btn.closest('.creator-research-card');
+    const filename = card.dataset.filename;
+    const textarea = card.querySelector('.research-pack-content');
+    const content = textarea.value;
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+    try {
+        const res = await fetch(`/api/research-pack/${encodeURIComponent(filename)}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ content }),
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Saved', 'Research pack updated.', 'success');
+            // Update excerpt preview
+            const lines = content.split('\n').filter(l => l.trim());
+            const excerpt = card.querySelector('.research-pack-excerpt');
+            if (excerpt && lines[1]) excerpt.textContent = lines[1].slice(0, 180);
+        } else {
+            showToast('Error', data.error || 'Failed to save.', 'error');
+        }
+    } catch (e) {
+        showToast('Error', 'Network error.', 'error');
+    }
+    btn.textContent = 'Save';
+    btn.disabled = false;
+}
+
+async function sendPackToPipeline(filename, btn) {
+    const oldText = btn.textContent;
+    btn.textContent = 'Sending...';
+    btn.disabled = true;
+    try {
+        const res = await fetch(`/api/research-pack/${encodeURIComponent(filename)}/send-to-pipeline`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({}),
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Pipeline', data.message || 'Added to Content Pipeline.', 'success');
+            btn.textContent = '✓ In Pipeline';
+        } else {
+            showToast('Error', data.error || 'Failed.', 'error');
+            btn.textContent = oldText;
+            btn.disabled = false;
+        }
+    } catch (e) {
+        showToast('Error', 'Network error.', 'error');
+        btn.textContent = oldText;
+        btn.disabled = false;
+    }
+}
+
 function requestEnrichment(item, btn) {
     setButtonLoading(btn, true);
     fetch('/api/enrich', {
@@ -1958,7 +2037,7 @@ async function refreshForgeStudio() {
     try {
         const res = await fetch('/api/saved?status=script_ready');
         const data = await res.json();
-        const items = (data.items || []).filter(i => i.production_status === 'ready' || i.production_assets);
+        const items = data.items || [];
         
         if (items.length === 0) {
             list.innerHTML = '<div class="empty-state">No forged items ready.</div>';
@@ -2003,8 +2082,9 @@ function selectForgeItem(item) {
     document.getElementById('forge-active-meta').innerText = `${item.category} • ${item.source} • ${item.created_at.split(' ')[0]}`;
     
     // Update context
-    document.getElementById('forge-context-leads').innerText = item.notes.split('|')[0] || 'No leads extracted.';
-    document.getElementById('forge-context-inversion').innerText = item.notes.includes('INVERSION:') ? item.notes.split('INVERSION:')[1] : 'No risk analysis available.';
+    const notes = item.notes || '';
+    document.getElementById('forge-context-leads').innerText = notes.split('|')[0] || 'No leads extracted.';
+    document.getElementById('forge-context-inversion').innerText = notes.includes('INVERSION:') ? notes.split('INVERSION:')[1] : 'No risk analysis available.';
     
     // Default to shorts
     switchStudioAsset('shorts');
@@ -2030,11 +2110,19 @@ function switchStudioAsset(type) {
     document.getElementById('forge-asset-label').innerText = labels[type];
     
     // Load content
-    const assets = typeof activeForgeItem.production_assets === 'string' 
-        ? JSON.parse(activeForgeItem.production_assets) 
-        : activeForgeItem.production_assets;
-        
-    const content = assets[type + '_script'] || assets[type + '_post'] || assets[type + '_outline'] || assets[type + '_guide'] || assets[type] || 'Asset not forged for this format.';
+    let content = '';
+    if (activeForgeItem.production_assets) {
+        const assets = typeof activeForgeItem.production_assets === 'string'
+            ? JSON.parse(activeForgeItem.production_assets)
+            : activeForgeItem.production_assets;
+        content = assets[type + '_script'] || assets[type + '_post'] || assets[type + '_outline'] || assets[type + '_guide'] || assets[type] || '';
+    }
+    if (!content) {
+        // Fall back to the notes/research content when no forged assets yet
+        content = (type === 'shorts' || type === 'blog')
+            ? (activeForgeItem.notes || activeForgeItem.hook || 'No forged asset yet. Use "Forge assets" in the Content Pipeline to generate content.')
+            : 'No forged asset yet. Use "Forge assets" in the Content Pipeline to generate content.';
+    }
     document.getElementById('forge-editor-content').innerText = content;
 }
 
@@ -2050,6 +2138,106 @@ function copyStudioAsset() {
             btn.classList.remove('btn-success');
         }, 2000);
     });
+}
+
+// --- Forge Studio mode switching ---
+
+function switchForgeMode(mode, btn) {
+    document.querySelectorAll('.forge-mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('forge-mode-pipeline').style.display = mode === 'pipeline' ? 'flex' : 'none';
+    document.getElementById('forge-mode-agents').style.display = mode === 'agents' ? 'grid' : 'none';
+}
+
+// --- Practicum AI Agents ---
+
+const _agentLastInputs = {};
+
+async function runPracticumAgent(agentId, inputs, btn) {
+    const firstInputVal = Object.values(inputs).find(v => v.trim());
+    if (!firstInputVal) {
+        showToast('Missing input', 'Please fill in at least the topic field.', 'error');
+        return;
+    }
+    _agentLastInputs[agentId] = inputs;
+
+    const outputBox = document.getElementById(`agent-output-${agentId}`);
+    const outputContent = document.getElementById(`agent-output-content-${agentId}`);
+    outputBox.style.display = 'flex';
+    outputContent.textContent = 'Generating…';
+    btn.disabled = true;
+    const origText = btn.textContent;
+    btn.textContent = '⏳ Running…';
+
+    try {
+        const res = await fetch('/api/agent-run', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ agent_id: agentId, inputs }),
+        });
+        const data = await res.json();
+        if (data.success) {
+            outputContent.textContent = data.output;
+            showToast(data.agent, 'Content generated.', 'success');
+        } else {
+            outputContent.textContent = `Error: ${data.error}`;
+            showToast('Agent error', data.error, 'error');
+        }
+    } catch (e) {
+        outputContent.textContent = 'Network error. Please try again.';
+        showToast('Error', 'Network error.', 'error');
+    }
+
+    btn.disabled = false;
+    btn.textContent = origText;
+}
+
+function copyAgentOutput(agentId) {
+    const el = document.getElementById(`agent-output-content-${agentId}`);
+    const text = el.innerText || el.textContent;
+    navigator.clipboard.writeText(text).then(() => showToast('Copied', 'Output copied to clipboard.', 'success'));
+}
+
+async function saveAgentOutputToPipeline(agentId, btn) {
+    const el = document.getElementById(`agent-output-content-${agentId}`);
+    const content = el.innerText || el.textContent;
+    const inputs = _agentLastInputs[agentId] || {};
+    const topic = inputs.topic || inputs.tool || 'Agent output';
+    const agentNames = { youtube: 'YouTube', shorts: 'Shorts', demo: 'Demo' };
+
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    try {
+        const res = await fetch('/api/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                title: `[${agentNames[agentId] || agentId}] ${topic}`,
+                url: `agent://${agentId}/${Date.now()}`,
+                source: 'practicum-agent',
+                source_type: 'agent',
+                category: 'Creator',
+                status: 'script_ready',
+                working_title: topic,
+                notes: content,
+                pipeline_type: 'creator',
+            }),
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Pipeline', 'Agent output saved to Content Pipeline as Script Ready.', 'success');
+            btn.textContent = '✓ Saved';
+        } else {
+            showToast('Error', data.error || 'Failed to save.', 'error');
+            btn.disabled = false;
+            btn.textContent = '→ Pipeline';
+        }
+    } catch (e) {
+        showToast('Error', 'Network error.', 'error');
+        btn.disabled = false;
+        btn.textContent = '→ Pipeline';
+    }
 }
 
 // End of Forge Studio logic

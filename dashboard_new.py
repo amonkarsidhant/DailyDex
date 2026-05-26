@@ -1098,6 +1098,113 @@ def api_list_research_packs():
     return jsonify({"packs": list_research_packs()})
 
 
+@app.route("/api/research-pack/<path:filename>", methods=["GET"])
+def api_get_research_pack(filename):
+    """Return the raw markdown content of a research pack."""
+    path = os.path.join(RESEARCH_PACK_DIR, os.path.basename(filename))
+    if not os.path.isfile(path):
+        return jsonify({"error": "Not found"}), 404
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+    return jsonify({"filename": filename, "content": content})
+
+
+@app.route("/api/research-pack/<path:filename>", methods=["PUT"])
+def api_update_research_pack(filename):
+    """Save edited markdown content back to a research pack file."""
+    path = os.path.join(RESEARCH_PACK_DIR, os.path.basename(filename))
+    if not os.path.isfile(path):
+        return jsonify({"error": "Not found"}), 404
+    data = request.get_json() or {}
+    content = data.get("content", "")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+    return jsonify({"success": True})
+
+
+@app.route("/api/research-pack/<path:filename>/send-to-pipeline", methods=["POST"])
+def api_research_pack_to_pipeline(filename):
+    """Create a content pipeline item from a research pack."""
+    if not intel_db:
+        return jsonify({"success": False, "error": "Database not available"})
+    path = os.path.join(RESEARCH_PACK_DIR, os.path.basename(filename))
+    if not os.path.isfile(path):
+        return jsonify({"error": "Not found"}), 404
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+    lines = [l.strip() for l in content.splitlines() if l.strip()]
+    title = lines[0].lstrip("# ") if lines else filename
+    excerpt = lines[1][:300] if len(lines) > 1 else ""
+    data = request.get_json() or {}
+    item_id = intel_db.save_item({
+        "title": title,
+        "url": f"research-pack://{filename}",
+        "source": "research-pack",
+        "source_type": "research-pack",
+        "category": data.get("category", "Research"),
+        "signal_score": 0,
+        "status": "researching",
+        "working_title": title,
+        "hook": excerpt,
+        "notes": content,
+        "pipeline_type": "creator",
+    })
+    return jsonify({"success": True, "id": item_id, "message": "Added to Content Pipeline."})
+
+
+
+_PRACTICUM_AGENTS = {
+    "youtube": {
+        "name": "YouTube — The Practicum",
+        "system_prompt": (
+            "You are a YouTube content strategist for AI Practicum, a channel run by two "
+            "engineering managers who build agentic AI systems and AI-augmented SDLC workflows. "
+            "Generate: 1) 3 title options (SEO optimised, punchy), 2) Full video description "
+            "with timestamps placeholder, 3) 5 tags, 4) Thumbnail concept description, "
+            "5) Full video outline with sections and talking points."
+        ),
+    },
+    "shorts": {
+        "name": "Shorts — The Practicum",
+        "system_prompt": (
+            "You are a scriptwriter for AI Practicum. Generate content based on the selected "
+            "format: For YouTube Short: a 60-second vertical video script with hook, 3 key "
+            "points, CTA. For Podcast Episode: intro, 4 talking segments with questions for "
+            "two hosts, outro. For Demo Script: step-by-step narration script for a live "
+            "technical demo, with cues for what to show on screen."
+        ),
+    },
+    "demo": {
+        "name": "Demo — The Practicum",
+        "system_prompt": (
+            "You are a technical demo producer for AI Practicum. Generate: 1) A step-by-step "
+            "demo guide with exact actions to perform, 2) A GIF storyboard (list of 6-8 frames "
+            "with descriptions of what to capture), 3) Key callout annotations to overlay on "
+            "screenshots, 4) A one-paragraph intro to read before the demo starts."
+        ),
+    },
+}
+
+
+@app.route("/api/agent-run", methods=["POST"])
+def api_agent_run():
+    """Run one of the Practicum content agents via the LLM."""
+    data = request.get_json() or {}
+    agent_id = data.get("agent_id", "")
+    agent = _PRACTICUM_AGENTS.get(agent_id)
+    if not agent:
+        return jsonify({"success": False, "error": f"Unknown agent: {agent_id}"}), 400
+
+    inputs = data.get("inputs", {})
+    user_prompt = "\n".join(f"{k}: {v}" for k, v in inputs.items() if v)
+
+    from llm_summary import query_claude_code_cli
+    result = query_claude_code_cli(user_prompt, system_prompt=agent["system_prompt"])
+    if result is None:
+        return jsonify({"success": False, "error": "LLM returned no response. Check LLM_PROVIDER and credentials."}), 500
+    return jsonify({"success": True, "output": result, "agent": agent["name"]})
+
+
 @app.route("/api/ignore", methods=["POST"])
 def api_ignore():
     """Ignore/hide an item"""

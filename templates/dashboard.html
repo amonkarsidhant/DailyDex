@@ -669,12 +669,25 @@
                     </div>
                     <div class="creator-research-grid">
                         {% for pack in research_packs %}
-                        <div class="card creator-research-card">
-                            <h3>{{ pack.title }}</h3>
-                            <p>{{ pack.excerpt }}</p>
+                        <div class="card creator-research-card" data-filename="{{ pack.filename }}">
+                            <div class="research-pack-header">
+                                <h3>{{ pack.title }}</h3>
+                                <div class="research-pack-header-actions">
+                                    <button class="btn btn-small" onclick="toggleResearchPackEdit(this)">Edit</button>
+                                    <button class="btn btn-small btn-primary" onclick="sendPackToPipeline('{{ pack.filename }}', this)">→ Pipeline</button>
+                                </div>
+                            </div>
+                            <p class="research-pack-excerpt">{{ pack.excerpt }}</p>
                             <div class="creator-research-meta">
                                 <span>{{ pack.updated_at }}</span>
                                 <span>{{ pack.filename }}</span>
+                            </div>
+                            <div class="research-pack-editor" style="display:none">
+                                <textarea class="research-pack-content" rows="20" placeholder="Loading..."></textarea>
+                                <div class="research-pack-editor-actions">
+                                    <button class="btn btn-small btn-primary" onclick="saveResearchPack(this)">Save</button>
+                                    <button class="btn btn-small" onclick="toggleResearchPackEdit(this)">Cancel</button>
+                                </div>
                             </div>
                         </div>
                         {% endfor %}
@@ -752,6 +765,9 @@
                                         <button class="btn btn-small" onclick="updateCreatorItem({{ item.id }}, this.closest('.creator-saved-card'))">Save</button>
                                         <button class="btn btn-small btn-primary" onclick="forgeProductionAssets({{ item.id }}, this)" title="Generate Shorts / Podcast / LinkedIn / Blog / Demo">Forge assets</button>
                                         <span class="forge-status-pill state-{{ item.production_status or 'none' }}">{{ item.production_status or 'none' }}</span>
+                                        {% if item.status == 'script_ready' %}
+                                        <button class="btn btn-small btn-studio" onclick="openItemInStudio({{ item.id }})">⚒️ Open in Studio</button>
+                                        {% endif %}
                                         <button class="btn btn-small action-ignore" onclick="deleteItem({{ item.id }}, this)">Remove</button>
                                     </div>
                                 </div>
@@ -1268,21 +1284,27 @@
                             <button class="btn btn-small" onclick="refreshForgeStudio()">Refresh</button>
                         </div>
                     </div>
-                    
-                    <div class="forge-studio-container">
+
+                    <!-- Studio mode tabs -->
+                    <div class="forge-mode-tabs">
+                        <button class="forge-mode-btn active" onclick="switchForgeMode('pipeline', this)">📋 Pipeline</button>
+                        <button class="forge-mode-btn" onclick="switchForgeMode('agents', this)">🤖 AI Agents</button>
+                    </div>
+
+                    <!-- Pipeline mode -->
+                    <div class="forge-studio-container" id="forge-mode-pipeline">
                         <div class="forge-sidebar">
-                            <h3 class="forge-sidebar-title">Research Pipeline</h3>
+                            <h3 class="forge-sidebar-title">Script Ready</h3>
                             <div class="forge-item-list" id="forge-item-list">
-                                <!-- Populated by JS -->
                                 <div class="empty-state">No forged items ready.</div>
                             </div>
                         </div>
-                        
+
                         <div class="forge-main" id="forge-main-empty">
                             <div class="forge-empty-state">
                                 <div class="forge-empty-icon">⚒️</div>
                                 <h3>Select an item to enter the Studio</h3>
-                                <p>Items promoted to 'Script Ready' with forged assets will appear here.</p>
+                                <p>Items promoted to 'Script Ready' appear here.</p>
                             </div>
                         </div>
 
@@ -1307,7 +1329,6 @@
                                         <button class="btn btn-small btn-primary" onclick="copyStudioAsset()">Copy to Clipboard</button>
                                     </div>
                                     <div class="forge-editor-content" id="forge-editor-content" contenteditable="true">
-                                        <!-- Asset content here -->
                                     </div>
                                 </div>
 
@@ -1323,6 +1344,144 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Agents mode -->
+                    <div class="forge-agents-panel" id="forge-mode-agents" style="display:none">
+
+                        <!-- Agent 1: YouTube -->
+                        <div class="agent-card" id="agent-youtube">
+                            <div class="agent-card-header">
+                                <span class="agent-icon">📺</span>
+                                <div>
+                                    <div class="agent-name">YouTube — The Practicum</div>
+                                    <div class="agent-desc">SEO titles · Full description · Outline · Thumbnail concept</div>
+                                </div>
+                            </div>
+                            <div class="agent-form">
+                                <div class="agent-field">
+                                    <label>Topic / trend</label>
+                                    <input type="text" class="agent-input" id="yt-topic" placeholder="e.g. Claude MCP tool use in production">
+                                </div>
+                                <div class="agent-field-row">
+                                    <div class="agent-field">
+                                        <label>Target audience</label>
+                                        <select class="agent-select" id="yt-audience">
+                                            <option value="Beginners">Beginners</option>
+                                            <option value="Engineers" selected>Engineers</option>
+                                            <option value="Engineering Managers">Engineering Managers</option>
+                                            <option value="All">All</option>
+                                        </select>
+                                    </div>
+                                    <div class="agent-field">
+                                        <label>Video length</label>
+                                        <select class="agent-select" id="yt-length">
+                                            <option value="Short (5 min)">Short 5min</option>
+                                            <option value="Medium (10 min)" selected>Medium 10min</option>
+                                            <option value="Long (20min+)">Long 20min+</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary agent-run-btn" onclick="runPracticumAgent('youtube', {topic: document.getElementById('yt-topic').value, audience: document.getElementById('yt-audience').value, video_length: document.getElementById('yt-length').value}, this)">▶ Generate</button>
+                            </div>
+                            <div class="agent-output" id="agent-output-youtube" style="display:none">
+                                <div class="agent-output-toolbar">
+                                    <span class="agent-output-label">YouTube — The Practicum</span>
+                                    <button class="btn btn-small" onclick="copyAgentOutput('youtube')">Copy</button>
+                                    <button class="btn btn-small" onclick="saveAgentOutputToPipeline('youtube', this)">→ Pipeline</button>
+                                </div>
+                                <div class="agent-output-content" id="agent-output-content-youtube" contenteditable="true"></div>
+                            </div>
+                        </div>
+
+                        <!-- Agent 2: Shorts / Podcast / Demo Script -->
+                        <div class="agent-card" id="agent-shorts">
+                            <div class="agent-card-header">
+                                <span class="agent-icon">🎬</span>
+                                <div>
+                                    <div class="agent-name">Shorts — The Practicum</div>
+                                    <div class="agent-desc">60-sec script · Podcast episode · Demo narration</div>
+                                </div>
+                            </div>
+                            <div class="agent-form">
+                                <div class="agent-field">
+                                    <label>Topic</label>
+                                    <input type="text" class="agent-input" id="sh-topic" placeholder="e.g. Running LLMs on Raspberry Pi 5">
+                                </div>
+                                <div class="agent-field-row">
+                                    <div class="agent-field">
+                                        <label>Format</label>
+                                        <select class="agent-select" id="sh-format">
+                                            <option value="YouTube Short">YouTube Short</option>
+                                            <option value="Podcast Episode">Podcast Episode</option>
+                                            <option value="Demo Script">Demo Script</option>
+                                        </select>
+                                    </div>
+                                    <div class="agent-field">
+                                        <label>Tone</label>
+                                        <select class="agent-select" id="sh-tone">
+                                            <option value="Technical">Technical</option>
+                                            <option value="Accessible">Accessible</option>
+                                            <option value="Conversational">Conversational</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary agent-run-btn" onclick="runPracticumAgent('shorts', {topic: document.getElementById('sh-topic').value, format: document.getElementById('sh-format').value, tone: document.getElementById('sh-tone').value}, this)">▶ Generate</button>
+                            </div>
+                            <div class="agent-output" id="agent-output-shorts" style="display:none">
+                                <div class="agent-output-toolbar">
+                                    <span class="agent-output-label">Shorts — The Practicum</span>
+                                    <button class="btn btn-small" onclick="copyAgentOutput('shorts')">Copy</button>
+                                    <button class="btn btn-small" onclick="saveAgentOutputToPipeline('shorts', this)">→ Pipeline</button>
+                                </div>
+                                <div class="agent-output-content" id="agent-output-content-shorts" contenteditable="true"></div>
+                            </div>
+                        </div>
+
+                        <!-- Agent 3: Demo Producer -->
+                        <div class="agent-card" id="agent-demo">
+                            <div class="agent-card-header">
+                                <span class="agent-icon">💻</span>
+                                <div>
+                                    <div class="agent-name">Demo — The Practicum</div>
+                                    <div class="agent-desc">Step-by-step guide · GIF storyboard · Screenshot callouts</div>
+                                </div>
+                            </div>
+                            <div class="agent-form">
+                                <div class="agent-field">
+                                    <label>Tool or concept to demo</label>
+                                    <input type="text" class="agent-input" id="dm-tool" placeholder="e.g. Claude Code hooks system">
+                                </div>
+                                <div class="agent-field-row">
+                                    <div class="agent-field">
+                                        <label>Demo type</label>
+                                        <select class="agent-select" id="dm-type">
+                                            <option value="Live Coding">Live Coding</option>
+                                            <option value="Tool Walkthrough">Tool Walkthrough</option>
+                                            <option value="Concept Explainer">Concept Explainer</option>
+                                        </select>
+                                    </div>
+                                    <div class="agent-field">
+                                        <label>Output asset</label>
+                                        <select class="agent-select" id="dm-output">
+                                            <option value="GIF storyboard">GIF storyboard</option>
+                                            <option value="Screenshot guide">Screenshot guide</option>
+                                            <option value="Slide outline">Slide outline</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary agent-run-btn" onclick="runPracticumAgent('demo', {tool: document.getElementById('dm-tool').value, demo_type: document.getElementById('dm-type').value, output_asset: document.getElementById('dm-output').value}, this)">▶ Generate</button>
+                            </div>
+                            <div class="agent-output" id="agent-output-demo" style="display:none">
+                                <div class="agent-output-toolbar">
+                                    <span class="agent-output-label">Demo — The Practicum</span>
+                                    <button class="btn btn-small" onclick="copyAgentOutput('demo')">Copy</button>
+                                    <button class="btn btn-small" onclick="saveAgentOutputToPipeline('demo', this)">→ Pipeline</button>
+                                </div>
+                                <div class="agent-output-content" id="agent-output-content-demo" contenteditable="true"></div>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 

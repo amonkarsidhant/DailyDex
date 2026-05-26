@@ -30,6 +30,14 @@ GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "600"))
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/generate")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "phi3:mini")
 
+# Claude Code CLI — uses the existing OAuth session, no API key needed.
+_CLAUDE_CODE_BIN = os.environ.get(
+    "CLAUDE_CODE_BIN",
+    os.environ.get("CLAUDE_CODE_EXECPATH", "claude"),
+)
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
+CLAUDE_TIMEOUT = int(os.environ.get("CLAUDE_TIMEOUT", "120"))
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CREATOR_PROFILE_PATH = os.environ.get(
     "CREATOR_PROFILE_PATH",
@@ -146,15 +154,53 @@ def query_ollama(prompt: str, system_prompt: Optional[str] = None) -> Optional[s
     return None
 
 
+def query_claude_code_cli(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:
+    """Call Claude via the claude CLI using the existing OAuth session."""
+    full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+    args = [
+        _CLAUDE_CODE_BIN,
+        "-p", full_prompt,
+        "--model", CLAUDE_MODEL,
+    ]
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            timeout=CLAUDE_TIMEOUT,
+        )
+    except FileNotFoundError:
+        print(f"Claude CLI not found at {_CLAUDE_CODE_BIN!r}. Set CLAUDE_CODE_BIN.")
+        return None
+    except subprocess.TimeoutExpired:
+        print(f"Claude CLI timed out after {CLAUDE_TIMEOUT}s")
+        return None
+    except Exception as exc:
+        print(f"Claude CLI error: {exc}")
+        return None
+
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()[:400]
+        print(f"Claude CLI exit {result.returncode}: {stderr}")
+        return None
+
+    return (result.stdout or "").strip() or None
+
+
 def query_llm(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:
     if PROVIDER == "ollama":
         return query_ollama(prompt, system_prompt)
+    if PROVIDER == "claude":
+        return query_claude_code_cli(prompt, system_prompt)
     return query_gemini_cli(prompt, system_prompt)
 
 
 def llm_provider_label() -> str:
     if PROVIDER == "ollama":
         return f"ollama:{OLLAMA_MODEL}"
+    if PROVIDER == "claude":
+        return f"claude:{CLAUDE_MODEL}"
     return f"gemini:{GEMINI_MODEL or 'default'}"
 
 
