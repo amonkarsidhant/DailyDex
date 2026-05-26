@@ -7,7 +7,7 @@ def test_creator_variant_exists_and_creator_ui_renders(creator_client):
     assert variant_payload["current"] == "creator"
     assert "creator" in keys
 
-    html = creator_client.get("/").get_data(as_text=True)
+    html = creator_client.get("/classic").get_data(as_text=True)
     assert "Creator Brief" in html
     assert "Video Ideas" in html
     assert "Shorts" in html
@@ -159,7 +159,7 @@ def test_creator_pipeline_statuses_and_fields_are_supported(creator_client, crea
 
 
 def test_normal_mode_still_works(client):
-    html = client.get("/").get_data(as_text=True)
+    html = client.get("/classic").get_data(as_text=True)
     assert "Overview" in html
     assert "High Signal Feed" in html
     assert "Creator Brief" not in html
