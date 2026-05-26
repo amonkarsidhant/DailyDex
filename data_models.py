@@ -200,6 +200,89 @@ class IntelligenceDB:
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_creator_assets_status ON creator_assets(status)")
 
+        # ── Creator Cockpit tables (Phases 1-5) ──────────────────────────
+        # P1: per-(topic, hour) cluster snapshots for trend time-series.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS cluster_snapshots (
+                topic         TEXT NOT NULL,
+                hour_bucket   INTEGER NOT NULL,
+                item_count    INTEGER NOT NULL,
+                signal_sum    INTEGER NOT NULL,
+                sources_json  TEXT NOT NULL,
+                PRIMARY KEY (topic, hour_bucket)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_cluster_snapshots_topic_bucket
+                ON cluster_snapshots(topic, hour_bucket DESC)
+        """)
+
+        # P2: multi-agent runner state + per-run log lines.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS agent_runs (
+                id           TEXT PRIMARY KEY,
+                agent_type   TEXT NOT NULL,
+                topic        TEXT,
+                target_id    TEXT,
+                status       TEXT NOT NULL,
+                stage        TEXT,
+                progress     REAL DEFAULT 0,
+                eta_sec      INTEGER,
+                started_at   REAL,
+                finished_at  REAL,
+                result_summary TEXT,
+                error        TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_agent_runs_status_started
+                ON agent_runs(status, started_at DESC)
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS agent_logs (
+                run_id  TEXT NOT NULL,
+                ts      REAL NOT NULL,
+                line    TEXT NOT NULL,
+                PRIMARY KEY (run_id, ts)
+            )
+        """)
+
+        # P3: publishing/production calendar.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS schedule (
+                id          TEXT PRIMARY KEY,
+                item_id     TEXT NOT NULL,
+                day         TEXT NOT NULL,
+                time        TEXT,
+                kind        TEXT NOT NULL,
+                status      TEXT NOT NULL DEFAULT 'planned',
+                created_at  REAL NOT NULL
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_schedule_day ON schedule(day)")
+
+        # P5: thumbnail variant store.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS thumbnail_variants (
+                id             TEXT PRIMARY KEY,
+                content_hash   TEXT NOT NULL,
+                topic          TEXT,
+                kind           TEXT NOT NULL,
+                text_primary   TEXT,
+                text_secondary TEXT,
+                hue            INTEGER,
+                image_path     TEXT,
+                ctr_pred       REAL,
+                picked         INTEGER DEFAULT 0,
+                generated_by   TEXT,
+                created_at     REAL NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_thumbnail_variants_hash
+                ON thumbnail_variants(content_hash, ctr_pred DESC)
+        """)
+
         conn.commit()
         conn.close()
 
@@ -735,6 +818,26 @@ class IntelligenceDB:
         conn.close()
         return count
 
+    # ---- P1: cluster_snapshots helpers ----
+
+    def write_cluster_snapshot(self, topic: str, hour_bucket: int, item_count: int,
+                               signal_sum: int, sources: str) -> None:
+        """Idempotent upsert — re-running the snapshotter in the same hour is safe."""
+        conn = sqlite3.connect(self.db_path)
+        conn.execute(
+            """
+            INSERT INTO cluster_snapshots (topic, hour_bucket, item_count, signal_sum, sources_json)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(topic, hour_bucket) DO UPDATE SET
+                item_count=excluded.item_count,
+                signal_sum=excluded.signal_sum,
+                sources_json=excluded.sources_json
+            """,
+            (topic, int(hour_bucket), int(item_count), int(signal_sum), sources),
+        )
+        conn.commit()
+        conn.close()
+
     # ===== Telegram Subscribers =====
 
     def add_subscriber(self, chat_id: int, name: str = "") -> None:
@@ -746,6 +849,281 @@ class IntelligenceDB:
         )
         conn.commit()
         conn.close()
+
+    def read_cluster_history(self, topic: str, hours: int = 168) -> List[tuple]:
+        """Returns list of (hour_bucket, item_count, signal_sum), newest-last."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT hour_bucket, item_count, signal_sum
+            FROM cluster_snapshots
+            WHERE topic = ?
+            ORDER BY hour_bucket DESC
+            LIMIT ?
+            """,
+            (topic, int(hours)),
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return list(reversed(rows))
+
+    def first_seen_hour(self, topic: str) -> Optional[int]:
+        """Earliest hour_bucket where item_count > 0, or None."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT MIN(hour_bucket) FROM cluster_snapshots WHERE topic = ? AND item_count > 0",
+            (topic,),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return int(row[0]) if row and row[0] is not None else None
+
+    def trim_cluster_snapshots(self, older_than_hour: int) -> int:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM cluster_snapshots WHERE hour_bucket < ?", (int(older_than_hour),))
+        deleted = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return deleted
+
+    # ---- P2: agent_runs / agent_logs helpers ----
+
+    def insert_agent_run(self, run_id: str, agent_type: str, topic: str = None,
+                         target_id: str = None, eta_sec: int = None) -> None:
+        conn = sqlite3.connect(self.db_path)
+        conn.execute(
+            """
+            INSERT INTO agent_runs (id, agent_type, topic, target_id, status, progress, eta_sec)
+            VALUES (?, ?, ?, ?, 'queued', 0, ?)
+            """,
+            (run_id, agent_type, topic, target_id, eta_sec),
+        )
+        conn.commit()
+        conn.close()
+
+    def update_agent_run(self, run_id: str, **fields) -> None:
+        allowed = {"status", "stage", "progress", "eta_sec", "started_at",
+                   "finished_at", "result_summary", "error", "topic", "target_id"}
+        sets = {k: v for k, v in fields.items() if k in allowed}
+        if not sets:
+            return
+        cols = ", ".join(f"{k} = ?" for k in sets)
+        conn = sqlite3.connect(self.db_path)
+        conn.execute(f"UPDATE agent_runs SET {cols} WHERE id = ?", (*sets.values(), run_id))
+        conn.commit()
+        conn.close()
+
+    def get_agent_run(self, run_id: str) -> Optional[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM agent_runs WHERE id = ?", (run_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def list_agent_runs(self, status: str = None, limit: int = 50) -> List[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        if status:
+            cursor.execute(
+                "SELECT * FROM agent_runs WHERE status = ? ORDER BY started_at DESC LIMIT ?",
+                (status, int(limit)),
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM agent_runs ORDER BY started_at DESC LIMIT ?", (int(limit),)
+            )
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    def list_active_agent_runs(self) -> List[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM agent_runs WHERE status IN ('queued','running') ORDER BY started_at DESC"
+        )
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    def append_agent_log(self, run_id: str, ts: float, line: str) -> None:
+        conn = sqlite3.connect(self.db_path)
+        # ts is PK with run_id; nudge on collision so rapid logs don't drop
+        try:
+            conn.execute("INSERT INTO agent_logs (run_id, ts, line) VALUES (?, ?, ?)",
+                         (run_id, float(ts), line))
+        except sqlite3.IntegrityError:
+            conn.execute("INSERT INTO agent_logs (run_id, ts, line) VALUES (?, ?, ?)",
+                         (run_id, float(ts) + 1e-4, line))
+        conn.commit()
+        conn.close()
+
+    def get_agent_logs(self, run_id: str, limit: int = 200) -> List[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT ts, line FROM agent_logs WHERE run_id = ? ORDER BY ts ASC LIMIT ?",
+            (run_id, int(limit)),
+        )
+        rows = [{"ts": r[0], "line": r[1]} for r in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    def trim_agent_logs(self, older_than_ts: float) -> int:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM agent_logs WHERE ts < ?", (float(older_than_ts),))
+        deleted = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return deleted
+
+    # ---- P3: schedule helpers ----
+
+    def insert_schedule(self, sched_id: str, item_id: str, day: str, kind: str,
+                        time: str = None, status: str = "planned", created_at: float = None) -> None:
+        import time as _time
+        conn = sqlite3.connect(self.db_path)
+        conn.execute(
+            """
+            INSERT INTO schedule (id, item_id, day, time, kind, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (sched_id, str(item_id), day, time, kind, status, created_at or _time.time()),
+        )
+        conn.commit()
+        conn.close()
+
+    def get_schedule_range(self, start: str, end: str) -> List[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM schedule WHERE day >= ? AND day <= ? ORDER BY day ASC, time ASC",
+            (start, end),
+        )
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    def get_schedule_entry(self, sched_id: str) -> Optional[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM schedule WHERE id = ?", (sched_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def update_schedule(self, sched_id: str, **fields) -> bool:
+        allowed = {"item_id", "day", "time", "kind", "status"}
+        sets = {k: v for k, v in fields.items() if k in allowed}
+        if not sets:
+            return False
+        cols = ", ".join(f"{k} = ?" for k in sets)
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(f"UPDATE schedule SET {cols} WHERE id = ?", (*sets.values(), sched_id))
+        changed = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return changed > 0
+
+    def delete_schedule(self, sched_id: str) -> bool:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM schedule WHERE id = ?", (sched_id,))
+        changed = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return changed > 0
+
+    # ---- P5: thumbnail_variants helpers ----
+
+    def insert_thumbnail_variant(self, variant: Dict) -> None:
+        conn = sqlite3.connect(self.db_path)
+        conn.execute(
+            """
+            INSERT INTO thumbnail_variants
+                (id, content_hash, topic, kind, text_primary, text_secondary,
+                 hue, image_path, ctr_pred, picked, generated_by, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                variant["id"], variant["content_hash"], variant.get("topic"),
+                variant["kind"], variant.get("text_primary"), variant.get("text_secondary"),
+                variant.get("hue"), variant.get("image_path"), variant.get("ctr_pred"),
+                int(variant.get("picked", 0)), variant.get("generated_by", "stub"),
+                variant["created_at"],
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+    def get_thumbnail_variants(self, content_hash: str) -> List[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM thumbnail_variants WHERE content_hash = ? ORDER BY ctr_pred DESC",
+            (content_hash,),
+        )
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    def get_thumbnail_variant(self, variant_id: str) -> Optional[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM thumbnail_variants WHERE id = ?", (variant_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def update_thumbnail_variant(self, variant_id: str, **fields) -> bool:
+        allowed = {"text_primary", "text_secondary", "hue", "kind", "ctr_pred", "image_path", "picked"}
+        sets = {k: v for k, v in fields.items() if k in allowed}
+        if not sets:
+            return False
+        cols = ", ".join(f"{k} = ?" for k in sets)
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(f"UPDATE thumbnail_variants SET {cols} WHERE id = ?", (*sets.values(), variant_id))
+        changed = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return changed > 0
+
+    def delete_thumbnail_variant(self, variant_id: str) -> bool:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM thumbnail_variants WHERE id = ?", (variant_id,))
+        changed = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return changed > 0
+
+    def pick_thumbnail_variant(self, variant_id: str) -> bool:
+        """Mark one variant picked; clear the rest for the same content_hash."""
+        variant = self.get_thumbnail_variant(variant_id)
+        if not variant:
+            return False
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("UPDATE thumbnail_variants SET picked = 0 WHERE content_hash = ?",
+                       (variant["content_hash"],))
+        cursor.execute("UPDATE thumbnail_variants SET picked = 1 WHERE id = ?", (variant_id,))
+        conn.commit()
+        conn.close()
+        return True
 
     def remove_subscriber(self, chat_id: int) -> None:
         conn = sqlite3.connect(self.db_path)

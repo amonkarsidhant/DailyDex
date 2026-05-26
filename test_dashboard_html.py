@@ -29,7 +29,7 @@ def test_dashboard_contains_real_action_wiring(client, app_env):
         }
     )
 
-    html = client.get("/").get_data(as_text=True)
+    html = client.get("/classic").get_data(as_text=True)
 
     assert "<script src=\"/static/app.js\"></script>" in html
     assert "Daily Trust State" in html
@@ -49,7 +49,7 @@ def test_dashboard_contains_real_action_wiring(client, app_env):
 
 
 def test_empty_state_is_helpful(empty_client):
-    html = empty_client.get("/").get_data(as_text=True)
+    html = empty_client.get("/classic").get_data(as_text=True)
 
     assert "Overview" in html
     assert "Refresh Now" in html
