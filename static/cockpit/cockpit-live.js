@@ -53,6 +53,14 @@
       return jpost("/api/schedule", { item_id, day, kind, time });
     },
     saveToPipeline(item) { return jpost("/api/save", item); },
+
+    // Creator Central
+    studio() { return jget("/api/studio"); },
+    studioRun(topN) { return jpost("/api/studio/run", { top_n: topN || 0 }); },
+    studioRegenerate(storyKey, fmt, provider) {
+      return jpost(`/api/studio/${encodeURIComponent(storyKey)}/${fmt}/regenerate`,
+                   provider ? { provider } : {});
+    },
   };
 
   window.DDX = DDX;

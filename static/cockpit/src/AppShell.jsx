@@ -42,6 +42,7 @@ const Nav = ({ view, setView }) => {
     { key: "thumbs",    icon: <I.Thumb size={15}/>,    label: "Thumb Lab",sub: "title × thumb"  },
     { key: "research",  icon: <I.Research size={15}/>, label: "Research", sub: "evidence packs" },
     { key: "pipeline",  icon: <I.Pipeline size={15}/>, label: "Pipeline", sub: "+ calendar"        },
+    { key: "studio",    icon: <I.Studio size={15}/>,   label: "Creator Central", sub: "autonomous content" },
   ];
   return (
     <nav className="nav" style={{ display: "flex", flexDirection: "column" }}>

@@ -887,7 +887,31 @@ def build_cockpit_data():
         "pipeline": _cockpit_pipeline(saved_items),
         "calendar": _cockpit_calendar(),
         "thumbnails": _cockpit_thumbnails(clusters, opp_by_slug),
+        "studio": _cockpit_studio(),
     }
+
+
+def _cockpit_studio():
+    """Creator Central: autonomously generated content + provider status."""
+    stories = []
+    if intel_db:
+        try:
+            stories = intel_db.studio_list_stories(limit=30)
+        except Exception:
+            stories = []
+    providers = []
+    try:
+        import cli_registry
+        providers = cli_registry.probe().get("providers", [])
+    except Exception:
+        providers = []
+    try:
+        import studio as _studio
+        skills = [{"format": f, "label": _studio.SKILLS[f]["label"],
+                   "icon": _studio.SKILLS[f]["icon"]} for f in _studio.FORMAT_ORDER]
+    except Exception:
+        skills = []
+    return {"stories": stories, "providers": providers, "skills": skills}
 
 
 def build_chart_payload(scored_data, saved_items, source_status_cards):
@@ -1212,6 +1236,55 @@ def classic_dashboard():
 def api_cockpit_data():
     """JSON DD_DATA payload — lets the UI refresh without a full reload."""
     return jsonify(build_cockpit_data())
+
+
+# ── Creator Central (Studio) ─────────────────────────────────────────────
+_studio_run_state = {"running": False, "started_at": None, "last": None}
+
+
+@app.route("/api/studio")
+def api_studio():
+    """List autonomously generated content + detected providers + skills."""
+    return jsonify(_cockpit_studio() | {"run": _studio_run_state})
+
+
+@app.route("/api/studio/run", methods=["POST"])
+def api_studio_run():
+    """Kick the autonomous content factory in the background."""
+    if _studio_run_state["running"]:
+        return jsonify({"status": "already_running"}), 409
+    top_n = int((request.get_json(silent=True) or {}).get("top_n", 0)) or None
+
+    def _runner():
+        _studio_run_state.update(running=True, started_at=datetime.now().isoformat())
+        try:
+            import studio_job
+            _studio_run_state["last"] = studio_job.run(intel_db=intel_db, top_n=top_n)
+        except Exception as exc:  # noqa: BLE001
+            _studio_run_state["last"] = {"ok": False, "error": str(exc)}
+        finally:
+            _studio_run_state["running"] = False
+
+    threading.Thread(target=_runner, name="studio-run", daemon=True).start()
+    return jsonify({"status": "started"})
+
+
+@app.route("/api/studio/<story_key>/<fmt>/regenerate", methods=["POST"])
+def api_studio_regenerate(story_key, fmt):
+    """Regenerate one format for one story, reusing its stored research."""
+    if intel_db is None:
+        return jsonify({"error": "no_db"}), 503
+    rows = intel_db.studio_get_story(story_key)
+    row = next((r for r in rows if r["fmt"] == fmt), None)
+    if not row:
+        return jsonify({"error": "not_found"}), 404
+    import studio
+    prefer = (request.get_json(silent=True) or {}).get("provider")
+    intel_db.studio_set_status(story_key, row["topic"], fmt, "generating")
+    result = studio.generate_format(fmt, row.get("research") or "", prefer=prefer)
+    intel_db.studio_save_result(story_key, row["topic"], fmt, result)
+    return jsonify({"ok": result["ok"], "format": fmt, "provider": result.get("provider"),
+                    "body": result.get("body", "")})
 
 
 @app.route("/health")

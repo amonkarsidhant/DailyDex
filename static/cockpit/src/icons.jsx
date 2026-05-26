@@ -14,6 +14,7 @@ const I = {
   Research: (p) => <Icon {...p}><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></Icon>,
   Pipeline: (p) => <Icon {...p}><rect x="1.5" y="3" width="3" height="10"/><rect x="6.5" y="3" width="3" height="6"/><rect x="11.5" y="3" width="3" height="8"/></Icon>,
   Calendar: (p) => <Icon {...p}><rect x="2" y="3" width="12" height="11" rx="1"/><path d="M2 6h12M5 1.5v3M11 1.5v3"/></Icon>,
+  Studio:   (p) => <Icon {...p}><circle cx="8" cy="8" r="6"/><path d="M8 5.5v5M5.5 8h5"/><circle cx="8" cy="8" r="2"/></Icon>,
   Settings: (p) => <Icon {...p}><circle cx="8" cy="8" r="2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.2 3.2l1.4 1.4M11.4 11.4l1.4 1.4M3.2 12.8l1.4-1.4M11.4 4.6l1.4-1.4"/></Icon>,
   Bell:     (p) => <Icon {...p}><path d="M4 11V7a4 4 0 0 1 8 0v4l1 1.5H3L4 11Z"/><path d="M6.5 13.5a1.5 1.5 0 0 0 3 0"/></Icon>,
   Refresh:  (p) => <Icon {...p}><path d="M13.5 6.5A6 6 0 0 0 2.5 4.5"/><path d="M2.5 9.5a6 6 0 0 0 11 2"/><path d="M11 2v4h-4M5 14v-4h4"/></Icon>,

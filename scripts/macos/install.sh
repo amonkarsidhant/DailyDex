@@ -48,6 +48,7 @@ render_and_load() {
 
 render_and_load com.dailydex.app
 render_and_load com.dailydex.refresh
+render_and_load com.dailydex.studio
 
 # 3. wait for the server to answer
 echo -n "==> waiting for http://127.0.0.1:$PORT "

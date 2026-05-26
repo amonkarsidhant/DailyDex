@@ -5,7 +5,7 @@ set -euo pipefail
 AGENTS_DIR="$HOME/Library/LaunchAgents"
 DOMAIN="gui/$(id -u)"
 
-for label in com.dailydex.app com.dailydex.refresh; do
+for label in com.dailydex.app com.dailydex.refresh com.dailydex.studio; do
     echo "==> removing $label"
     launchctl bootout "$DOMAIN/$label" 2>/dev/null || true
     rm -f "$AGENTS_DIR/$label.plist"

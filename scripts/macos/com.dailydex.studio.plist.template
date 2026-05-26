@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.dailydex.studio</string>
+
+    <!-- Creator Central: autonomously research the top stories and generate
+         shorts / video / podcast / blog drafts via whatever model CLI is
+         available. Runs every 6h; safe to overlap the refresh job. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>__APP_DIR__/.venv-cockpit/bin/python</string>
+        <string>__APP_DIR__/studio_job.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__APP_DIR__</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>STUDIO_TOP_N</key><string>2</string>
+        <key>STUDIO_DEEP_RESEARCH</key><string>1</string>
+        <!-- enricher off in the batch path; generation uses cli_registry directly -->
+        <key>CREATOR_ENRICHER_PRIMARY</key><string>0</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StartInterval</key>
+    <integer>21600</integer>
+
+    <key>StandardOutPath</key>
+    <string>__APP_DIR__/data/logs/studio.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__APP_DIR__/data/logs/studio.err.log</string>
+</dict>
+</plist>
