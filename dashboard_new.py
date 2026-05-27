@@ -11,7 +11,7 @@ import hashlib
 import threading
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context, send_from_directory
 
 from creator_intelligence import (
     CREATOR_STATUS_ORDER,
@@ -26,14 +26,21 @@ from creator_intelligence import (
     slugify_topic as _ci_slug,
 )
 
-# Add current directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Add current directory and v0.1 directory to path for imports
+sys.path.insert(0, BASE_DIR)
+sys.path.insert(0, os.path.join(BASE_DIR, "v0.1"))
 
+import jinja2
 app = Flask(__name__)
 app.url_map.merge_slashes = False
 
-# Paths
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Add v0.1/templates to Jinja search path so the classic dashboard template is found
+my_loader = jinja2.ChoiceLoader([
+    app.jinja_loader,
+    jinja2.FileSystemLoader(os.path.join(BASE_DIR, "v0.1", "templates")),
+])
+app.jinja_loader = my_loader
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
 DB_PATH = os.environ.get("DB_PATH", os.path.join(DATA_DIR, "intelligence.db"))
 CACHE_DIR = os.environ.get("CACHE_DIR", os.path.join(DATA_DIR, "cache"))
@@ -1291,6 +1298,18 @@ def home():
 def classic_dashboard():
     """The original DailyDex dashboard, kept for reference."""
     return render_template("dashboard.html", **build_dashboard_context())
+
+
+@app.route("/static/app.css")
+def serve_classic_css():
+    """Serve legacy stylesheet from v0.1 archive."""
+    return send_from_directory(os.path.join(BASE_DIR, "v0.1", "static"), "app.css")
+
+
+@app.route("/static/app.js")
+def serve_classic_js():
+    """Serve legacy client script from v0.1 archive."""
+    return send_from_directory(os.path.join(BASE_DIR, "v0.1", "static"), "app.js")
 
 
 @app.route("/api/cockpit-data")
