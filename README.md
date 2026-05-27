@@ -124,6 +124,7 @@ This builds a local `.venv-cockpit`, installs requirements, and loads:
 |---|---|
 | `com.dailydex.app` | Flask server on `http://127.0.0.1:8888`, `KeepAlive` (restarts on crash) + starts at login. |
 | `com.dailydex.refresh` | Runs `refresh_job.py` (fetch → score → cluster snapshot) at load and every 60 min, straight to the data files + SQLite — works whether or not the server is up. |
+| `com.dailydex.studio` | Runs `studio_job.py` (Creator Central) every 6h: picks the top stories, researches them, and autonomously writes shorts / video / podcast / blog drafts. |
 
 Open `http://127.0.0.1:8888`.
 
@@ -144,6 +145,40 @@ Notes:
   then flip `LLM_PROVIDER`/`CREATOR_ENRICHER_PRIMARY` in
   `scripts/macos/com.dailydex.refresh.plist.template` and re-run `install.sh`.
 - Trend `momentum`/`pulse` fill in as hourly snapshots accumulate (≈24h for full 24h momentum).
+
+### Creator Central (autonomous content factory)
+
+The **Creator Central** cockpit screen turns the day's top stories into finished
+content with zero manual prompting. The `com.dailydex.studio` agent:
+
+1. picks the top N stories (by creator score),
+2. researches each via whatever model CLI is on the machine, then
+3. runs four generator skills and saves the drafts to SQLite.
+
+| Skill | Output |
+|---|---|
+| `shorts` | 25–60s vertical script with `[Visual]`/`[Audio]` cues |
+| `video` | Long-form YouTube script — cold open, 3 beats, demo, outro |
+| `podcast` | ~5 min two-host dialogue |
+| `blog` | Full publishable Markdown post |
+
+**Model backend is auto-detected** (`cli_registry.py`) — it probes for `opencode`,
+`claude`, `gemini`, `hermes`, `ollama`, and NVIDIA NIM, uses the best available,
+and falls back automatically. No API key required if `opencode` (free models) or a
+`claude`/`gemini` CLI session is present. Tune with `STUDIO_*` env vars
+(`STUDIO_TOP_N`, `STUDIO_DEEP_RESEARCH`, `STUDIO_OPENCODE_MODEL`, …).
+
+The format specs are also published as Claude Code skills in
+`.claude/skills/creator-{shorts,video,podcast,blog}` so any agent CLI with
+`--skills` support generates them consistently.
+
+```bash
+# manual run / endpoints
+launchctl kickstart -p gui/$(id -u)/com.dailydex.studio   # generate now
+python3 cli_registry.py                                   # list detected model CLIs
+python3 studio_job.py                                     # run the factory in the foreground
+curl -X POST localhost:8888/api/studio/run                # trigger via the app
+```
 
 ### Telegram Bot (optional)
 

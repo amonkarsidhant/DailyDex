@@ -26,7 +26,7 @@ def main() -> int:
             snapshot_clusters(scored, dd.intel_db)
             print("[refresh_job] cluster snapshot written")
         n = sum(len(scored.get(k, []) or []) for k in
-                ("github", "huggingface", "youtube", "blogs", "papers"))
+                ("github", "huggingface", "youtube", "blogs", "papers", "hackernews"))
         print(f"[refresh_job] done — {n} scored items in {time.time() - started:.1f}s")
         return 0
     except Exception:

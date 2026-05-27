@@ -216,7 +216,7 @@ class EnrichmentService:
         timeout_seconds = int(automation.get("enrichment_wait_seconds", 180))
 
         item_lookup: Dict[str, Dict[str, Any]] = {}
-        for source_type in ("github", "huggingface", "youtube", "blogs", "papers"):
+        for source_type in ("github", "huggingface", "youtube", "blogs", "papers", "hackernews"):
             for raw_item in scored_data.get(source_type, []) or []:
                 url = raw_item.get("url")
                 if url:
@@ -636,12 +636,120 @@ class AgentRunner:
 
     def _run_topic_researcher(self, run_id, topic, target_id, payload) -> str:
         label = topic or target_id or "topic"
-        self._log(run_id, f"matched items across sources for {label}")
-        self._stage(run_id, "Synthesizing sources", 0.35)
-        self._log(run_id, "extracted unique claims + benchmarks")
-        self._stage(run_id, "Cross-referencing evidence", 0.7)
-        self._log(run_id, "writing angle recommendation")
-        self._stage(run_id, "Finalizing pack", 0.95)
+        if not label:
+            return "No topic provided"
+
+        self._log(run_id, f"Initiating agentic dive on: {label}")
+        self._stage(run_id, "Querying leads from LLM", 0.2)
+
+        import llm_summary
+        import re
+        from datetime import datetime
+
+        leads_prompt = (
+            f"Research the AI topic '{label}'. Identify:\n"
+            "1. The primary technical framework or repo driving this trend.\n"
+            "2. The Munger Inversion: what are the risks, failure modes, or counter-arguments?\n"
+            "3. The Creator Opportunity: what concrete demo would prove or disprove the hype?\n"
+            "Return a concise technical summary (no preamble, no markdown headings)."
+        )
+        try:
+            leads = llm_summary.query_llm(
+                leads_prompt,
+                "You are a PhD-level research lead. Be technical, terse, and source-aware.",
+            ) or ""
+        except Exception as e:
+            leads = ""
+            self._log(run_id, f"Warning: LLM query for leads failed: {e}")
+
+        if not leads:
+            self._log(run_id, "Failed to retrieve research leads. Aborting.")
+            self._stage(run_id, "Failed", 1.0)
+            return f"failed to draft research pack for {label}"
+
+        self._log(run_id, "Successfully synthesized research leads.")
+        self._stage(run_id, "Drafting structured brief", 0.5)
+
+        synthesis_prompt = (
+            f"Based on these research leads for '{label}':\n{leads}\n\n"
+            "Return a JSON object with these exact keys:\n"
+            "strategic_title (high-CTR technical title, 38-62 chars),\n"
+            "shift (1 sentence: why this matters fundamentally),\n"
+            "superpower (1 sentence: the unique technical edge),\n"
+            "hook_contrarian (1 sentence),\n"
+            "hook_speed (1 sentence),\n"
+            "narrative_beats (array of 5 short strings),\n"
+            "thumbnail_visuals (array of 3 short strings),\n"
+            "inversion (1 sentence: the critical risk).\n"
+            "Output JSON only. No commentary, no code fences."
+        )
+        try:
+            raw = llm_summary.query_llm(
+                synthesis_prompt,
+                "You are a senior AI content strategist. Output strict JSON only.",
+            ) or ""
+        except Exception as e:
+            raw = ""
+            self._log(run_id, f"Warning: LLM synthesis query failed: {e}")
+
+        from agentic_researcher import _extract_json
+        brief = _extract_json(raw)
+
+        if not brief:
+            self._log(run_id, "Failed to parse structured brief JSON from LLM response.")
+            self._stage(run_id, "Failed", 1.0)
+            return f"failed to parse structured brief for {label}"
+
+        brief["leads"] = leads
+        brief["topic"] = label
+
+        self._log(run_id, "Successfully compiled strategic brief.")
+        self._stage(run_id, "Writing research pack markdown file", 0.8)
+
+        # Save to research packs directory
+        from agentic_researcher import RESEARCH_PACK_DIR
+        date_slug = datetime.now().strftime("%Y-%m-%d")
+        file_slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-") or "topic"
+        path = os.path.join(RESEARCH_PACK_DIR, f"{date_slug}-{file_slug}.md")
+
+        beats = brief.get("narrative_beats") or []
+        thumbs = brief.get("thumbnail_visuals") or []
+        body = [
+            f"# Research Pack: {label}",
+            f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            "**Status:** Agentic Recursive Dive",
+            "",
+            "## Leads",
+            brief.get("leads", "(no leads returned)"),
+            "",
+            "## Strategic Brief",
+            f"**Strategic title:** {brief.get('strategic_title', '')}",
+            f"**Shift:** {brief.get('shift', '')}",
+            f"**Superpower:** {brief.get('superpower', '')}",
+            f"**Munger Inversion:** {brief.get('inversion', '')}",
+            "",
+            "**Hooks:**",
+            f"- Contrarian: {brief.get('hook_contrarian', '')}",
+            f"- Speed-to-Value: {brief.get('hook_speed', '')}",
+            "",
+            "**Narrative Beats:**",
+            *[f"- {beat}" for beat in beats],
+            "",
+            "**Thumbnail Visuals:**",
+            *[f"- {visual}" for visual in thumbs],
+            "",
+        ]
+
+        try:
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("\n".join(body))
+            self._log(run_id, f"Research pack written to {path}")
+        except Exception as e:
+            self._log(run_id, f"Error writing file: {e}")
+            self._stage(run_id, "Failed", 1.0)
+            return f"failed to write research pack to disk for {label}"
+
+        self._stage(run_id, "Done", 1.0)
         return f"research pack drafted · {label}"
 
     def _run_script_writer(self, run_id, topic, target_id, payload) -> str:

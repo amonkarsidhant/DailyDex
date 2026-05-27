@@ -578,6 +578,9 @@ class SignalScorer:
         if "papers" in data:
             scored_data["papers"] = [self.score_paper(paper) for paper in data["papers"]]
 
+        if "hackernews" in data:
+            scored_data["hackernews"] = [self.score_news(item) for item in data["hackernews"]]
+
         return enrich_scored_data_with_creator_fields(scored_data)
     
     def generate_executive_brief(self, scored_data: Dict) -> Dict:
@@ -586,7 +589,7 @@ class SignalScorer:
         
         # Collect all scored items
         for category, items in scored_data.items():
-            if category in ["github", "huggingface", "youtube", "blogs", "papers"]:
+            if category in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews"]:
                 for item in items:
                     all_items.append({**item, "source_type": category})
         

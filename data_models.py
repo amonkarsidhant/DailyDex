@@ -3,6 +3,7 @@
 
 import sqlite3
 import json
+import time
 import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
@@ -283,8 +284,108 @@ class IntelligenceDB:
                 ON thumbnail_variants(content_hash, ctr_pred DESC)
         """)
 
+        # Creator Central — autonomously generated content, one row per
+        # (story, format). Regeneration overwrites in place.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS studio_content (
+                story_key   TEXT NOT NULL,
+                topic       TEXT,
+                fmt         TEXT NOT NULL,
+                body        TEXT,
+                provider    TEXT,
+                model       TEXT,
+                status      TEXT NOT NULL DEFAULT 'queued',
+                error       TEXT,
+                research    TEXT,
+                source_url  TEXT,
+                created_at  REAL NOT NULL,
+                updated_at  REAL NOT NULL,
+                PRIMARY KEY (story_key, fmt)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_studio_content_story
+                ON studio_content(story_key, fmt)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_studio_content_updated
+                ON studio_content(updated_at DESC)
+        """)
+
         conn.commit()
         conn.close()
+
+    # ---- studio_content helpers (Creator Central) ----
+
+    def studio_set_status(self, story_key: str, topic: str, fmt: str,
+                          status: str, *, research: str = None, source_url: str = None) -> None:
+        """Upsert a content row to a status (queued/generating), preserving body."""
+        now = time.time()
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("""
+            INSERT INTO studio_content
+                (story_key, topic, fmt, status, research, source_url, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(story_key, fmt) DO UPDATE SET
+                status=excluded.status, topic=excluded.topic,
+                research=COALESCE(excluded.research, studio_content.research),
+                source_url=COALESCE(excluded.source_url, studio_content.source_url),
+                updated_at=excluded.updated_at
+        """, (story_key, topic, fmt, status, research, source_url, now, now))
+        conn.commit()
+        conn.close()
+
+    def studio_save_result(self, story_key: str, topic: str, fmt: str, result: Dict) -> None:
+        """Persist a finished generation (body + provider + status)."""
+        now = time.time()
+        status = "ready" if result.get("ok") else "failed"
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("""
+            INSERT INTO studio_content
+                (story_key, topic, fmt, body, provider, model, status, error, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(story_key, fmt) DO UPDATE SET
+                body=excluded.body, provider=excluded.provider, model=excluded.model,
+                status=excluded.status, error=excluded.error, topic=excluded.topic,
+                updated_at=excluded.updated_at
+        """, (story_key, topic, fmt, result.get("body", ""), result.get("provider"),
+              result.get("model"), status, result.get("error"), now, now))
+        conn.commit()
+        conn.close()
+
+    def studio_get_story(self, story_key: str) -> List[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM studio_content WHERE story_key = ? ORDER BY fmt", (story_key,)
+        ).fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+
+    def studio_list_stories(self, limit: int = 30) -> List[Dict]:
+        """Group content by story, newest story first; each carries its formats."""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM studio_content ORDER BY updated_at DESC"
+        ).fetchall()
+        conn.close()
+        stories: Dict[str, Dict] = {}
+        for r in rows:
+            d = dict(r)
+            s = stories.setdefault(d["story_key"], {
+                "story_key": d["story_key"], "topic": d["topic"],
+                "source_url": d["source_url"], "updated_at": d["updated_at"],
+                "formats": {},
+            })
+            s["formats"][d["fmt"]] = {
+                "format": d["fmt"], "body": d["body"], "provider": d["provider"],
+                "model": d["model"], "status": d["status"], "error": d["error"],
+                "updated_at": d["updated_at"],
+            }
+            s["updated_at"] = max(s["updated_at"], d["updated_at"])
+        ordered = sorted(stories.values(), key=lambda x: x["updated_at"], reverse=True)
+        return ordered[:limit]
 
     # ---- creator_assets helpers ----
 
@@ -364,6 +465,30 @@ class IntelligenceDB:
         conn.close()
         return True
 
+    def _deserialize_row(self, row: sqlite3.Row) -> Dict:
+        """Map Row to dict and deserialize structured columns."""
+        item = dict(row)
+        for key in ["tags", "sources", "outline", "three_beat_structure", "thumbnail_text"]:
+            if item.get(key):
+                try:
+                    item[key] = json.loads(item[key])
+                except Exception:
+                    if key == "tags" and isinstance(item[key], str) and "," in item[key]:
+                        item[key] = [t.strip() for t in item[key].split(",")]
+                    else:
+                        item[key] = [item[key]] if item[key] is not None else []
+            else:
+                item[key] = []
+                
+        if item.get("production_assets"):
+            try:
+                item["production_assets"] = json.loads(item["production_assets"])
+            except Exception:
+                item["production_assets"] = {}
+        else:
+            item["production_assets"] = {}
+        return item
+
     def get_saved_item(self, item_id: int) -> Optional[Dict]:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
@@ -373,11 +498,11 @@ class IntelligenceDB:
         conn.close()
         if not row:
             return None
-        return dict(row)
+        return self._deserialize_row(row)
 
     def _serialize_value(self, key: str, value):
         """Serialize structured values for SQLite storage."""
-        if key in {"tags", "sources", "outline"}:
+        if key in {"tags", "sources", "outline", "thumbnail_text", "three_beat_structure"}:
             if value is None:
                 return json.dumps([])
             if isinstance(value, str):
@@ -403,6 +528,7 @@ class IntelligenceDB:
         tags = self._serialize_value("tags", item.get("tags", []))
         sources = self._serialize_value("sources", item.get("sources", []))
         outline = self._serialize_value("outline", item.get("outline", []))
+        thumbnail_text = self._serialize_value("thumbnail_text", item.get("thumbnail_text", []))
         
         # Check if item with this URL already exists
         if url:
@@ -434,7 +560,7 @@ class IntelligenceDB:
                     item.get("format"),
                     outline,
                     sources,
-                    item.get("thumbnail_text"),
+                    thumbnail_text,
                     item.get("priority"),
                     item.get("published_url"),
                     datetime.now().isoformat(),
@@ -468,7 +594,7 @@ class IntelligenceDB:
             item.get("format"),
             outline,
             sources,
-            item.get("thumbnail_text"),
+            thumbnail_text,
             item.get("priority"),
             item.get("published_url")
         ))
@@ -559,52 +685,7 @@ class IntelligenceDB:
         
         items = []
         for row in rows:
-            item = dict(row)
-            if item.get("tags"):
-                try:
-                    item["tags"] = json.loads(item["tags"])
-                except Exception:
-                    # Fallback for comma-separated strings
-                    if isinstance(item["tags"], str) and "," in item["tags"]:
-                        item["tags"] = [t.strip() for t in item["tags"].split(",")]
-                    else:
-                        item["tags"] = [item["tags"]] if item["tags"] else []
-            else:
-                item["tags"] = []
-                
-            if item.get("sources"):
-                try:
-                    item["sources"] = json.loads(item["sources"])
-                except Exception:
-                    item["sources"] = [item["sources"]]
-            else:
-                item["sources"] = []
-                
-            if item.get("outline"):
-                try:
-                    item["outline"] = json.loads(item["outline"])
-                except Exception:
-                    item["outline"] = [item["outline"]]
-            else:
-                item["outline"] = []
-
-            if item.get("production_assets"):
-                try:
-                    item["production_assets"] = json.loads(item["production_assets"])
-                except Exception:
-                    item["production_assets"] = {}
-            else:
-                item["production_assets"] = {}
-                
-            if item.get("three_beat_structure"):
-                try:
-                    item["three_beat_structure"] = json.loads(item["three_beat_structure"])
-                except Exception:
-                    item["three_beat_structure"] = [item["three_beat_structure"]]
-            else:
-                item["three_beat_structure"] = []
-            items.append(item)
-        
+            items.append(self._deserialize_row(row))
         return items
     
     def record_keyword(self, keyword: str, source: str) -> None:

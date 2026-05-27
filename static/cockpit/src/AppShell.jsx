@@ -35,13 +35,19 @@ const NavItem = ({ icon, label, sub, active, hot, onClick }) => (
 );
 
 const Nav = ({ view, setView }) => {
+  const freshCount = useMemo(() => {
+    if (!window.DD_DATA || !window.DD_DATA.clusters) return 0;
+    return window.DD_DATA.clusters.filter(c => c.first_seen_hrs <= 24).length;
+  }, [window.DD_DATA?.clusters]);
+
   const items = [
-    { key: "pulse",     icon: <I.Pulse size={15}/>,    label: "Pulse",    sub: "trend radar",         hot: "8 new" },
+    { key: "pulse",     icon: <I.Pulse size={15}/>,    label: "Pulse",    sub: "trend radar",         hot: freshCount > 0 ? `${freshCount} new` : null },
     { key: "brief",     icon: <I.Brief size={15}/>,    label: "Brief",    sub: "today's pick" },
     { key: "clusters",  icon: <I.Cluster size={15}/>,  label: "Clusters", sub: "cross-source stories" },
     { key: "thumbs",    icon: <I.Thumb size={15}/>,    label: "Thumb Lab",sub: "title × thumb"  },
     { key: "research",  icon: <I.Research size={15}/>, label: "Research", sub: "evidence packs" },
     { key: "pipeline",  icon: <I.Pipeline size={15}/>, label: "Pipeline", sub: "+ calendar"        },
+    { key: "studio",    icon: <I.Studio size={15}/>,   label: "Creator Central", sub: "autonomous content" },
   ];
   return (
     <nav className="nav" style={{ display: "flex", flexDirection: "column" }}>
@@ -79,10 +85,10 @@ const Nav = ({ view, setView }) => {
       <div style={{ marginTop: "auto", padding: 14, borderTop: "1px solid var(--line)" }}>
         <div className="micro" style={{ marginBottom: 8 }}>State</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <MiniStat label="Saved" value="34" />
-          <MiniStat label="Tracked" value="11" />
-          <MiniStat label="In pipe" value="6" />
-          <MiniStat label="Drafts" value="3" color="var(--signal)"/>
+          <MiniStat label="Saved" value={window.DD_DATA?.stats?.saved_count ?? 0} />
+          <MiniStat label="Tracked" value={window.DD_DATA?.stats?.tracked_count ?? 0} />
+          <MiniStat label="In pipe" value={window.DD_DATA?.stats?.in_pipe_count ?? 0} />
+          <MiniStat label="Drafts" value={window.DD_DATA?.stats?.drafts_count ?? 0} color="var(--signal)"/>
         </div>
       </div>
     </nav>
@@ -134,7 +140,7 @@ const Topbar = ({ now, onOpenTweaks, onRefresh, refreshing }) => {
 
       {/* Center: source health */}
       <div style={{ display: "flex", alignItems: "center", gap: 14, justifySelf: "center" }}>
-        {["github","huggingface","youtube","blogs","papers"].map(k => {
+        {["github","huggingface","youtube","blogs","papers","hackernews"].map(k => {
           const h = sourceHealth[k]; const S = SOURCES[k];
           return (
             <div key={k} title={`${S.label} · last fetch ${h.last_fetch_min}m ago · ${h.items_24h} items / 24h`}

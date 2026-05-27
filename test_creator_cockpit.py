@@ -239,3 +239,17 @@ def test_thumbnail_endpoints_and_pick(client):
     # Edit + delete.
     assert client.put(f"/api/thumbnails/{vid}", json={"text": "NEW HOOK"}).status_code == 200
     assert client.delete(f"/api/thumbnails/{vid}").get_json()["success"] is True
+
+
+def test_ignore_topic_endpoint(client):
+    resp = client.post("/api/ignore-topic", json={
+        "topic": "AI Agents",
+        "items": [
+            {"url": "https://example.com/item1", "title": "Item 1", "source_type": "github"},
+            {"url": "https://example.com/item2", "title": "Item 2", "source_type": "youtube"},
+        ]
+    })
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["success"] is True
+    assert "ignored" in data["message"]

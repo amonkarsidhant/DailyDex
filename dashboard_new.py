@@ -8,6 +8,7 @@ import time
 import uuid
 import queue
 import hashlib
+import threading
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context
@@ -48,6 +49,7 @@ SOURCE_META = [
     ("youtube", "YouTube"),
     ("blogs", "Blogs"),
     ("papers", "arXiv"),
+    ("hackernews", "HackerNews"),
 ]
 SAVED_STATUS_ORDER = [
     ("to_read", "To Read"),
@@ -106,7 +108,7 @@ except Exception as e:
 def _top_items_for_enrichment(scored_data, limit: int = 20):
     """Pick the highest-signal items across sources for background enrichment."""
     pool = []
-    for source_type in ("github", "huggingface", "youtube", "blogs", "papers"):
+    for source_type in ("github", "huggingface", "youtube", "blogs", "papers", "hackernews"):
         for item in scored_data.get(source_type, []) or []:
             score = max(
                 int(item.get("signal_score") or 0),
@@ -125,7 +127,7 @@ def load_data():
         with open(DATA_FILE, encoding="utf-8") as f:
             return json.load(f)
     except:
-        return {"github": [], "huggingface": [], "youtube": [], "blogs": [], "papers": []}
+        return {"github": [], "huggingface": [], "youtube": [], "blogs": [], "papers": [], "hackernews": []}
 
 
 def load_config():
@@ -395,6 +397,8 @@ def why_it_matters_to_me(item: dict) -> str:
         reasons.append("Worth evaluating for local model workflows.")
     elif item.get("source_type") == "papers":
         reasons.append("Research worth saving before implementation decisions.")
+    elif item.get("source_type") == "hackernews":
+        reasons.append("High developer interest on HackerNews.")
 
     return " ".join(reasons[:2]) or "Keeps the daily briefing aligned with practical AI work."
 
@@ -425,7 +429,7 @@ def install_command_for_item(item: dict) -> str:
 def build_top_items(scored_data):
     """Build the decisive top-five briefing cards."""
     top_items = []
-    for source_type in ["github", "huggingface", "youtube", "blogs", "papers"]:
+    for source_type in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews"]:
         for item in scored_data.get(source_type, []):
             if item.get("signal_score", 0) >= 40:
                 enriched = {**item, "source_type": source_type}
@@ -532,7 +536,7 @@ def build_try_this_weekend(scored_data):
 def build_topic_heatmap(scored_data):
     """Build topic frequency heatmap by source."""
     topic_sources = {}
-    source_list = ["github", "huggingface", "youtube", "blogs", "papers"]
+    source_list = ["github", "huggingface", "youtube", "blogs", "papers", "hackernews"]
     
     keywords = [
         "agent", "claude", "gpt", "ollama", "llama", "mcp", "cursor", "windsurf",
@@ -655,6 +659,7 @@ COCKPIT_SOURCES = {
     "youtube":     {"key": "youtube",     "label": "YouTube",      "color": "#FF5A5A", "abbr": "YT"},
     "blogs":       {"key": "blogs",       "label": "Blogs / News", "color": "#62A8FF", "abbr": "BL"},
     "papers":      {"key": "papers",      "label": "arXiv",        "color": "#B084F2", "abbr": "AX"},
+    "hackernews":  {"key": "hackernews",  "label": "HackerNews",   "color": "#FF6600", "abbr": "HN"},
 }
 
 COCKPIT_PERSONAS = {
@@ -856,6 +861,41 @@ def _cockpit_thumbnails(clusters, opp_by_slug):
     return out
 
 
+def _calculate_lead_time_days(saved_items):
+    """Calculate average lead time from saved items in pipeline."""
+    published_items = [item for item in saved_items if item.get("status") == "published"]
+    if not published_items:
+        return 2.4
+    
+    diffs = []
+    for item in published_items:
+        try:
+            c_at_str = item.get("created_at")
+            u_at_str = item.get("updated_at")
+            if c_at_str and u_at_str:
+                fmts = ["%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%SZ"]
+                c_at, u_at = None, None
+                for fmt in fmts:
+                    try:
+                        if not c_at:
+                            c_at = datetime.strptime(c_at_str[:19].replace("T", " "), "%Y-%m-%d %H:%M:%S")
+                    except Exception:
+                        pass
+                    try:
+                        if not u_at:
+                            u_at = datetime.strptime(u_at_str[:19].replace("T", " "), "%Y-%m-%d %H:%M:%S")
+                    except Exception:
+                        pass
+                if c_at and u_at:
+                    diff_days = (u_at - c_at).total_seconds() / 86400.0
+                    diffs.append(max(0.1, diff_days))
+        except Exception:
+            pass
+    if diffs:
+        return round(sum(diffs) / len(diffs), 1)
+    return 2.4
+
+
 def build_cockpit_data():
     """Server-side DD_DATA payload matching prototype/src/data.js shape."""
     scored_data = load_scored_data()
@@ -872,9 +912,18 @@ def build_cockpit_data():
         opp_by_slug.setdefault(slug, opp)
     clusters = _cockpit_clusters(scored_data)
     saved_items = intel_db.get_saved_items(pipeline_type="creator") if intel_db else []
+    creator_brief = build_creator_brief(opportunities, clusters_raw, saved_items)
     profile = _load_creator_profile_safe()
     persona = profile.get("persona", "multi")
     cop_cfg = profile.get("copilot") or {}
+
+    tracked_count = 0
+    if intel_db:
+        try:
+            tracked_count = len(intel_db.get_tracked_topics())
+        except Exception:
+            pass
+
     return {
         "SOURCES": COCKPIT_SOURCES,
         "personas": COCKPIT_PERSONAS,
@@ -887,7 +936,42 @@ def build_cockpit_data():
         "pipeline": _cockpit_pipeline(saved_items),
         "calendar": _cockpit_calendar(),
         "thumbnails": _cockpit_thumbnails(clusters, opp_by_slug),
+        "studio": _cockpit_studio(),
+        "opportunities": opportunities,
+        "creator_brief": creator_brief,
+        "stats": {
+            "tracked_topics_count": len([i for i in saved_items if i.get("pipeline_type") == "creator"]),
+            "active_agents_count": len(_cockpit_agents()),
+            "avg_lead_time_days": _calculate_lead_time_days(saved_items),
+            "saved_count": len([i for i in saved_items if i.get("status") in ("idea", "researching", "script_ready", "recording")]),
+            "tracked_count": tracked_count,
+            "in_pipe_count": len([i for i in saved_items if i.get("status") in ("researching", "script_ready", "recording")]),
+            "drafts_count": len([i for i in saved_items if i.get("status") == "script_ready"]),
+        },
     }
+
+
+def _cockpit_studio():
+    """Creator Central: autonomously generated content + provider status."""
+    stories = []
+    if intel_db:
+        try:
+            stories = intel_db.studio_list_stories(limit=30)
+        except Exception:
+            stories = []
+    providers = []
+    try:
+        import cli_registry
+        providers = cli_registry.probe().get("providers", [])
+    except Exception:
+        providers = []
+    try:
+        import studio as _studio
+        skills = [{"format": f, "label": _studio.SKILLS[f]["label"],
+                   "icon": _studio.SKILLS[f]["icon"]} for f in _studio.FORMAT_ORDER]
+    except Exception:
+        skills = []
+    return {"stories": stories, "providers": providers, "skills": skills}
 
 
 def build_chart_payload(scored_data, saved_items, source_status_cards):
@@ -1131,6 +1215,7 @@ def build_dashboard_context():
         "youtube": scored_data.get("youtube", []),
         "blogs": scored_data.get("blogs", []),
         "papers": scored_data.get("papers", []),
+        "hackernews": scored_data.get("hackernews", []),
         "correlations": correlations,
         "topic_heatmap": topic_heatmap,
         "feed_items": feed_items[:30],
@@ -1212,6 +1297,55 @@ def classic_dashboard():
 def api_cockpit_data():
     """JSON DD_DATA payload — lets the UI refresh without a full reload."""
     return jsonify(build_cockpit_data())
+
+
+# ── Creator Central (Studio) ─────────────────────────────────────────────
+_studio_run_state = {"running": False, "started_at": None, "last": None}
+
+
+@app.route("/api/studio")
+def api_studio():
+    """List autonomously generated content + detected providers + skills."""
+    return jsonify(_cockpit_studio() | {"run": _studio_run_state})
+
+
+@app.route("/api/studio/run", methods=["POST"])
+def api_studio_run():
+    """Kick the autonomous content factory in the background."""
+    if _studio_run_state["running"]:
+        return jsonify({"status": "already_running"}), 409
+    top_n = int((request.get_json(silent=True) or {}).get("top_n", 0)) or None
+
+    def _runner():
+        _studio_run_state.update(running=True, started_at=datetime.now().isoformat())
+        try:
+            import studio_job
+            _studio_run_state["last"] = studio_job.run(intel_db=intel_db, top_n=top_n)
+        except Exception as exc:  # noqa: BLE001
+            _studio_run_state["last"] = {"ok": False, "error": str(exc)}
+        finally:
+            _studio_run_state["running"] = False
+
+    threading.Thread(target=_runner, name="studio-run", daemon=True).start()
+    return jsonify({"status": "started"})
+
+
+@app.route("/api/studio/<story_key>/<fmt>/regenerate", methods=["POST"])
+def api_studio_regenerate(story_key, fmt):
+    """Regenerate one format for one story, reusing its stored research."""
+    if intel_db is None:
+        return jsonify({"error": "no_db"}), 503
+    rows = intel_db.studio_get_story(story_key)
+    row = next((r for r in rows if r["fmt"] == fmt), None)
+    if not row:
+        return jsonify({"error": "not_found"}), 404
+    import studio
+    prefer = (request.get_json(silent=True) or {}).get("provider")
+    intel_db.studio_set_status(story_key, row["topic"], fmt, "generating")
+    result = studio.generate_format(fmt, row.get("research") or "", prefer=prefer)
+    intel_db.studio_save_result(story_key, row["topic"], fmt, result)
+    return jsonify({"ok": result["ok"], "format": fmt, "provider": result.get("provider"),
+                    "body": result.get("body", "")})
 
 
 @app.route("/health")
@@ -1458,7 +1592,7 @@ def _copilot_live_context(max_clusters=8, max_items=3):
 
     # Per-source freshness + 24h counts.
     sources = {}
-    for key in ("github", "huggingface", "youtube", "blogs", "papers"):
+    for key in ("github", "huggingface", "youtube", "blogs", "papers", "hackernews"):
         items = scored.get(key, []) or []
         sources[key] = len(items)
     ctx["items_by_source"] = sources
@@ -1884,6 +2018,31 @@ def api_ignore():
     
     intel_db.ignore_item(url, title, source_type)
     return jsonify({"success": True, "message": "Item ignored and hidden."})
+
+
+@app.route("/api/ignore-topic", methods=["POST"])
+def api_ignore_topic():
+    """Ignore all items associated with a topic cluster"""
+    if not intel_db:
+        return jsonify({"success": False, "error": "Database not available"})
+    
+    data = request.json
+    topic = data.get("topic", "")
+    items = data.get("items", [])
+    
+    for item in items:
+        url = item.get("url", "")
+        title = item.get("title", "")
+        source_type = item.get("source_type", "")
+        if url:
+            intel_db.ignore_item(url, title, source_type)
+            
+    try:
+        load_scored_data(force=True)
+    except Exception:
+        pass
+        
+    return jsonify({"success": True, "message": f"Topic '{topic}' and all {len(items)} items ignored."})
 
 
 @app.route("/api/ignored")
