@@ -16,11 +16,23 @@ const StudioStatusDot = ({ status }) => {
     display: "inline-block", animation: status === "generating" ? "pulse 1.4s infinite" : "none" }}/>;
 };
 
-const StudioFormatCard = ({ storyKey, fmt, data, onRegen, busy }) => {
+const StudioFormatCard = ({ storyKey, fmt, data, onRegen, busy, broll = [], cues = [] }) => {
   const [open, setOpen] = useState(false);
   const meta = STUDIO_FMT_META[fmt] || { icon: "•", label: fmt };
   const body = data?.body || "";
   const preview = body.slice(0, open ? body.length : 320);
+
+  const handleDownload = () => {
+    let content = `# Script: ${meta.label}\n\n${body}\n\n`;
+    if (broll.length > 0) {
+      content += `## Suggested B-Roll\n` + broll.map(x => `- ${x}`).join("\n") + "\n\n";
+    }
+    if (cues.length > 0) {
+      content += `## On-Screen Cues\n` + cues.map(x => `- ${x}`).join("\n") + "\n\n";
+    }
+    window.downloadScript(`${storyKey}-${fmt}.md`, content);
+  };
+
   return (
     <div className="panel" style={{ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px",
@@ -47,6 +59,8 @@ const StudioFormatCard = ({ storyKey, fmt, data, onRegen, busy }) => {
           <button className="btn ghost" onClick={() => setOpen(o => !o)}>{open ? "Less" : "Expand"}</button>}
         {body &&
           <button className="btn ghost" onClick={() => navigator.clipboard?.writeText(body)}>Copy</button>}
+        {body &&
+          <button className="btn ghost" onClick={handleDownload}>Download</button>}
         <span style={{ flex: 1 }}/>
         <button className="btn ghost" disabled={busy}
           onClick={() => onRegen(storyKey, fmt)}>{busy ? "…" : "Regenerate"}</button>
@@ -154,11 +168,16 @@ const StudioView = ({ onJump }) => {
           </div>
           <div style={{ padding: 16, display: "grid",
             gridTemplateColumns: "repeat(2, 1fr)", gap: 14 }}>
-            {["shorts", "video", "podcast", "blog"].map(fmt => (
-              <StudioFormatCard key={fmt} storyKey={story.story_key} fmt={fmt}
-                data={(story.formats || {})[fmt]} onRegen={regen}
-                busy={busyKey === story.story_key + ":" + fmt}/>
-            ))}
+            {["shorts", "video", "podcast", "blog"].map(fmt => {
+              const opp = window.DD_DATA.opportunities?.find(o => o.topic === story.topic || o.slug === story.story_key);
+              return (
+                <StudioFormatCard key={fmt} storyKey={story.story_key} fmt={fmt}
+                  data={(story.formats || {})[fmt]} onRegen={regen}
+                  busy={busyKey === story.story_key + ":" + fmt}
+                  broll={opp?.broll_list || []}
+                  cues={opp?.on_screen_cues || []}/>
+              );
+            })}
           </div>
         </div>
       ))}

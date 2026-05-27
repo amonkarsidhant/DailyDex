@@ -53,6 +53,9 @@
       return jpost("/api/schedule", { item_id, day, kind, time });
     },
     saveToPipeline(item) { return jpost("/api/save", item); },
+    ignoreTopic(topic, items) {
+      return jpost("/api/ignore-topic", { topic, items });
+    },
 
     // Creator Central
     studio() { return jget("/api/studio"); },

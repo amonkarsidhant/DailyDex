@@ -6,6 +6,8 @@ const RadarPlot = ({ clusters, onPick, picked }) => {
   const cx = size / 2, cy = size / 2;
   const rings = [0.25, 0.5, 0.75, 1];
   const [angle, setAngle] = useState(0);
+  const [hoveredBlip, setHoveredBlip] = useState(null);
+
   useEffect(() => {
     let raf;
     const tick = () => { setAngle(a => (a + 0.5) % 360); raf = requestAnimationFrame(tick); };
@@ -15,6 +17,90 @@ const RadarPlot = ({ clusters, onPick, picked }) => {
 
   // each ring = age bucket
   const rings_labels = ["NOW", "24h", "72h", "1w+"];
+
+  const rawBlips = clusters.map((c, i) => {
+    const minR = 45;
+    const maxR = size / 2 - 35;
+    const r = minR + Math.min(1, c.first_seen_hrs / 168) * (maxR - minR);
+    const mag = Math.hypot(c.angle_x, c.angle_y);
+    const ang = mag < 0.05
+      ? (i * (360 / clusters.length) * Math.PI) / 180
+      : Math.atan2(c.angle_y, c.angle_x);
+    return {
+      cluster: c,
+      i,
+      x: cx + Math.cos(ang) * r,
+      y: cy + Math.sin(ang) * r,
+      radius: 6 + (c.creator_score - 60) / 6
+    };
+  });
+
+  // Relaxation loop to resolve overlaps
+  const adjustedBlips = [...rawBlips];
+  const iterations = 80;
+  const minVerticalDist = 20; // text line height/vertical clearance
+  const minHorizontalDist = 120; // horizontal region of label collision
+  const minR = 45;
+
+  for (let step = 0; step < iterations; step++) {
+    for (let j = 0; j < adjustedBlips.length; j++) {
+      for (let k = j + 1; k < adjustedBlips.length; k++) {
+        const a = adjustedBlips[j];
+        const b = adjustedBlips[k];
+
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist = Math.hypot(dx, dy);
+
+        // 1. Circle overlap check
+        const rSum = a.radius + b.radius + 12; // sum of radii + padding
+        if (dist < rSum) {
+          const push = (rSum - dist) / 2;
+          const ux = dist > 0.1 ? dx / dist : Math.cos(j);
+          const uy = dist > 0.1 ? dy / dist : Math.sin(j);
+          a.x -= ux * push;
+          a.y -= uy * push;
+          b.x += ux * push;
+          b.y += uy * push;
+        }
+
+        // 2. Text/label overlap check (horizontal proximity requires vertical stack)
+        if (Math.abs(a.x - b.x) < minHorizontalDist && Math.abs(a.y - b.y) < minVerticalDist) {
+          const overlap = minVerticalDist - Math.abs(a.y - b.y);
+          const pushY = overlap / 2;
+          if (a.y <= b.y) {
+            a.y -= pushY;
+            b.y += pushY;
+          } else {
+            a.y += pushY;
+            b.y -= pushY;
+          }
+        }
+        
+        // 3. Enforce minimum radius from center (repel from center NOW zone)
+        const distA = Math.hypot(a.x - cx, a.y - cy);
+        if (distA < minR) {
+          const ux = distA > 0.1 ? (a.x - cx) / distA : 1;
+          const uy = distA > 0.1 ? (a.y - cy) / distA : 0;
+          a.x = cx + ux * minR;
+          a.y = cy + uy * minR;
+        }
+        const distB = Math.hypot(b.x - cx, b.y - cy);
+        if (distB < minR) {
+          const ux = distB > 0.1 ? (b.x - cx) / distB : 1;
+          const uy = distB > 0.1 ? (b.y - cy) / distB : 0;
+          b.x = cx + ux * minR;
+          b.y = cy + uy * minR;
+        }
+        
+        // Clamp to SVG view box boundaries
+        a.x = Math.max(25, Math.min(size - 130, a.x));
+        a.y = Math.max(25, Math.min(size - 25, a.y));
+        b.x = Math.max(25, Math.min(size - 130, b.x));
+        b.y = Math.max(25, Math.min(size - 25, b.y));
+      }
+    }
+  }
 
   return (
     <div style={{ position: "relative", width: size, height: size, margin: "0 auto" }}>
@@ -54,17 +140,16 @@ const RadarPlot = ({ clusters, onPick, picked }) => {
         </g>
 
         {/* Blips */}
-        {clusters.map((c, i) => {
-          const r = Math.min(1, c.first_seen_hrs / 168) * (size / 2 - 30);
-          const ang = Math.atan2(c.angle_y, c.angle_x);
-          const x = cx + Math.cos(ang) * r;
-          const y = cy + Math.sin(ang) * r;
+        {adjustedBlips.map((bInfo) => {
+          const c = bInfo.cluster;
+          const { x, y, radius } = bInfo;
           const S = window.DD_DATA.SOURCES;
           const sourceColors = c.sources.map(s => S[s].color);
-          const radius = 6 + (c.creator_score - 60) / 6;
           const isPicked = picked === c.slug;
           return (
-            <g key={c.slug} onClick={() => onPick(c.slug)} style={{ cursor: "pointer" }}>
+            <g key={c.slug} onClick={() => onPick(c.slug)} style={{ cursor: "pointer" }}
+               onMouseEnter={() => setHoveredBlip(bInfo)}
+               onMouseLeave={() => setHoveredBlip(null)}>
               {/* Ping */}
               {c.momentum > 20 && (
                 <circle cx={x} cy={y} r={radius} fill="none" stroke={sourceColors[0]} strokeWidth={1}
@@ -96,7 +181,7 @@ const RadarPlot = ({ clusters, onPick, picked }) => {
                     fontFamily="var(--font-sans)" fontWeight={isPicked ? 600 : 500}>
                 {c.topic}
               </text>
-              <text x={x + radius + 8} y={y + 16}
+              <text x={x + radius + 8} y={y + 14}
                     fill="var(--text-lo)" fontSize="9.5" fontFamily="var(--font-mono)" letterSpacing="0.04em">
                 {c.first_seen_hrs}h · {c.source_count}× sources · {c.momentum > 0 ? "+" : ""}{c.momentum}%
               </text>
@@ -107,13 +192,38 @@ const RadarPlot = ({ clusters, onPick, picked }) => {
         {/* Center mark */}
         <circle cx={cx} cy={cy} r={3} fill="var(--signal)"/>
         <text x={cx + 8} y={cy + 12} fill="var(--text-lo)" fontSize="9" fontFamily="var(--font-mono)" letterSpacing="0.08em">YOU · NOW</text>
+
+        {/* Axis labels positioned at the ends of the crosshairs */}
+        <text x={18} y={cy - 6} fill="var(--text-lo)" fontSize="9" fontFamily="var(--font-mono)" letterSpacing="0.08em">VISUAL</text>
+        <text x={size - 18} y={cy - 6} fill="var(--text-lo)" fontSize="9" fontFamily="var(--font-mono)" letterSpacing="0.08em" textAnchor="end">DEMO</text>
+        <text x={cx + 8} y={22} fill="var(--text-lo)" fontSize="9" fontFamily="var(--font-mono)" letterSpacing="0.08em">EXPLAINER</text>
+        <text x={cx + 8} y={size - 16} fill="var(--text-lo)" fontSize="9" fontFamily="var(--font-mono)" letterSpacing="0.08em">CULTURAL</text>
       </svg>
 
-      {/* Corner axis labels */}
-      <div className="mono" style={{ position: "absolute", top: 4, left: 4, fontSize: 9, color: "var(--text-lo)", letterSpacing: "0.08em" }}>VISUAL</div>
-      <div className="mono" style={{ position: "absolute", bottom: 4, left: 4, fontSize: 9, color: "var(--text-lo)", letterSpacing: "0.08em" }}>EXPLAINER</div>
-      <div className="mono" style={{ position: "absolute", top: 4, right: 4, fontSize: 9, color: "var(--text-lo)", letterSpacing: "0.08em" }}>DEMO</div>
-      <div className="mono" style={{ position: "absolute", bottom: 4, right: 4, fontSize: 9, color: "var(--text-lo)", letterSpacing: "0.08em" }}>CULTURAL</div>
+      {/* Floating Glassmorphic Tooltip */}
+      {hoveredBlip && (
+        <div style={{
+          position: "absolute",
+          left: hoveredBlip.x,
+          top: hoveredBlip.y - 48,
+          transform: "translateX(-50%)",
+          pointerEvents: "none",
+          background: "rgba(22, 22, 26, 0.88)",
+          backdropFilter: "blur(12px) saturate(180%)",
+          border: "1px solid var(--line-2)",
+          boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.4)",
+          borderRadius: 6,
+          padding: "8px 12px",
+          zIndex: 100,
+          minWidth: 160,
+          textAlign: "center"
+        }}>
+          <div style={{ fontWeight: 600, fontSize: 11.5, color: "var(--text-hi)", marginBottom: 2 }}>{hoveredBlip.cluster.topic}</div>
+          <div className="mono" style={{ fontSize: 9.5, color: "var(--text-lo)" }}>
+            Score: <span style={{ color: "var(--signal)", fontWeight: 600 }}>{hoveredBlip.cluster.creator_score}</span> · {hoveredBlip.cluster.source_count}× sources
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -127,6 +237,13 @@ const PulseDetail = ({ cluster, onJump }) => {
         actions={
           <>
             <button className="btn ghost" onClick={() => onJump("clusters")}>Open cluster →</button>
+            <button className="btn ghost" style={{ color: "var(--signal-down)", borderColor: "rgba(255,90,90,0.3)" }}
+                    onClick={async () => {
+                      if (confirm(`Ignore trend cluster "${cluster.topic}"? This will hide all associated items.`)) {
+                        await window.DDX.ignoreTopic(cluster.topic, cluster.related_items);
+                        window.DDX.refresh();
+                      }
+                    }}>Ignore Trend</button>
             <button className="btn primary" onClick={() => onJump("brief")}>Make this today</button>
           </>
         }>
@@ -171,10 +288,13 @@ const PulseDetail = ({ cluster, onJump }) => {
           <div className="micro">Source evidence ({cluster.source_count})</div>
           <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
             {cluster.related_items.slice(0, 5).map((it, i) => (
-              <div key={i} style={{
+              <a href={it.url} target="_blank" rel="noopener noreferrer" key={i} className="evidence-link" style={{
                 display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 10, alignItems: "center",
                 padding: "6px 8px", background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 4,
-              }}>
+                textDecoration: "none", cursor: "pointer", transition: "border-color 0.15s ease, background 0.15s ease"
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--signal)"; e.currentTarget.style.background = "var(--bg-3)"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--line)"; e.currentTarget.style.background = "var(--bg-2)"; }}>
                 <SourceChip src={it.source_type}/>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ color: "var(--text-hi)", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.title}</div>
@@ -184,7 +304,7 @@ const PulseDetail = ({ cluster, onJump }) => {
                   </div>
                 </div>
                 <span className="mono tnum" style={{ fontSize: 11, color: "var(--text-hi)", fontWeight: 600 }}>{it.signal_score}</span>
-              </div>
+              </a>
             ))}
           </div>
         </div>
@@ -203,14 +323,25 @@ const PULSE_SORTS = [
 const PulseTable = ({ clusters, picked, onPick }) => {
   const [sortIdx, setSortIdx] = useState(0);
   const [demoOnly, setDemoOnly] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [, label, cmp] = PULSE_SORTS[sortIdx];
   let rows = demoOnly ? clusters.filter(c => c.has_demoable_item) : clusters.slice();
+  if (searchQuery) {
+    rows = rows.filter(c => c.topic.toLowerCase().includes(searchQuery.toLowerCase()));
+  }
   rows = rows.sort(cmp);
   return (
     <div className="panel" style={{ overflow: "hidden" }}>
       <PanelHeader no="02"
         actions={
           <>
+            <input type="text" placeholder="Search trends..." value={searchQuery}
+                   onChange={e => setSearchQuery(e.target.value)}
+                   style={{
+                     background: "var(--bg-3)", border: "1px solid var(--line)", borderRadius: 4,
+                     padding: "4px 8px", fontSize: 11, color: "var(--text-hi)", fontFamily: "var(--font-sans)",
+                     outline: "none", width: 140, marginRight: 8
+                   }}/>
             <button className="btn ghost" onClick={() => setDemoOnly(v => !v)}
                     style={{ color: demoOnly ? "var(--signal)" : undefined }}>
               <I.Filter size={12}/> {demoOnly ? "Demoable only" : "Filter"}
@@ -341,9 +472,9 @@ const PulseView = ({ onJump }) => {
               <button className="btn ghost" onClick={() => onJump("research")}>Watch the research</button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginTop: 26, paddingTop: 18, borderTop: "1px solid var(--line)" }}>
-              <KPI label="Tracked topics" value="11" sub="+3 today"/>
-              <KPI label="Active agents" value="4" sub="researching now" color="var(--signal)"/>
-              <KPI label="Avg lead time" value="2.4d" sub="vs press cycle" color="var(--signal-up)"/>
+              <KPI label="Tracked topics" value={window.DD_DATA.stats?.tracked_topics_count ?? 11} sub="in pipeline"/>
+              <KPI label="Active agents" value={window.DD_DATA.agents?.active?.length ?? window.DD_DATA.stats?.active_agents_count ?? 4} sub="researching now" color="var(--signal)"/>
+              <KPI label="Avg lead time" value={`${window.DD_DATA.stats?.avg_lead_time_days ?? 2.4}d`} sub="vs press cycle" color="var(--signal-up)"/>
             </div>
           </div>
 
@@ -352,7 +483,7 @@ const PulseView = ({ onJump }) => {
           <div>
             <div className="label" style={{ marginBottom: 10 }}>Source pulse · 24h</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {["github","huggingface","youtube","blogs","papers"].map(k => {
+              {["github","huggingface","youtube","blogs","papers","hackernews"].map(k => {
                 const S = window.DD_DATA.SOURCES[k];
                 const h = window.DD_DATA.sourceHealth[k];
                 // synthesize per-source pulse from clusters

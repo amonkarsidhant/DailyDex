@@ -38,9 +38,10 @@ def test_fetch_news_main_writes_data_file(tmp_path):
     (stub_dir / "requests.py").write_text(
         """
 class Response:
-    def __init__(self, text='', json_data=None):
+    def __init__(self, text='', json_data=None, status_code=200):
         self.text = text
         self._json = json_data
+        self.status_code = status_code
     def raise_for_status(self):
         return None
     def json(self):
@@ -49,6 +50,14 @@ class Response:
 def get(url, headers=None, timeout=None):
     if 'huggingface.co/api/models' in url:
         return Response(json_data=[{'id': 'acme/model', 'downloads': 123, 'likes': 4}])
+    if 'hacker-news.firebaseio.com' in url:
+        if 'topstories.json' in url:
+            return Response(json_data=[101, 102])
+        elif 'item/101.json' in url:
+            return Response(json_data={'id': 101, 'type': 'story', 'title': 'Show HN: LLM agent framework', 'url': 'https://github.com/agent', 'score': 150, 'time': 1779830000})
+        elif 'item/102.json' in url:
+            return Response(json_data={'id': 102, 'type': 'story', 'title': 'Unrelated story', 'url': 'https://example.com', 'score': 10, 'time': 1779830000})
+        return Response(json_data=None, status_code=404)
     return Response(text='<article class="Box-row"><h2><a class="Link" href="/acme/repo">acme/repo</a></h2><p>AI repo</p><a class="Link--muted">123 stars today</a><span itemprop="programmingLanguage">Python</span></article>')
 """,
         encoding="utf-8",
@@ -154,8 +163,9 @@ class YoutubeDL:
     assert len(data["huggingface"]) == 1
     assert len(data["blogs"]) == 1
     assert len(data["papers"]) == 1
+    assert len(data["hackernews"]) == 1
 
     conn = sqlite3.connect(db_path)
     count = conn.execute("SELECT COUNT(*) FROM source_health").fetchone()[0]
     conn.close()
-    assert count == 5
+    assert count == 6

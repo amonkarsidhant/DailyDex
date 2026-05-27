@@ -1,9 +1,90 @@
 // ResearchView — research pack viewer with live agent synthesis
+const { useState, useEffect, useMemo } = React;
 
 const ResearchView = ({ onJump }) => {
-  const { clusters } = window.DD_DATA;
+  const { clusters, research_packs } = window.DD_DATA;
+  const packs = research_packs || [];
+
   const [topic, setTopic] = useState((clusters[0] && clusters[0].slug) || "");
   const cluster = clusters.find(c => c.slug === topic) || clusters[0];
+
+  const slugify = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  const matchingPack = cluster ? packs.find(p => p.filename.includes(slugify(cluster.topic))) : null;
+
+  const [packContent, setPackContent] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [dispatched, setDispatched] = useState(false);
+
+  useEffect(() => {
+    if (!matchingPack) {
+      setPackContent("");
+      return;
+    }
+    setLoading(true);
+    fetch(`/api/research-pack/${encodeURIComponent(matchingPack.filename)}`)
+      .then(res => res.json())
+      .then(data => {
+        setPackContent(data.content || "");
+        setLoading(false);
+      })
+      .catch(() => {
+        setPackContent("");
+        setLoading(false);
+      });
+  }, [matchingPack?.filename]);
+
+  const parsed = useMemo(() => {
+    if (!packContent) return null;
+    try {
+      const markdown = packContent;
+      const sections = {};
+      
+      const leadsMatch = markdown.match(/## Leads\s*([\s\S]*?)(?=\n##|$)/);
+      sections.leads = leadsMatch ? leadsMatch[1].trim() : "";
+      
+      const titleMatch = markdown.match(/\*\*Strategic title:\*\*\s*(.*?)\n/);
+      sections.strategicTitle = titleMatch ? titleMatch[1].trim() : "";
+      
+      const shiftMatch = markdown.match(/\*\*Shift:\*\*\s*(.*?)\n/);
+      sections.shift = shiftMatch ? shiftMatch[1].trim() : "";
+      
+      const superpowerMatch = markdown.match(/\*\*Superpower:\*\*\s*(.*?)\n/);
+      sections.superpower = superpowerMatch ? superpowerMatch[1].trim() : "";
+      
+      const inversionMatch = markdown.match(/\*\*Munger Inversion:\*\*\s*(.*?)\n/);
+      sections.inversion = inversionMatch ? inversionMatch[1].trim() : "";
+      
+      const contrarianMatch = markdown.match(/- Contrarian:\s*(.*?)\n/);
+      sections.hookContrarian = contrarianMatch ? contrarianMatch[1].trim() : "";
+      
+      const speedMatch = markdown.match(/- Speed-to-Value:\s*(.*?)\n/);
+      sections.hookSpeed = speedMatch ? speedMatch[1].trim() : "";
+      
+      const beatsMatch = markdown.match(/## Narrative Beats:\s*([\s\S]*?)(?=\n##|$)/);
+      if (beatsMatch) {
+        sections.beats = beatsMatch[1]
+          .split("\n")
+          .map(line => line.replace(/^-\s*/, "").trim())
+          .filter(Boolean);
+      } else {
+        sections.beats = [];
+      }
+      
+      const thumbsMatch = markdown.match(/## Thumbnail Visuals:\s*([\s\S]*?)(?=\n##|$)/);
+      if (thumbsMatch) {
+        sections.thumbs = thumbsMatch[1]
+          .split("\n")
+          .map(line => line.replace(/^-\s*/, "").trim())
+          .filter(Boolean);
+      } else {
+        sections.thumbs = [];
+      }
+      
+      return sections;
+    } catch (e) {
+      return null;
+    }
+  }, [packContent]);
 
   if (!cluster) {
     return (
@@ -23,7 +104,7 @@ const ResearchView = ({ onJump }) => {
     );
   }
 
-  const buildMD = (c) => {
+  const buildMD = (c, pData) => {
     if (!c) return "";
     const ev = (c.related_items || []).map((it, i) =>
       `${i + 1}. **${it.title}** — ${it.source_type} · signal ${it.signal_score}${it.url && it.url !== "#" ? ` — ${it.url}` : ""}`
@@ -31,22 +112,40 @@ const ResearchView = ({ onJump }) => {
     return [
       `# Research Pack — ${c.topic}`, "",
       `Creator score: ${c.creator_score} · Signal: ${c.average_signal_score} · Momentum: ${c.momentum}% · Sources: ${(c.sources || []).join(", ")}`, "",
-      `## 01 Core angle`, c.recommended_angle || "", "",
-      `## 02 Why this is a story`, c.why_this_is_a_story || "", "",
-      `## 03 Source evidence`, ev || "_none_", "",
-      `## 04 Recommended format`, c.best_content_format || "", "",
+      pData ? `## Core Claim\n${pData.leads}\n` : "",
+      pData ? `## Strategic Title\n${pData.strategicTitle}\n` : "",
+      pData ? `## Shift\n${pData.shift}\n` : "",
+      pData ? `## Superpower\n${pData.superpower}\n` : "",
+      pData ? `## Munger Inversion\n${pData.inversion}\n` : "",
+      `## Source evidence`, ev || "_none_", "",
     ].join("\n");
   };
+
   const exportMD = () => {
-    const blob = new Blob([buildMD(cluster)], { type: "text/markdown" });
+    const blob = new Blob([buildMD(cluster, parsed)], { type: "text/markdown" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `${cluster ? cluster.slug : "research"}-pack.md`;
     a.click();
   };
+
   const openFile = () => {
-    const blob = new Blob([buildMD(cluster)], { type: "text/markdown" });
+    const blob = new Blob([buildMD(cluster, parsed)], { type: "text/markdown" });
     window.open(URL.createObjectURL(blob), "_blank");
+  };
+
+  const runResearcher = () => {
+    if (cluster && window.DDX) {
+      setDispatched(true);
+      window.DDX.dispatch("topic_researcher", cluster.topic, cluster.slug)
+        .then(() => {
+          alert("Topic Researcher agent dispatched! Watch the status rail on the right side of the cockpit.");
+        })
+        .catch(() => {
+          alert("Failed to dispatch Topic Researcher.");
+          setDispatched(false);
+        });
+    }
   };
 
   return (
@@ -56,118 +155,158 @@ const ResearchView = ({ onJump }) => {
         <PanelHeader no="01"
           actions={
             <>
-              <button className="btn ghost" onClick={exportMD}><I.Doc size={12}/> Export MD</button>
-              <button className="btn ghost" onClick={openFile}>Open file</button>
-              <button className="btn primary" onClick={() => {
-                if (cluster && window.DDX) { window.DDX.dispatch("topic_researcher", cluster.topic, cluster.slug); alert("Topic Researcher dispatched — watch the agent rail."); }
-              }}><I.Spark size={11}/> Re-research</button>
+              {matchingPack && <button className="btn ghost" onClick={exportMD}><I.Doc size={12}/> Export MD</button>}
+              {matchingPack && <button className="btn ghost" onClick={openFile}>Open file</button>}
+              <button className="btn primary" disabled={dispatched} onClick={runResearcher}>
+                <I.Spark size={11}/> {matchingPack ? "Re-research" : "Start Research"}
+              </button>
             </>
           }>
-          Research pack · data/research_packs/2026-05-22-{topic}.md
+          Research pack · {matchingPack ? `data/research_packs/${matchingPack.filename}` : "No pack generated yet"}
         </PanelHeader>
 
         <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", minHeight: 580 }}>
           {/* Sidebar — pack list */}
           <div style={{ borderRight: "1px solid var(--line)", padding: "12px 0", overflowY: "auto" }}>
             <div className="micro" style={{ padding: "0 14px 8px" }}>Today</div>
-            {clusters.slice(0, 4).map(c => (
-              <PackRow key={c.slug} c={c} active={topic === c.slug} onClick={() => setTopic(c.slug)} when="today" />
-            ))}
+            {clusters.slice(0, 4).map(c => {
+              const hasFile = packs.some(p => p.filename.includes(slugify(c.topic)));
+              return (
+                <PackRow key={c.slug} c={c} active={topic === c.slug} hasFile={hasFile} onClick={() => { setTopic(c.slug); setDispatched(false); }} />
+              );
+            })}
             <div className="micro" style={{ padding: "12px 14px 8px" }}>Yesterday</div>
-            {clusters.slice(4).map(c => (
-              <PackRow key={c.slug} c={c} active={topic === c.slug} onClick={() => setTopic(c.slug)} when="yesterday" />
-            ))}
+            {clusters.slice(4).map(c => {
+              const hasFile = packs.some(p => p.filename.includes(slugify(c.topic)));
+              return (
+                <PackRow key={c.slug} c={c} active={topic === c.slug} hasFile={hasFile} onClick={() => { setTopic(c.slug); setDispatched(false); }} />
+              );
+            })}
           </div>
 
           {/* Pack content */}
           <div style={{ overflowY: "auto", padding: "20px 28px" }}>
-            {/* Header */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <span className="mono" style={{
-                padding: "3px 8px", border: "1px solid var(--signal)", color: "var(--signal)",
-                background: "rgba(240,183,47,0.06)", borderRadius: 3,
-                fontSize: 10.5, letterSpacing: "0.06em",
-              }}>RESEARCH PACK · v3</span>
-              <span className="mono" style={{ fontSize: 11, color: "var(--text-lo)" }}>last refreshed 12m ago by Topic Researcher</span>
-            </div>
-            <h1 style={{
-              fontSize: 36, lineHeight: 1.06, letterSpacing: "-0.02em",
-              margin: "12px 0 6px", color: "var(--text-hi)", fontWeight: 700, textWrap: "balance",
-            }}>{cluster.topic}</h1>
-            <p className="serif" style={{
-              fontSize: 19, fontStyle: "italic", lineHeight: 1.4, color: "var(--text)",
-              margin: 0, textWrap: "pretty", maxWidth: 720,
-            }}>{cluster.recommended_angle}</p>
-
-            <Divider/>
-
-            <Section title="Core claim" no="01">
-              <p style={{ fontSize: 14, lineHeight: 1.55, color: "var(--text)", margin: 0, textWrap: "pretty" }}>
-                Open-source computer-use agents have closed the gap with Anthropic's October release in roughly 8 days.
-                Five source families confirm independent reproductions, with at least one (browser-use) running fully local.
-                The story is the <span style={{ color: "var(--text-hi)", fontWeight: 600 }}>speed of catch-up</span>, not the absolute capability.
-              </p>
-            </Section>
-
-            <Section title="Key evidence" no="02">
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {cluster.related_items.map((it, i) => (
-                  <EvidenceRow key={i} idx={i + 1} it={it} />
-                ))}
+            {loading ? (
+              <div style={{ display: "grid", placeItems: "center", height: "100%", color: "var(--text-mid)" }}>
+                <span className="blink">Loading research pack...</span>
               </div>
-            </Section>
-
-            <Section title="Counterpoints" no="03">
-              <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
-                <Counter pt="Browser-use v0.9 still fails on dynamic forms (~38% drop vs Claude)." src="github · #1247"/>
-                <Counter pt="xLAM-2 requires 7B at FP16 — not laptop-friendly without quantization." src="HF discussions"/>
-                <Counter pt="Reproducibility is single-task; nobody has run the full WebArena benchmark on these yet." src="papers · open issue"/>
-              </ul>
-            </Section>
-
-            <Section title="Stats worth quoting" no="04">
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-                <StatCard big="8 days" small="from Anthropic ship → first open implementation"/>
-                <StatCard big="9.4k ★" small="browser-use stars (+1.2k in 24h)"/>
-                <StatCard big="412k ▶" small="AI Jason's reaction video, 4 days"/>
-                <StatCard big="5/5" small="source families reporting"/>
-                <StatCard big="184k ↓" small="xLAM-2-Computer-Use downloads"/>
-                <StatCard big="$0" small="local-runnable cost on M-series Mac"/>
+            ) : !matchingPack ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", padding: "40px 20px", textAlign: "center" }}>
+                <div style={{ width: 48, height: 48, borderRadius: 24, background: "rgba(240,183,47,0.06)", border: "1px dashed var(--signal)", display: "grid", placeItems: "center", color: "var(--signal)", marginBottom: 16 }}>
+                  <I.Spark size={20}/>
+                </div>
+                <h3 className="serif" style={{ fontSize: 22, color: "var(--text-hi)", margin: "0 0 8px", fontWeight: 600 }}>No Research Pack Created</h3>
+                <p style={{ color: "var(--text-mid)", maxWidth: 360, fontSize: 13, lineHeight: 1.4, margin: "0 0 16px" }}>
+                  There is no strategic brief or research documentation compiled for <strong>"{cluster.topic}"</strong> yet.
+                </p>
+                <button className="btn primary" disabled={dispatched} onClick={runResearcher}>
+                  {dispatched ? "Researcher Dispatched..." : "Run Topic Researcher Agent"}
+                </button>
               </div>
-            </Section>
+            ) : parsed ? (
+              <>
+                {/* Header */}
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <span className="mono" style={{
+                    padding: "3px 8px", border: "1px solid var(--signal)", color: "var(--signal)",
+                    background: "rgba(240,183,47,0.06)", borderRadius: 3,
+                    fontSize: 10.5, letterSpacing: "0.06em",
+                  }}>RESEARCH PACK · ACTIVE</span>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--text-lo)" }}>Generated dynamically by Topic Researcher</span>
+                </div>
+                <h1 style={{
+                  fontSize: 34, lineHeight: 1.1, letterSpacing: "-0.02em",
+                  margin: "12px 0 6px", color: "var(--text-hi)", fontWeight: 700, textWrap: "balance",
+                }}>{cluster.topic}</h1>
+                {parsed.strategicTitle && (
+                  <p className="serif" style={{
+                    fontSize: 18, fontStyle: "italic", lineHeight: 1.4, color: "var(--text)",
+                    margin: 0, textWrap: "pretty", maxWidth: 720,
+                  }}>"{parsed.strategicTitle}"</p>
+                )}
 
-            <Section title="Demo recipe" no="05">
-              <ol style={{ margin: 0, paddingLeft: 20, fontSize: 13.5, lineHeight: 1.7, color: "var(--text)" }}>
-                <li>Set up 3 agents: browser-use (local), xLAM-2 (local), Claude Computer Use (API).</li>
-                <li>Give each the same 5 tasks: book a flight, fill a form, scrape a table, write a tweet, search a codebase.</li>
-                <li>10-minute time budget, no human help, screen-record.</li>
-                <li>Score: success y/n, time, intervention count.</li>
-                <li>Decision tree as the closing graphic — viewers screenshot this.</li>
-              </ol>
-            </Section>
+                <Divider/>
 
-            <Section title="Suggested outline" no="06">
-              <BeatRow n="00:00" t="Hook: 'Anthropic shipped this in October. Eight days later, the open-source version is free.'"/>
-              <BeatRow n="00:25" t="The bet: same tasks, three agents, ten minutes each."/>
-              <BeatRow n="02:10" t="Demo 1 — browser-use crushes a flight booking."/>
-              <BeatRow n="05:40" t="Demo 2 — xLAM-2 nails the file system."/>
-              <BeatRow n="09:00" t="Demo 3 — Claude wins on multi-step reasoning."/>
-              <BeatRow n="12:20" t="Decision tree + repo dump."/>
-              <BeatRow n="14:30" t="Closing: 'The interesting question isn't who's best — it's how fast the gap closes.'"/>
-            </Section>
+                {parsed.leads && (
+                  <Section title="Core Claim / Leads" no="01">
+                    <p style={{ fontSize: 13.5, lineHeight: 1.55, color: "var(--text)", margin: 0, textWrap: "pretty", whiteSpace: "pre-wrap" }}>
+                      {parsed.leads}
+                    </p>
+                  </Section>
+                )}
 
-            <div style={{ display: "flex", gap: 8, marginTop: 24 }}>
-              <button className="btn primary" onClick={() => onJump("brief")}><I.Brief size={12}/> Open in brief</button>
-              <button className="btn ghost" onClick={() => {
-                if (!cluster || !window.DDX) return;
-                window.DDX.saveToPipeline({
-                  title: cluster.topic, working_title: cluster.topic, topic: cluster.topic, category: cluster.topic,
-                  format: cluster.best_content_format, creator_score: cluster.creator_score,
-                  signal_score: cluster.average_signal_score, pipeline_type: "creator", status: "researching",
-                }).then(() => { alert("Sent to pipeline (researching)."); window.DDX.reload(); });
-              }}><I.Save size={12}/> Send to pipeline</button>
-              <button className="btn ghost" onClick={() => onJump("thumbs")}><I.Thumb size={12}/> Generate thumbnails</button>
-            </div>
+                <Section title="Key evidence" no="02">
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {cluster.related_items.map((it, i) => (
+                      <EvidenceRow key={i} idx={i + 1} it={it} />
+                    ))}
+                  </div>
+                </Section>
+
+                {parsed.inversion && (
+                  <Section title="Counterpoints & Munger Inversion" no="03">
+                    <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+                      <Counter pt={parsed.inversion} src="Inversion Analysis" />
+                    </ul>
+                  </Section>
+                )}
+
+                {(parsed.shift || parsed.superpower) && (
+                  <Section title="Strategic Context" no="04">
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      {parsed.shift && <StatCard big="THE SHIFT" small={parsed.shift}/>}
+                      {parsed.superpower && <StatCard big="SUPERPOWER" small={parsed.superpower}/>}
+                    </div>
+                  </Section>
+                )}
+
+                {(parsed.hookContrarian || parsed.hookSpeed) && (
+                  <Section title="Creative Hook Angles" no="05">
+                    <ol style={{ margin: 0, paddingLeft: 20, fontSize: 13.5, lineHeight: 1.7, color: "var(--text)" }}>
+                      {parsed.hookContrarian && <li><strong>Contrarian Angle:</strong> {parsed.hookContrarian}</li>}
+                      {parsed.hookSpeed && <li><strong>Speed Angle:</strong> {parsed.hookSpeed}</li>}
+                    </ol>
+                  </Section>
+                )}
+
+                {parsed.beats && parsed.beats.length > 0 && (
+                  <Section title="Suggested Narrative Beats" no="06">
+                    {parsed.beats.map((beat, idx) => (
+                      <BeatRow key={idx} n={`Beat ${idx + 1}`} t={beat}/>
+                    ))}
+                  </Section>
+                )}
+
+                {parsed.thumbs && parsed.thumbs.length > 0 && (
+                  <Section title="Thumbnail Visual Directions" no="07">
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
+                      {parsed.thumbs.map((thumb, idx) => (
+                        <div key={idx} style={{ padding: "10px 12px", background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 4, fontSize: 12, lineHeight: 1.4, color: "var(--text)" }}>
+                          <strong>Variant {idx + 1}:</strong> {thumb}
+                        </div>
+                      ))}
+                    </div>
+                  </Section>
+                )}
+
+                <div style={{ display: "flex", gap: 8, marginTop: 24 }}>
+                  <button className="btn primary" onClick={() => onJump("brief")}><I.Brief size={12}/> Open in brief</button>
+                  <button className="btn ghost" onClick={() => {
+                    if (!cluster || !window.DDX) return;
+                    window.DDX.saveToPipeline({
+                      title: parsed.strategicTitle || cluster.topic, working_title: parsed.strategicTitle || cluster.topic, topic: cluster.topic, category: cluster.topic,
+                      format: cluster.best_content_format, creator_score: cluster.creator_score,
+                      signal_score: cluster.average_signal_score, pipeline_type: "creator", status: "researching",
+                    }).then(() => { alert("Sent to pipeline (researching)."); window.DDX.reload(); });
+                  }}><I.Save size={12}/> Send to pipeline</button>
+                  <button className="btn ghost" onClick={() => onJump("thumbs")}><I.Thumb size={12}/> Generate thumbnails</button>
+                </div>
+              </>
+            ) : (
+              <div style={{ display: "grid", placeItems: "center", height: "100%", color: "var(--text-mid)" }}>
+                <span>Failed to parse research pack content. Click Re-research to regenerate.</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -175,23 +314,24 @@ const ResearchView = ({ onJump }) => {
   );
 };
 
-const PackRow = ({ c, active, onClick, when }) => {
+const PackRow = ({ c, active, hasFile, onClick }) => {
   const S = window.DD_DATA.SOURCES;
   return (
     <button onClick={onClick} style={{
-      display: "grid", gridTemplateColumns: "auto 1fr", gap: 10,
+      display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 10,
       width: "100%", padding: "8px 14px", textAlign: "left",
       background: active ? "var(--bg-2)" : "transparent",
       borderLeft: `2px solid ${active ? "var(--signal)" : "transparent"}`,
       border: "none", cursor: "pointer", color: "var(--text)",
     }}>
-      <span style={{ width: 6, height: 6, borderRadius: 999, background: S[c.sources[0]].color, marginTop: 6 }}/>
+      <span style={{ width: 6, height: 6, borderRadius: 999, background: S[c.sources[0]]?.color || "var(--signal)", marginTop: 6 }}/>
       <span style={{ lineHeight: 1.2 }}>
         <span style={{ display: "block", color: active ? "var(--text-hi)" : "var(--text)", fontSize: 12.5, fontWeight: active ? 600 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.topic}</span>
         <span className="mono" style={{ display: "block", fontSize: 10, color: "var(--text-lo)", marginTop: 2, letterSpacing: "0.04em" }}>
           {c.source_count}× · score {c.creator_score}
         </span>
       </span>
+      {hasFile && <span style={{ fontSize: 9, color: "var(--signal-up)", padding: "1px 4px", border: "1px solid rgba(124,255,178,0.2)", borderRadius: 2, alignSelf: "center", background: "rgba(124,255,178,0.04)" }}>READY</span>}
     </button>
   );
 };
@@ -238,8 +378,8 @@ const Counter = ({ pt, src }) => (
 
 const StatCard = ({ big, small }) => (
   <div style={{ padding: "12px 14px", background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 4 }}>
-    <div className="mono tnum" style={{ color: "var(--text-hi)", fontWeight: 700, fontSize: 22, letterSpacing: "-0.01em" }}>{big}</div>
-    <div style={{ fontSize: 11.5, color: "var(--text-mid)", marginTop: 4, lineHeight: 1.35 }}>{small}</div>
+    <div className="mono" style={{ color: "var(--signal)", fontWeight: 700, fontSize: 12, letterSpacing: "0.08em" }}>{big}</div>
+    <div style={{ fontSize: 13, color: "var(--text-hi)", marginTop: 6, lineHeight: 1.45 }}>{small}</div>
   </div>
 );
 

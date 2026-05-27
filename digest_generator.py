@@ -47,7 +47,7 @@ class DailyDigestGenerator:
         
         # 3. LLM Enrichment for high-signal items
         for source_type, items in scored_data.items():
-            if source_type in ["github", "huggingface", "youtube", "blogs", "papers"]:
+            if source_type in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews"]:
                 for i in range(len(items)):
                     # Only enrich top 3 items per source to save tokens/time
                     if i < 3 and (items[i].get("signal_score", 0) >= 60 or items[i].get("creator_score", 0) >= 60):
@@ -95,7 +95,7 @@ class DailyDigestGenerator:
         
         all_items = []
         for source_type, items in scored_data.items():
-            if source_type in ["github", "huggingface", "youtube", "blogs", "papers"]:
+            if source_type in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews"]:
                 for item in items:
                     if item.get("signal_score", 0) >= 70:
                         all_items.append({**item, "source": source_type})
@@ -196,7 +196,8 @@ class DailyDigestGenerator:
             "huggingface": "🤗",
             "youtube": "📺",
             "blogs": "📰",
-            "papers": "📄"
+            "papers": "📄",
+            "hackernews": "🧡"
         }
         return mapping.get(source, "📌")
     

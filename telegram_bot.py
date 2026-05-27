@@ -78,7 +78,7 @@ def get_top_items(limit: int = TOP_N) -> list:
             with open(path) as f:
                 data = json.load(f)
             all_items = []
-            for source in ["github", "youtube", "blogs", "papers", "huggingface"]:
+            for source in ["github", "youtube", "blogs", "papers", "huggingface", "hackernews"]:
                 for item in data.get(source, []):
                     all_items.append({**item, "source_type": source})
             all_items.sort(key=lambda x: x.get("signal_score", 0), reverse=True)

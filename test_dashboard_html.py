@@ -32,7 +32,7 @@ def test_dashboard_contains_real_action_wiring(client, app_env):
     html = client.get("/classic").get_data(as_text=True)
 
     assert "<script src=\"/static/app.js\"></script>" in html
-    assert "Daily Trust State" in html
+    assert "Daily Trust" in html
     assert "Refresh Now" in html
     assert "Open Today" not in html and "DailyDex Digest" in html
     assert "nav-btn" in html

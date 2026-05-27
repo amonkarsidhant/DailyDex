@@ -20,6 +20,7 @@ SOURCE_LABELS = {
     "youtube": "YouTube",
     "blogs": "Blogs",
     "papers": "arXiv",
+    "hackernews": "HackerNews",
 }
 
 CREATOR_STATUS_ORDER = [
@@ -140,7 +141,7 @@ def build_topic_clusters(scored_data: Dict, intel_db=None) -> List[Dict]:
     existing callers keep working unchanged.
     """
     topic_map = {}
-    for source_type in ["github", "huggingface", "youtube", "blogs", "papers"]:
+    for source_type in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews"]:
         for item in scored_data.get(source_type, []) or []:
             for topic in extract_topics(item):
                 cluster = topic_map.setdefault(topic, {
@@ -281,7 +282,7 @@ def snapshot_clusters(scored_data: Dict, intel_db, now_ts: Optional[float] = Non
     now_ts = now_ts or time.time()
     bucket = int(now_ts // 3600)
     by_topic = defaultdict(lambda: {"items": 0, "signal": 0, "sources": set()})
-    for source_type in ("github", "huggingface", "youtube", "blogs", "papers"):
+    for source_type in ("github", "huggingface", "youtube", "blogs", "papers", "hackernews"):
         for item in scored_data.get(source_type, []) or []:
             topic = primary_topic(item)
             by_topic[topic]["items"] += 1
@@ -525,13 +526,36 @@ def _apply_creator_pack(target: Dict, pack: Dict) -> None:
         target["suggested_titles"] = merged
 
 
+def enrich_with_llm_intelligence(item: Dict) -> Dict:
+    """Use LLM to generate deep insights, hooks and outlines for high-signal items."""
+    # Only enrich if it has high signal or is specifically requested
+    if item.get("signal_score", 0) < 70 and item.get("creator_score", 0) < 70:
+        return item
+        
+    import llm_summary
+    enrichment = llm_summary.get_item_enrichment(item)
+    
+    # Update item with LLM intelligence
+    item["insight"] = enrichment.get("insight", item.get("insight", ""))
+    item["opening_hook"] = enrichment.get("hooks", [item.get("opening_hook", "")])[0] if enrichment.get("hooks") else item.get("opening_hook", "")
+    item["hooks"] = enrichment.get("hooks", [])
+    item["three_key_points"] = enrichment.get("outline", item.get("three_key_points", []))
+    
+    # If it's a very high score, set as idea automatically
+    if item.get("creator_score", 0) >= 85:
+        item["status"] = "idea"
+        item["pipeline_type"] = "creator"
+        
+    return item
+
+
 def enrich_scored_data_with_creator_fields(scored_data: Dict, intel_db=None) -> Dict:
     """Add creator metadata to every scored item."""
     support_map = {}
     for cluster in build_topic_clusters(scored_data):
         support_map[cluster["topic"]] = cluster
 
-    for source_type in ["github", "huggingface", "youtube", "blogs", "papers"]:
+    for source_type in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews"]:
         enriched_items = []
         for item in scored_data.get(source_type, []) or []:
             topic = primary_topic(item)
@@ -621,7 +645,7 @@ def build_content_opportunities(scored_data: Dict, clusters: List[Dict], limit: 
     """Turn scored items into actionable creator cards."""
     cluster_map = {cluster["topic"]: cluster for cluster in clusters}
     opportunities = []
-    for source_type in ["github", "huggingface", "youtube", "blogs", "papers"]:
+    for source_type in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews"]:
         for item in scored_data.get(source_type, []) or []:
             if item.get("signal_score", 0) < 40 and item.get("creator_score", 0) < 55:
                 continue

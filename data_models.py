@@ -465,6 +465,30 @@ class IntelligenceDB:
         conn.close()
         return True
 
+    def _deserialize_row(self, row: sqlite3.Row) -> Dict:
+        """Map Row to dict and deserialize structured columns."""
+        item = dict(row)
+        for key in ["tags", "sources", "outline", "three_beat_structure", "thumbnail_text"]:
+            if item.get(key):
+                try:
+                    item[key] = json.loads(item[key])
+                except Exception:
+                    if key == "tags" and isinstance(item[key], str) and "," in item[key]:
+                        item[key] = [t.strip() for t in item[key].split(",")]
+                    else:
+                        item[key] = [item[key]] if item[key] is not None else []
+            else:
+                item[key] = []
+                
+        if item.get("production_assets"):
+            try:
+                item["production_assets"] = json.loads(item["production_assets"])
+            except Exception:
+                item["production_assets"] = {}
+        else:
+            item["production_assets"] = {}
+        return item
+
     def get_saved_item(self, item_id: int) -> Optional[Dict]:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
@@ -474,11 +498,11 @@ class IntelligenceDB:
         conn.close()
         if not row:
             return None
-        return dict(row)
+        return self._deserialize_row(row)
 
     def _serialize_value(self, key: str, value):
         """Serialize structured values for SQLite storage."""
-        if key in {"tags", "sources", "outline"}:
+        if key in {"tags", "sources", "outline", "thumbnail_text", "three_beat_structure"}:
             if value is None:
                 return json.dumps([])
             if isinstance(value, str):
@@ -504,6 +528,7 @@ class IntelligenceDB:
         tags = self._serialize_value("tags", item.get("tags", []))
         sources = self._serialize_value("sources", item.get("sources", []))
         outline = self._serialize_value("outline", item.get("outline", []))
+        thumbnail_text = self._serialize_value("thumbnail_text", item.get("thumbnail_text", []))
         
         # Check if item with this URL already exists
         if url:
@@ -535,7 +560,7 @@ class IntelligenceDB:
                     item.get("format"),
                     outline,
                     sources,
-                    item.get("thumbnail_text"),
+                    thumbnail_text,
                     item.get("priority"),
                     item.get("published_url"),
                     datetime.now().isoformat(),
@@ -569,7 +594,7 @@ class IntelligenceDB:
             item.get("format"),
             outline,
             sources,
-            item.get("thumbnail_text"),
+            thumbnail_text,
             item.get("priority"),
             item.get("published_url")
         ))
@@ -660,52 +685,7 @@ class IntelligenceDB:
         
         items = []
         for row in rows:
-            item = dict(row)
-            if item.get("tags"):
-                try:
-                    item["tags"] = json.loads(item["tags"])
-                except Exception:
-                    # Fallback for comma-separated strings
-                    if isinstance(item["tags"], str) and "," in item["tags"]:
-                        item["tags"] = [t.strip() for t in item["tags"].split(",")]
-                    else:
-                        item["tags"] = [item["tags"]] if item["tags"] else []
-            else:
-                item["tags"] = []
-                
-            if item.get("sources"):
-                try:
-                    item["sources"] = json.loads(item["sources"])
-                except Exception:
-                    item["sources"] = [item["sources"]]
-            else:
-                item["sources"] = []
-                
-            if item.get("outline"):
-                try:
-                    item["outline"] = json.loads(item["outline"])
-                except Exception:
-                    item["outline"] = [item["outline"]]
-            else:
-                item["outline"] = []
-
-            if item.get("production_assets"):
-                try:
-                    item["production_assets"] = json.loads(item["production_assets"])
-                except Exception:
-                    item["production_assets"] = {}
-            else:
-                item["production_assets"] = {}
-                
-            if item.get("three_beat_structure"):
-                try:
-                    item["three_beat_structure"] = json.loads(item["three_beat_structure"])
-                except Exception:
-                    item["three_beat_structure"] = [item["three_beat_structure"]]
-            else:
-                item["three_beat_structure"] = []
-            items.append(item)
-        
+            items.append(self._deserialize_row(row))
         return items
     
     def record_keyword(self, keyword: str, source: str) -> None:

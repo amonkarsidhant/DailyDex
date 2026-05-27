@@ -281,6 +281,79 @@ def get_arxiv():
     return papers
 
 
+def get_hackernews():
+    import requests
+    import time
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    # Get top stories
+    try:
+        r = requests.get("https://hacker-news.firebaseio.com/v0/topstories.json", timeout=10)
+        r.raise_for_status()
+        story_ids = r.json()
+    except Exception as e:
+        print(f"  HN: Failed to fetch top stories list: {e}")
+        return []
+
+    # Limit to top 150 stories to inspect
+    story_ids = story_ids[:150]
+
+    config = load_config()
+    variant_key = config.get("variant", "default")
+    variant_config = config.get("variants", {}).get(variant_key, {})
+    
+    # AI/ML filter keywords
+    focus_kws = {kw.lower() for kw in variant_config.get("focus_keywords", [])}
+    base_kws = {
+        "ai", "ml", "llm", "gpt", "claude", "llama", "mcp", "agent", 
+        "openai", "anthropic", "gemini", "deepmind", "reasoning model",
+        "open-source model", "neural", "deep learning", "machine learning",
+        "stable diffusion", "midjourney", "huggingface", "vector db", 
+        "rag", "copilot", "cursor", "ollama", "vlm", "lmm"
+    }
+    keywords = base_kws.union(focus_kws)
+
+    results = []
+
+    def fetch_item(story_id):
+        try:
+            item_url = f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json"
+            item_res = requests.get(item_url, timeout=5)
+            if item_res.status_code == 200:
+                item_data = item_res.json()
+                if item_data and item_data.get("type") == "story":
+                    title = item_data.get("title", "")
+                    title_lower = title.lower()
+                    
+                    if any(kw in title_lower for kw in keywords):
+                        pub_time = item_data.get("time", int(time.time()))
+                        published_str = datetime.fromtimestamp(pub_time).isoformat()
+                        return {
+                            "source": "HackerNews",
+                            "title": title,
+                            "url": item_data.get("url") or f"https://news.ycombinator.com/item?id={story_id}",
+                            "score": item_data.get("score", 0),
+                            "comments": item_data.get("descendants", 0),
+                            "published": published_str,
+                            "type": "news"
+                        }
+        except Exception:
+            pass
+        return None
+
+    # Fetch concurrently with ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=15) as executor:
+        futures = [executor.submit(fetch_item, s_id) for s_id in story_ids]
+        for future in as_completed(futures):
+            item = future.result()
+            if item:
+                results.append(item)
+
+    # Sort by score descending
+    results.sort(key=lambda x: x.get("score", 0), reverse=True)
+    return results
+
+
 def fetch_all():
     print(f"[{datetime.now().strftime('%H:%M')}] Fetching AI news...")
 
@@ -363,10 +436,24 @@ def fetch_all():
         update_source_health("papers", False, len(cached), str(e), cache_age_seconds=cache_age)
         print(f"  Using cache: {len(cached)} papers" + (" (stale)" if cached and not is_fresh else ""))
 
+    # HackerNews
+    try:
+        new_data["hackernews"] = get_hackernews()
+        save_source_cache("hackernews", new_data["hackernews"])
+        update_source_health("hackernews", True, len(new_data["hackernews"]))
+        print(f"  HackerNews: {len(new_data['hackernews'])} items")
+    except Exception as e:
+        print(f"  HackerNews failed: {e}")
+        cached, is_fresh = load_source_cache("hackernews")
+        new_data["hackernews"] = cached
+        cache_age = get_cache_age_seconds("hackernews")
+        update_source_health("hackernews", False, len(cached), str(e), cache_age_seconds=cache_age)
+        print(f"  Using cache: {len(cached)} items" + (" (stale)" if cached and not is_fresh else ""))
+
     # Deduplicate
     global _seen_fingerprints
     _seen_fingerprints = set()
-    for key in ["youtube", "github", "huggingface", "blogs", "papers"]:
+    for key in ["youtube", "github", "huggingface", "blogs", "papers", "hackernews"]:
         items = new_data.get(key, [])
         deduplicated = [item for item in items if not is_duplicate(item)]
         new_data[key] = deduplicated
@@ -380,7 +467,7 @@ def fetch_all():
         json.dump(combined, f, indent=2)
 
     print(
-        f"Done: YT:{len(combined['youtube'])} GH:{len(combined['github'])} HF:{len(combined['huggingface'])} Blogs:{len(combined['blogs'])} Papers:{len(combined['papers'])}"
+        f"Done: YT:{len(combined['youtube'])} GH:{len(combined['github'])} HF:{len(combined['huggingface'])} Blogs:{len(combined['blogs'])} Papers:{len(combined['papers'])} HN:{len(combined.get('hackernews', []))}"
     )
     return combined["last_updated"]
 
@@ -396,7 +483,7 @@ def merge_weekly_data(history, new_data):
     combined = new_data.copy()
 
     # Merge historical items that are within 7 days
-    for key in ["youtube", "github", "huggingface", "blogs", "papers"]:
+    for key in ["youtube", "github", "huggingface", "blogs", "papers", "hackernews"]:
         if key not in combined:
             combined[key] = []
 

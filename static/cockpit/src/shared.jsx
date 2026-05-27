@@ -81,7 +81,7 @@ const Momentum = ({ delta, big }) => {
 // Source pulse — small stacked bars colored by source
 const SourceStack = ({ sources }) => (
   <span style={{ display: "inline-flex", gap: 2 }}>
-    {["github","huggingface","youtube","blogs","papers"].map(k => {
+    {["github","huggingface","youtube","blogs","papers","hackernews"].map(k => {
       const S = window.DD_DATA.SOURCES[k];
       const on = sources.includes(k);
       return (
@@ -119,30 +119,35 @@ const Waveform = ({ data, w = 220, h = 36, color = "var(--signal)" }) => {
 
 // Thumbnail preview — synthetic 16:9 YT-style card built from data
 const FakeThumb = ({ t, w = 220, h = 124 }) => {
+  if (!t) return null;
   const hue = t.hue;
   const c1 = `oklch(0.58 0.18 ${hue})`;
   const c2 = `oklch(0.32 0.14 ${hue})`;
   const c3 = `oklch(0.18 0.06 ${hue})`;
+  const hasImage = !!t.image_path;
+
   return (
     <div style={{
       width: w, height: h, borderRadius: 6, overflow: "hidden", position: "relative",
-      background: `linear-gradient(135deg, ${c1} 0%, ${c2} 55%, ${c3} 100%)`,
+      background: hasImage ? `url(${t.image_path}) no-repeat center/cover` : `linear-gradient(135deg, ${c1} 0%, ${c2} 55%, ${c3} 100%)`,
       boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)",
       fontFamily: "var(--font-sans)",
     }}>
-      {/* synthetic visual element */}
-      <div style={{
-        position: "absolute", inset: 0,
-        background: t.kind === "race"
-          ? `repeating-linear-gradient(90deg, transparent 0 12px, rgba(0,0,0,0.18) 12px 13px)`
-          : t.kind === "before-after"
-            ? `linear-gradient(90deg, rgba(0,0,0,0.4) 0 50%, transparent 50%)`
-            : t.kind === "vs-hero"
-              ? `radial-gradient(circle at 70% 40%, rgba(255,255,255,0.25), transparent 50%)`
-              : `radial-gradient(circle at 30% 35%, rgba(255,255,255,0.25), transparent 55%)`,
-      }}/>
-      {/* face placeholder for face-zoom */}
-      {(t.kind === "face-zoom") && (
+      {/* synthetic visual element (only show when no real image) */}
+      {!hasImage && (
+        <div style={{
+          position: "absolute", inset: 0,
+          background: t.kind === "race"
+            ? `repeating-linear-gradient(90deg, transparent 0 12px, rgba(0,0,0,0.18) 12px 13px)`
+            : t.kind === "before-after"
+              ? `linear-gradient(90deg, rgba(0,0,0,0.4) 0 50%, transparent 50%)`
+              : t.kind === "vs-hero"
+                ? `radial-gradient(circle at 70% 40%, rgba(255,255,255,0.25), transparent 50%)`
+                : `radial-gradient(circle at 30% 35%, rgba(255,255,255,0.25), transparent 55%)`,
+        }}/>
+      )}
+      {/* face placeholder for face-zoom (only show when no real image) */}
+      {!hasImage && (t.kind === "face-zoom") && (
         <div style={{
           position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
           width: h * 0.78, height: h * 0.78, borderRadius: "50%",
@@ -152,17 +157,20 @@ const FakeThumb = ({ t, w = 220, h = 124 }) => {
       )}
       {/* Headline */}
       <div style={{
-        position: "absolute", left: 10, bottom: 8, right: t.kind === "face-zoom" ? "45%" : 10,
+        position: "absolute", left: 10, bottom: 8, right: (t.kind === "face-zoom" && !hasImage) ? "45%" : 10,
         color: "#fff",
-        textShadow: "0 2px 8px rgba(0,0,0,0.45)",
+        textShadow: "0 2px 8px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.9)",
+        background: "rgba(0,0,0,0.3)",
+        padding: "4px 8px",
+        borderRadius: 4,
       }}>
         <div style={{ fontWeight: 800, fontSize: w / 12, lineHeight: 1, letterSpacing: "-0.01em" }}>{t.text}</div>
-        <div style={{ fontWeight: 500, fontSize: w / 22, opacity: 0.78, marginTop: 4 }}>{t.subtext}</div>
+        <div style={{ fontWeight: 500, fontSize: w / 22, opacity: 0.88, marginTop: 4 }}>{t.subtext}</div>
       </div>
       {/* corner badge */}
       <div className="mono" style={{
         position: "absolute", top: 6, left: 6,
-        padding: "1px 4px", background: "rgba(0,0,0,0.45)", color: "#fff",
+        padding: "1px 4px", background: "rgba(0,0,0,0.55)", color: "#fff",
         fontSize: 9, letterSpacing: "0.06em", borderRadius: 2,
       }}>{(t.kind || "").toUpperCase()}</div>
     </div>
@@ -220,7 +228,18 @@ const PanelHeader = ({ children, no, actions }) => (
   </div>
 );
 
+const downloadScript = (filename, text) => {
+  const element = document.createElement("a");
+  const file = new Blob([text], {type: 'text/markdown'});
+  element.href = URL.createObjectURL(file);
+  element.download = filename;
+  document.body.appendChild(element);
+  element.click();
+  document.body.removeChild(element);
+};
+
 Object.assign(window, {
   SourceChip, Sparkline, ScoreBar, Momentum, SourceStack,
-  Waveform, FakeThumb, FormatBadge, KPI, PanelHeader,
+  Waveform, FakeThumb, FormatBadge, KPI, PanelHeader, downloadScript,
 });
+

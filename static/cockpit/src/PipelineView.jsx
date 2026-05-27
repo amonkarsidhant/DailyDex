@@ -101,11 +101,68 @@ const PipelineView = ({ onJump }) => {
         </div>
       </div>
 
+      {/* Schedule Optimizer */}
+      <div className="panel" style={{ overflow: "hidden" }}>
+        <PanelHeader no="OPTIMIZER">
+          Publishing Time Optimizer · niche-calibrated engagement slots
+        </PanelHeader>
+        <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: 24 }}>
+          <div>
+            <div className="label" style={{ color: "var(--signal)" }}>Niche Target Calibration</div>
+            <p style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--text)", margin: "8px 0 0" }}>
+              Targeting <strong>Indie Builders & self-hosters</strong>. Best publishing windows are optimized for high-intent tech focus: weekday mornings for written/professional networks (LinkedIn), and weekend mornings for deep-dive video production.
+            </p>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="micro" style={{ marginBottom: 4 }}>Recommended Peak Engagement Slots</div>
+            <OptimizedSlotRow
+              platform="YouTube"
+              time="Saturday, 10:00 AM"
+              nicheScore="98% Fit"
+              reason="Peak time for developers shipping weekend projects."
+              status={cal.some(d => d.day === "Sat" && d.items.some(it => it.kind === "publish" || it.kind === "record")) ? "FILLED" : "OPEN"}
+            />
+            <OptimizedSlotRow
+              platform="LinkedIn"
+              time="Wednesday, 10:00 AM"
+              nicheScore="94% Fit"
+              reason="Maximum mid-week developer feed engagement."
+              status={cal.some(d => d.day === "Wed" && d.items.some(it => it.kind === "linkedin")) ? "FILLED" : "OPEN"}
+            />
+            <OptimizedSlotRow
+              platform="Shorts/Tiktok"
+              time="Sunday, 10:00 AM"
+              nicheScore="89% Fit"
+              reason="Sunday morning casual tech browsing peak."
+              status={cal.some(d => d.day === "Sun" && d.items.some(it => it.kind === "publish" || it.kind === "record")) ? "FILLED" : "OPEN"}
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Calendar */}
       <div className="panel" style={{ overflow: "hidden" }}>
         <PanelHeader no="02"
           actions={
             <>
+              <button className="btn ghost" onClick={async () => {
+                if (window.confirm("Auto-schedule top brief opportunities for the upcoming week?")) {
+                  try {
+                    const res = await fetch("/api/schedule/auto", { method: "POST" });
+                    const data = await res.json();
+                    if (data.count > 0) {
+                      alert(`Scheduled ${data.count} content slots!`);
+                      window.DDX.reload();
+                    } else {
+                      alert("No new items scheduled.");
+                    }
+                  } catch (e) {
+                    alert("Failed to auto-schedule.");
+                  }
+                }
+              }} style={{ color: "var(--signal)" }}>
+                <I.Spark size={11} stroke="var(--signal)"/> Auto-Schedule
+              </button>
               <button className="btn ghost" onClick={() => setWeekOffset(o => o - 1)}>‹ Last week</button>
               <button className="btn ghost" onClick={() => setWeekOffset(0)} style={{ color: weekOffset === 0 ? "var(--signal)" : undefined }}>This week</button>
               <button className="btn ghost" onClick={() => setWeekOffset(o => o + 1)}>Next week ›</button>
@@ -225,6 +282,26 @@ const PublishedRow = ({ p }) => {
         </div>
       </div>
       <Sparkline data={curve} w={160} h={48} color="var(--src-youtube)" />
+    </div>
+  );
+};
+
+const OptimizedSlotRow = ({ platform, time, nicheScore, reason, status }) => {
+  const isOpen = status === "OPEN";
+  return (
+    <div style={{
+      display: "grid", gridTemplateColumns: "100px 140px 1fr 80px", gap: 12, alignItems: "center",
+      padding: "8px 12px", background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 4
+    }}>
+      <span className="mono" style={{ color: "var(--text-hi)", fontWeight: 600, fontSize: 11.5 }}>{platform}</span>
+      <span className="mono tnum" style={{ fontSize: 11.5, color: "var(--text)" }}>{time}</span>
+      <span style={{ fontSize: 12, color: "var(--text-mid)" }}>{reason} <span className="mono" style={{ color: "var(--signal-up)", fontSize: 10.5 }}>({nicheScore})</span></span>
+      <span className="mono" style={{
+        textAlign: "center", fontSize: 10, padding: "2px 6px", borderRadius: 2,
+        background: isOpen ? "rgba(124,255,178,0.1)" : "var(--bg-3)",
+        border: `1px solid ${isOpen ? "rgba(124,255,178,0.3)" : "var(--line-2)"}`,
+        color: isOpen ? "var(--signal-up)" : "var(--text-lo)"
+      }}>{status}</span>
     </div>
   );
 };
