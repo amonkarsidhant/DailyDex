@@ -33,6 +33,11 @@ from typing import Any, Callable, Dict, Iterable, List, Optional
 
 import llm_summary
 
+# In-memory store for full agent-generated text (run_id -> content string).
+# Agents write here after generation so the frontend can fetch the full result
+# via GET /api/agents/<run_id>/result without hitting disk.
+_AGENT_RESULTS: Dict[str, str] = {}
+
 LOG = logging.getLogger("dailydex.creator_enricher")
 if not LOG.handlers:
     handler = logging.StreamHandler()
@@ -639,125 +644,167 @@ class AgentRunner:
         if not label:
             return "No topic provided"
 
-        self._log(run_id, f"Initiating agentic dive on: {label}")
-        self._stage(run_id, "Querying leads from LLM", 0.2)
-
-        import llm_summary
+        import cli_registry as _cr
         import re
-        from datetime import datetime
+
+        self._log(run_id, f"Researching: {label}")
+        self._stage(run_id, "Gathering research leads", 0.2)
 
         leads_prompt = (
-            f"Research the AI topic '{label}'. Identify:\n"
-            "1. The primary technical framework or repo driving this trend.\n"
-            "2. The Munger Inversion: what are the risks, failure modes, or counter-arguments?\n"
+            f"Research the AI topic: '{label}'\n\n"
+            "Identify and explain:\n"
+            "1. The primary technical framework, repo, or paper driving this trend — be specific.\n"
+            "2. The Munger Inversion: what are the real risks, failure modes, or counter-arguments?\n"
             "3. The Creator Opportunity: what concrete demo would prove or disprove the hype?\n"
-            "Return a concise technical summary (no preamble, no markdown headings)."
+            "4. Who are the key people / organizations involved?\n"
+            "5. What should a YouTube creator make about this — and what angle is most under-served?\n\n"
+            "Be technical and direct. No preamble. No markdown headings. Max 400 words."
         )
-        try:
-            leads = llm_summary.query_llm(
-                leads_prompt,
-                "You are a PhD-level research lead. Be technical, terse, and source-aware.",
-            ) or ""
-        except Exception as e:
-            leads = ""
-            self._log(run_id, f"Warning: LLM query for leads failed: {e}")
+        res = _cr.generate(
+            leads_prompt,
+            "You are a PhD-level AI research lead. Be specific, terse, and source-aware. No filler.",
+            timeout=60,
+        )
+        leads = (res.get("text") or "").strip()
 
         if not leads:
-            self._log(run_id, "Failed to retrieve research leads. Aborting.")
+            self._log(run_id, "LLM returned nothing — check ANTHROPIC_API_KEY")
             self._stage(run_id, "Failed", 1.0)
-            return f"failed to draft research pack for {label}"
+            return f"failed: no LLM response for {label}"
 
-        self._log(run_id, "Successfully synthesized research leads.")
-        self._stage(run_id, "Drafting structured brief", 0.5)
+        self._log(run_id, "Research leads gathered.")
+        self._stage(run_id, "Structuring strategic brief", 0.5)
 
         synthesis_prompt = (
             f"Based on these research leads for '{label}':\n{leads}\n\n"
-            "Return a JSON object with these exact keys:\n"
-            "strategic_title (high-CTR technical title, 38-62 chars),\n"
-            "shift (1 sentence: why this matters fundamentally),\n"
-            "superpower (1 sentence: the unique technical edge),\n"
-            "hook_contrarian (1 sentence),\n"
-            "hook_speed (1 sentence),\n"
-            "narrative_beats (array of 5 short strings),\n"
-            "thumbnail_visuals (array of 3 short strings),\n"
-            "inversion (1 sentence: the critical risk).\n"
-            "Output JSON only. No commentary, no code fences."
+            "Return a JSON object with EXACTLY these keys (no extra keys, no code fences):\n"
+            '{"strategic_title": "...", "shift": "...", "superpower": "...", '
+            '"hook_contrarian": "...", "hook_speed": "...", '
+            '"narrative_beats": ["...", "...", "...", "...", "..."], '
+            '"thumbnail_visuals": ["...", "...", "..."], "inversion": "..."}\n\n'
+            "strategic_title: 38-62 char high-CTR title. shift: 1 sentence why this matters. "
+            "superpower: 1 sentence the unique technical edge. inversion: 1 sentence the key risk. "
+            "narrative_beats: 5 short talking-point strings. thumbnail_visuals: 3 visual concept strings."
         )
+        syn_res = _cr.generate(
+            synthesis_prompt,
+            "Output strict JSON only. No commentary. No markdown.",
+            timeout=60,
+        )
+        raw = (syn_res.get("text") or "").strip()
+
+        brief = {}
         try:
-            raw = llm_summary.query_llm(
-                synthesis_prompt,
-                "You are a senior AI content strategist. Output strict JSON only.",
-            ) or ""
-        except Exception as e:
-            raw = ""
-            self._log(run_id, f"Warning: LLM synthesis query failed: {e}")
+            from agentic_researcher import _extract_json
+            brief = _extract_json(raw) or {}
+        except Exception:
+            pass
 
-        from agentic_researcher import _extract_json
-        brief = _extract_json(raw)
-
-        if not brief:
-            self._log(run_id, "Failed to parse structured brief JSON from LLM response.")
-            self._stage(run_id, "Failed", 1.0)
-            return f"failed to parse structured brief for {label}"
-
-        brief["leads"] = leads
-        brief["topic"] = label
-
-        self._log(run_id, "Successfully compiled strategic brief.")
-        self._stage(run_id, "Writing research pack markdown file", 0.8)
-
-        # Save to research packs directory
-        from agentic_researcher import RESEARCH_PACK_DIR
-        date_slug = datetime.now().strftime("%Y-%m-%d")
-        file_slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-") or "topic"
-        path = os.path.join(RESEARCH_PACK_DIR, f"{date_slug}-{file_slug}.md")
+        self._stage(run_id, "Writing research pack", 0.8)
 
         beats = brief.get("narrative_beats") or []
         thumbs = brief.get("thumbnail_visuals") or []
-        body = [
+        body_lines = [
             f"# Research Pack: {label}",
-            f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-            "**Status:** Agentic Recursive Dive",
+            f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             "",
-            "## Leads",
-            brief.get("leads", "(no leads returned)"),
-            "",
-            "## Strategic Brief",
-            f"**Strategic title:** {brief.get('strategic_title', '')}",
-            f"**Shift:** {brief.get('shift', '')}",
-            f"**Superpower:** {brief.get('superpower', '')}",
-            f"**Munger Inversion:** {brief.get('inversion', '')}",
-            "",
-            "**Hooks:**",
-            f"- Contrarian: {brief.get('hook_contrarian', '')}",
-            f"- Speed-to-Value: {brief.get('hook_speed', '')}",
-            "",
-            "**Narrative Beats:**",
-            *[f"- {beat}" for beat in beats],
-            "",
-            "**Thumbnail Visuals:**",
-            *[f"- {visual}" for visual in thumbs],
+            "## Research Leads",
+            leads,
             "",
         ]
+        if brief.get("strategic_title"):
+            body_lines += [
+                "## Strategic Brief",
+                f"**Title:** {brief.get('strategic_title', '')}",
+                f"**The Shift:** {brief.get('shift', '')}",
+                f"**Superpower:** {brief.get('superpower', '')}",
+                f"**Munger Inversion:** {brief.get('inversion', '')}",
+                "",
+                "**Hooks:**",
+                f"- Contrarian: {brief.get('hook_contrarian', '')}",
+                f"- Speed-to-Value: {brief.get('hook_speed', '')}",
+                "",
+                "**Narrative Beats:**",
+                *[f"- {b}" for b in beats],
+                "",
+                "**Thumbnail Concepts:**",
+                *[f"- {t}" for t in thumbs],
+            ]
+        full_text = "\n".join(body_lines)
 
+        # Write to disk
         try:
-            with open(path, "w", encoding="utf-8") as handle:
-                handle.write("\n".join(body))
-            self._log(run_id, f"Research pack written to {path}")
+            from agentic_researcher import RESEARCH_PACK_DIR
+            os.makedirs(RESEARCH_PACK_DIR, exist_ok=True)
+            file_slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-") or "topic"
+            path = os.path.join(RESEARCH_PACK_DIR,
+                                f"{datetime.now().strftime('%Y-%m-%d')}-{file_slug}.md")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(full_text)
+            self._log(run_id, f"Saved to {os.path.basename(path)}")
         except Exception as e:
-            self._log(run_id, f"Error writing file: {e}")
-            self._stage(run_id, "Failed", 1.0)
-            return f"failed to write research pack to disk for {label}"
+            self._log(run_id, f"File write error: {e}")
 
+        self._store_result(run_id, full_text)
+        self._log(run_id, "Research pack ready — click View to copy or download")
         self._stage(run_id, "Done", 1.0)
-        return f"research pack drafted · {label}"
+        return f"research pack ready · {label}"
 
     def _run_script_writer(self, run_id, topic, target_id, payload) -> str:
-        self._log(run_id, "outlined cold-open hook (3 candidates)")
-        self._stage(run_id, "Drafting 3-beat structure", 0.4)
-        self._log(run_id, "beat 1 / beat 2 / beat 3 drafted")
-        self._stage(run_id, "Tightening pacing", 0.8)
-        return f"script draft ready · {topic or target_id or ''}".strip(" ·")
+        label = topic or target_id or "topic"
+        import cli_registry as _cr
+        import re
+
+        self._log(run_id, f"Writing video script for: {label}")
+        self._stage(run_id, "Drafting cold-open hook", 0.2)
+
+        prompt = (
+            f"Write a complete YouTube video script outline (14-18 min) for an AI creator.\n"
+            f"Topic: {label}\n\n"
+            "Structure:\n"
+            "## COLD OPEN (30s verbatim)\n"
+            "Write the exact words to say. Bold claim, no intro.\n\n"
+            "## SECTION 1 — [Title] (4-5 min)\n"
+            "Bullet talking points. Include a specific technical detail or stat.\n\n"
+            "## SECTION 2 — [Title] (5-6 min)\n"
+            "Bullet talking points. Include a demo or code moment.\n\n"
+            "## SECTION 3 — [Title] (3-4 min)\n"
+            "Bullet talking points. The contrarian take or what most creators miss.\n\n"
+            "## OUTRO + CTA (1 min verbatim)\n"
+            "Exact words. Subscribe ask + comment question.\n\n"
+            "Be specific — cite real repos, real benchmarks, real company names. No filler."
+        )
+        res = _cr.generate(
+            prompt,
+            "You are a content strategist for a top AI YouTube channel. Write direct, demo-driven scripts.",
+            timeout=90,
+        )
+        script = (res.get("text") or "").strip()
+
+        if not script:
+            self._log(run_id, "LLM returned nothing — check ANTHROPIC_API_KEY")
+            self._stage(run_id, "Failed", 1.0)
+            return f"script generation failed for {label}"
+
+        self._stage(run_id, "Saving script", 0.9)
+        full_text = f"# Script: {label}\n\n{script}"
+
+        try:
+            from agentic_researcher import RESEARCH_PACK_DIR
+            os.makedirs(RESEARCH_PACK_DIR, exist_ok=True)
+            file_slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-") or "topic"
+            path = os.path.join(RESEARCH_PACK_DIR,
+                                f"{datetime.now().strftime('%Y-%m-%d')}-script-{file_slug}.md")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(full_text)
+            self._log(run_id, f"Saved to {os.path.basename(path)}")
+        except Exception as e:
+            self._log(run_id, f"File write error: {e}")
+
+        self._store_result(run_id, full_text)
+        self._log(run_id, "Script ready — click View to copy or download")
+        self._stage(run_id, "Done", 1.0)
+        return f"script drafted · {label}"
 
     def _run_thumbnail_director(self, run_id, topic, target_id, payload) -> str:
         count = int((payload or {}).get("count", 6))
@@ -772,15 +819,90 @@ class AgentRunner:
                     self._log(run_id, f"variant {v['kind']} · CTR {v['ctr_pred']}%")
             except Exception as exc:  # noqa: BLE001
                 self._log(run_id, f"variant generation error: {exc}")
-        self._stage(run_id, "Ranking by predicted CTR", 0.9)
+        if not made:
+            # Fallback: generate textual thumbnail concepts via LLM
+            self._log(run_id, "No DB target — generating thumbnail concepts via LLM")
+            import cli_registry as _cr
+            prompt = (
+                f"Generate {count} YouTube thumbnail concepts for a video about: {topic}\n\n"
+                "For each concept describe:\n"
+                "- Visual layout (what's in frame)\n"
+                "- Text overlay (max 5 words, high contrast)\n"
+                "- Predicted CTR reasoning (1 sentence)\n\n"
+                "Number each concept 1-{count}. Be specific and visual.".replace("{count}", str(count))
+            )
+            res = _cr.generate(prompt, "You are a YouTube thumbnail designer.", timeout=60)
+            concepts = (res.get("text") or "").strip()
+            if concepts:
+                full_text = f"# Thumbnail Concepts: {topic}\n\n{concepts}"
+                self._store_result(run_id, full_text)
+                self._log(run_id, f"{count} thumbnail concepts ready — click View")
+                made = count
+        self._stage(run_id, "Done", 1.0)
         return f"{made or count} thumbnail variants generated"
 
     def _run_cross_poster(self, run_id, topic, target_id, payload) -> str:
-        self._log(run_id, "adapting long-form into LinkedIn carousel")
-        self._stage(run_id, "Slicing into 6 slides", 0.5)
-        self._log(run_id, "rewrote hook for LinkedIn voice")
-        self._stage(run_id, "Formatting carousel JSON", 0.85)
-        return f"carousel adapted · {topic or target_id or ''}".strip(" ·")
+        label = topic or target_id or "topic"
+        import cli_registry as _cr
+        import re
+
+        self._log(run_id, f"Adapting {label} for LinkedIn")
+        self._stage(run_id, "Writing carousel via LLM", 0.3)
+
+        prompt = (
+            f"Write an 8-slide LinkedIn carousel post about: {label}\n\n"
+            "[Slide 1] Bold hook — one claim that creates FOMO. Max 2 sentences.\n"
+            "[Slide 2] The core technical development. Cite a specific repo, paper, or release.\n"
+            "[Slide 3] Why this changes things. One stat or benchmark.\n"
+            "[Slide 4] Who's using it and how.\n"
+            "[Slide 5] The contrarian take — what everyone else is getting wrong.\n"
+            "[Slide 6] What builders and creators should do right now.\n"
+            "[Slide 7] The key risk or limitation most people overlook.\n"
+            "[Slide 8] CTA: follow for weekly AI signals + a question to drive comments.\n\n"
+            "Tone: direct, professional, no buzzwords. Each slide = max 2 sentences.\n"
+            "Cite real companies, real numbers, real names."
+        )
+        res = _cr.generate(
+            prompt,
+            "You are a LinkedIn content strategist for AI professionals. Be specific, not generic.",
+            timeout=60,
+        )
+        carousel = (res.get("text") or "").strip()
+
+        if not carousel:
+            self._log(run_id, "LLM returned nothing — check ANTHROPIC_API_KEY")
+            self._stage(run_id, "Failed", 1.0)
+            return f"carousel generation failed for {label}"
+
+        self._stage(run_id, "Saving carousel", 0.9)
+        full_text = f"# LinkedIn Carousel: {label}\n\n{carousel}"
+
+        try:
+            from agentic_researcher import RESEARCH_PACK_DIR
+            os.makedirs(RESEARCH_PACK_DIR, exist_ok=True)
+            file_slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-") or "topic"
+            path = os.path.join(RESEARCH_PACK_DIR,
+                                f"{datetime.now().strftime('%Y-%m-%d')}-linkedin-{file_slug}.md")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(full_text)
+            self._log(run_id, f"Saved to {os.path.basename(path)}")
+        except Exception as e:
+            self._log(run_id, f"File write error: {e}")
+
+        self._store_result(run_id, full_text)
+        self._log(run_id, "Carousel ready — click View to copy or download")
+        self._stage(run_id, "Done", 1.0)
+        return f"carousel adapted · {label}"
+
+    def _store_result(self, run_id: str, content: str) -> None:
+        """Persist full generated content so the frontend can retrieve it."""
+        _AGENT_RESULTS[run_id] = content
+        # Also stash a truncated copy in the DB summary field for persistence.
+        if self.intel_db:
+            try:
+                self.intel_db.update_agent_run(run_id, result_summary=content[:500])
+            except Exception:
+                pass
 
     def _log(self, run_id: str, line: str):
         ts = time.time()

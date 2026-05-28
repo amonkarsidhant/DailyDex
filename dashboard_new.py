@@ -946,6 +946,7 @@ def build_cockpit_data():
         "studio": _cockpit_studio(),
         "opportunities": opportunities,
         "creator_brief": creator_brief,
+        "research_packs": list_research_packs(),
         "stats": {
             "tracked_topics_count": len([i for i in saved_items if i.get("pipeline_type") == "creator"]),
             "active_agents_count": len(_cockpit_agents()),
@@ -1434,6 +1435,27 @@ def api_agent_logs(run_id):
     return jsonify({"run_id": run_id, "logs": intel_db.get_agent_logs(run_id)})
 
 
+@app.route("/api/agents/<run_id>/result")
+def api_agent_result(run_id):
+    """Return the full generated text for a completed agent run."""
+    try:
+        from creator_enricher import _AGENT_RESULTS
+        text = _AGENT_RESULTS.get(run_id)
+        if text:
+            return jsonify({"run_id": run_id, "text": text})
+    except Exception:
+        pass
+    # Fallback: try result_summary from DB
+    if intel_db:
+        try:
+            for row in (intel_db.list_agent_runs(limit=200) or []):
+                if row.get("id") == run_id:
+                    return jsonify({"run_id": run_id, "text": row.get("result_summary") or ""})
+        except Exception:
+            pass
+    return jsonify({"run_id": run_id, "text": ""})
+
+
 @app.route("/api/agents/stream")
 def api_agents_stream():
     if agent_runner is None:
@@ -1678,23 +1700,36 @@ def api_copilot():
     answer = None
     model = "unknown"
     max_tokens = int(cop_cfg.get("max_tokens", 200))
-    provider = cop_cfg.get("provider") or os.environ.get("LLM_PROVIDER", "gemini")
-    try:
-        import llm_summary
-        if provider == "nvidia":
-            model = cop_cfg.get("model") or llm_summary.NVIDIA_MODEL
-            # Reasoning models (e.g. minimax) spend tokens thinking — give headroom
-            # so the final answer isn't truncated; the display cap below trims it.
-            gen_tokens = max(max_tokens, int(cop_cfg.get("nvidia_max_tokens", 2048)))
-            answer = llm_summary.query_nvidia(question, system_prompt=system,
-                                              model=model, max_tokens=gen_tokens)
-        else:
-            model = llm_summary.llm_provider_label()
-            answer = llm_summary.query_llm(question, system_prompt=system)
-    except Exception as e:
-        print(f"Copilot LLM error: {e}")
+    provider = cop_cfg.get("provider") or os.environ.get("LLM_PROVIDER", "")
+
+    # ── primary path: llm_summary (legacy Gemini/Ollama/NVIDIA/Claude) ──
+    if provider in ("nvidia", "gemini", "claude", "ollama"):
+        try:
+            import llm_summary
+            if provider == "nvidia":
+                model = cop_cfg.get("model") or llm_summary.NVIDIA_MODEL
+                gen_tokens = max(max_tokens, int(cop_cfg.get("nvidia_max_tokens", 2048)))
+                answer = llm_summary.query_nvidia(question, system_prompt=system,
+                                                  model=model, max_tokens=gen_tokens)
+            else:
+                model = llm_summary.llm_provider_label()
+                answer = llm_summary.query_llm(question, system_prompt=system)
+        except Exception as e:
+            print(f"Copilot llm_summary error: {e}")
+
+    # ── fallback / default path: cli_registry auto-detects best available ──
     if not answer:
-        answer = "Copilot is offline right now — check the LLM provider config."
+        try:
+            import cli_registry as _cr
+            res = _cr.generate(question, system, timeout=45)
+            if res.get("text"):
+                answer = res["text"]
+                model = f"{res.get('provider', 'unknown')}:{res.get('model', '')}"
+        except Exception as e:
+            print(f"Copilot cli_registry error: {e}")
+
+    if not answer:
+        answer = "Copilot is offline — no LLM provider found. Set ANTHROPIC_API_KEY or install Claude/Gemini CLI."
     # Cap length defensively (~max_tokens proxy).
     max_chars = int(cop_cfg.get("max_tokens", 200)) * 6
     answer = answer.strip()[:max_chars]
@@ -1703,6 +1738,100 @@ def api_copilot():
         "model": model,
         "elapsed_ms": int((time.time() - started) * 1000),
     })
+
+
+# ── Brief: inline content generation ─────────────────────────────────────
+
+_BRIEF_PROMPTS = {
+    "video": (
+        "You are a content strategist for an AI creator who publishes weekly YouTube videos.\n"
+        "Write a complete video script outline (14-18 min) for the topic below.\n"
+        "Include: punchy cold-open hook (first 30s verbatim), 3 labelled sections with talking points, "
+        "a demo or code moment, and a strong closing CTA.\n"
+        "Be specific to the source material — cite real tools, real numbers, real companies.\n"
+        "No filler. No 'in this video'. Start with the hook.\n\n"
+        "TOPIC: {topic}\n\nSOURCE CONTEXT:\n{context}"
+    ),
+    "shorts": (
+        "You are writing a YouTube Short script for an AI creator. Max 47 seconds when read aloud.\n"
+        "Structure: Hook (5s bold claim) → 3 punchy facts (30s) → CTA (7s).\n"
+        "Write it verbatim — not an outline, the actual words to say.\n"
+        "Start with the most surprising thing. No intro, no 'hey guys'.\n\n"
+        "TOPIC: {topic}\n\nSOURCE CONTEXT:\n{context}"
+    ),
+    "linkedin": (
+        "Write an 8-slide LinkedIn carousel post about the topic below.\n"
+        "Slide 1: Bold hook (one claim that creates FOMO). Slides 2-7: One sharp insight each, "
+        "backed by the source data. Slide 8: CTA + follow prompt.\n"
+        "Tone: direct, professional, no hype words. Each slide = 1-2 sentences max.\n"
+        "Label each slide: [Slide N] ...\n\n"
+        "TOPIC: {topic}\n\nSOURCE CONTEXT:\n{context}"
+    ),
+    "newsletter": (
+        "Write a newsletter section (~800 words) for an AI-focused audience of builders and creators.\n"
+        "Structure: Hook paragraph → What happened (facts) → Why it matters (your take) "
+        "→ What to do this week (actionable) → Sign-off.\n"
+        "Be opinionated, not encyclopedic. Cite specific tools and numbers from the source data.\n\n"
+        "TOPIC: {topic}\n\nSOURCE CONTEXT:\n{context}"
+    ),
+    "shorts_ideas": (
+        "Generate exactly 5 YouTube Short hook ideas for an AI creator covering the topic below.\n"
+        "Each hook is ONE opening line (max 12 words) that creates genuine curiosity or tension.\n"
+        "Ground each hook in the actual source context — real tools, real numbers, real events.\n"
+        "No generic 'AI is changing everything' hooks.\n\n"
+        "TOPIC: {topic}\n\nSOURCE CONTEXT:\n{context}\n\n"
+        "Return ONLY a JSON array, no other text:\n"
+        '[{"hook": "...", "tension": <0-100>, "demo": <0-100>}, ...]'
+    ),
+    "quick_wins": (
+        "Generate 4 low-effort content ideas (each under 30 min to produce) for an AI creator.\n"
+        "Base them on the actual source context — specific tools, repos, papers, numbers.\n"
+        "Each idea should be a different format and platform.\n\n"
+        "TOPIC: {topic}\n\nSOURCE CONTEXT:\n{context}\n\n"
+        "Return ONLY a JSON array, no other text:\n"
+        '[{"kind": "LinkedIn post", "effort": "10 min", "impact": "high", "note": "..."}, ...]'
+    ),
+}
+
+@app.route("/api/brief/generate", methods=["POST"])
+def api_brief_generate():
+    body = request.get_json(silent=True) or {}
+    topic = (body.get("topic") or "").strip()
+    fmt = (body.get("format") or "video").strip()
+    context = (body.get("context") or "").strip()
+
+    if not topic:
+        return jsonify({"error": "topic required"}), 400
+
+    template = _BRIEF_PROMPTS.get(fmt, _BRIEF_PROMPTS["video"])
+    prompt = template.format(topic=topic, context=context or "No additional context available.")
+    system = "You are a sharp, direct content strategist. No filler, no AI slop. Output only what was asked."
+
+    started = time.time()
+    answer = None
+    try:
+        import cli_registry as _cr
+        res = _cr.generate(prompt, system, timeout=90)
+        if res.get("text"):
+            answer = res["text"].strip()
+    except Exception as e:
+        print(f"brief/generate error: {e}")
+
+    if not answer:
+        return jsonify({"error": "No LLM provider available — set ANTHROPIC_API_KEY"}), 503
+
+    # For structured formats, try to extract JSON from the response
+    if fmt in ("shorts_ideas", "quick_wins"):
+        try:
+            start_i = answer.find("[")
+            end_i = answer.rfind("]") + 1
+            if start_i >= 0 and end_i > start_i:
+                items = json.loads(answer[start_i:end_i])
+                return jsonify({"items": items, "elapsed_ms": int((time.time() - started) * 1000)})
+        except Exception:
+            pass  # Fall through to returning raw text
+
+    return jsonify({"text": answer, "elapsed_ms": int((time.time() - started) * 1000)})
 
 
 # ── Phase 5: thumbnails ──────────────────────────────────────────────────

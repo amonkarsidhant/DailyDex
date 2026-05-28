@@ -87,7 +87,17 @@ def test_api_clusters_endpoint(client):
 
 # ── Phase 2: agent runner + SSE ───────────────────────────────────────────
 
-def test_agent_dispatch_and_complete(app_env):
+def test_agent_dispatch_and_complete(app_env, monkeypatch):
+    import cli_registry
+    def mock_generate(prompt, system=None, *, prefer=None, timeout=240):
+        if "synthesis" in prompt.lower() or "Based on these research leads" in prompt or "Return a JSON object" in prompt:
+            return {
+                "text": '{"strategic_title": "Mock Title", "shift": "Mock Shift", "superpower": "Mock Superpower", "hook_contrarian": "Mock hook contrarian", "hook_speed": "Mock hook speed", "narrative_beats": ["Beat 1", "Beat 2", "Beat 3", "Beat 4", "Beat 5"], "thumbnail_visuals": ["Concept 1", "Concept 2", "Concept 3"], "inversion": "Mock Inversion"}',
+                "provider": "mock", "model": "mock", "elapsed_ms": 1, "tried": []
+            }
+        return {"text": "Mock research leads", "provider": "mock", "model": "mock", "elapsed_ms": 1, "tried": []}
+    monkeypatch.setattr(cli_registry, "generate", mock_generate)
+
     module = app_env["module"]
     module.agent_runner.step_delay = 0
     client = module.app.test_client()
@@ -117,8 +127,18 @@ def test_agents_snapshot_shape(client):
     assert "active" in data and "recent_done" in data
 
 
-def test_agent_runner_concurrency_different_types(app_env):
+def test_agent_runner_concurrency_different_types(app_env, monkeypatch):
     """Different agent types run on independent worker threads."""
+    import cli_registry
+    def mock_generate(prompt, system=None, *, prefer=None, timeout=240):
+        if "synthesis" in prompt.lower() or "Based on these research leads" in prompt or "Return a JSON object" in prompt:
+            return {
+                "text": '{"strategic_title": "Mock Title", "shift": "Mock Shift", "superpower": "Mock Superpower", "hook_contrarian": "Mock hook contrarian", "hook_speed": "Mock hook speed", "narrative_beats": ["Beat 1", "Beat 2", "Beat 3", "Beat 4", "Beat 5"], "thumbnail_visuals": ["Concept 1", "Concept 2", "Concept 3"], "inversion": "Mock Inversion"}',
+                "provider": "mock", "model": "mock", "elapsed_ms": 1, "tried": []
+            }
+        return {"text": "Mock output content", "provider": "mock", "model": "mock", "elapsed_ms": 1, "tried": []}
+    monkeypatch.setattr(cli_registry, "generate", mock_generate)
+
     runner = app_env["module"].agent_runner
     runner.step_delay = 0
     ids = [

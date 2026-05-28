@@ -17,6 +17,7 @@ import re
 import shutil
 import subprocess
 import time
+import urllib.request
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
@@ -188,7 +189,45 @@ def _nvidia_gen(prompt: str, system: Optional[str], timeout: int) -> Optional[st
         return None
 
 
+# -- Anthropic API: direct REST, needs ANTHROPIC_API_KEY --
+_ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_STUDIO_MODEL", "claude-haiku-4-5-20251001")
+
+def _anthropic_detect() -> bool:
+    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+
+def _anthropic_gen(prompt: str, system: Optional[str], timeout: int) -> Optional[str]:
+    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not key:
+        return None
+    try:
+        payload: dict = {
+            "model": _ANTHROPIC_MODEL,
+            "max_tokens": 4096,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if system:
+            payload["system"] = system
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=data,
+            headers={
+                "x-api-key": key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            result = json.loads(resp.read())
+            blocks = result.get("content", [])
+            return "\n".join(b.get("text", "") for b in blocks if b.get("type") == "text").strip() or None
+    except Exception:
+        return None
+
+
 _PROVIDERS: List[Provider] = [
+    Provider("anthropic", "Anthropic API (claude-haiku)", "http", _anthropic_detect, _anthropic_gen, _ANTHROPIC_MODEL, priority=5),
     Provider("opencode", "opencode (free models)", "cli", _opencode_detect, _opencode_gen, _OPENCODE_MODEL, priority=10),
     Provider("claude", "Claude Code CLI", "cli", _claude_detect, _claude_gen, _CLAUDE_MODEL, priority=20),
     Provider("nvidia", "NVIDIA NIM", "http", _nvidia_detect, _nvidia_gen, os.environ.get("NVIDIA_MODEL", ""), priority=30),

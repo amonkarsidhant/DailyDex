@@ -1,84 +1,66 @@
-# DailyDex
+# DailyDex — Creator Cockpit
 
 ![Version](https://img.shields.io/badge/version-v0.11-blue)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
-![Flask](https://img.shields.io/badge/flask-dashboard-111827?logo=flask&logoColor=white)
+![React](https://img.shields.io/badge/frontend-React%20%2B%20Vite-61DAFB?logo=react)
+![Flask](https://img.shields.io/badge/backend-Flask%20API-111827?logo=flask&logoColor=white)
 ![Status](https://img.shields.io/badge/status-active-22c55e)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-DailyDex is a lightweight open-source AI signal cockpit for tracking high-value AI updates across GitHub, Hugging Face, research papers, videos, and news — with a Telegram bot for sharing daily picks with friends and letting them vote on what you should read.
+DailyDex is a lightweight, open-source AI content strategist and signal cockpit designed for turning high-value AI developments into video scripts, visual thumbnail concepts, and multi-platform text assets. It is built specifically for creators, developer relations, and AI educators who want to bypass noisy RSS feeds and build a structured content pipeline directly from raw code, papers, and tech videos.
 
-It is built for people who want a daily AI signal cockpit instead of a generic RSS reader.
+---
 
-## Why It Exists
+## 🚀 Key Capabilities
 
-Most AI feeds are noisy.
+- **React-based Creator Cockpit**: A premium, high-fidelity React frontend showing content opportunities, topic clusters, and a central workspace.
+- **Recursive LLM Dives**: Multi-stage strategic research that extracts technical shifts, contrarian hooks, narrative beats, and target audience alignment.
+- **Strategic Pipeline**: A Kanban board showing state progression from `Idea` → `Researching` → `Script Ready` → `Recording` → `Published`.
+- **Forge Studio**: A two-panel workspace where creators edit forged assets and coordinate three AI Practicum content agents:
+  - 📺 **YouTube Director**: Generates titles, timestamps, video descriptions, and talking points.
+  - 🎬 **Shorts & Script Writer**: Outlines cold opens and vertical-ready scripts.
+  - 💻 **Demo Architect**: Produces step-by-step terminal guides, annotation points, and storyboards.
+- **Visual Thumbnail Concepts**: Auto-generates CTR-optimized textual layouts and premium visual variants matching your channel's niche.
 
-DailyDex helps builders identify what matters, what is worth saving, what is worth testing, and whether source data is fresh.
+---
 
-It now also includes **DailyDex Creator Mode**, a creator-intelligence layer for turning AI signals into concrete content decisions, a **Telegram social layer** so friends can vote on your daily picks, and a **Forge Studio** with AI-powered content agents built for [AI Practicum](https://www.youtube.com/@AIPracticum).
-
-## Highlights
-
-- **Modern dashboard UI** with sidebar navigation and a clean overview page
-- **Live update model** that refreshes the UI when server data changes
-- **Source trust and freshness** visible at a glance
-- **Top 5 daily signals** for fast triage
-- **Try This Weekend** section for hands-on projects
-- **Saved intelligence board** with workflow states
-- **Creator Mode** for video ideas, content clusters, research packs, and script starters
-- **Research Packs** — inline-editable markdown notes, sendable directly to the Content Pipeline
-- **Content Pipeline** — Kanban board from `idea` → `script_ready` → `published`; items marked Script Ready surface a one-click **Open in Studio** button
-- **Forge Studio** — two-panel workspace: Pipeline view for editing forged assets, and an **AI Agents** panel with three specialised Practicum content agents
-- **Trends view** with charts and radar
-- **Digest generation** in Markdown
-- **Telegram bot** — friends subscribe, receive daily picks, and vote on items; voted items surface a badge on the dashboard
-- **Flask + SQLite + JSON + vanilla JS** with no heavy frontend framework
-
-## Screenshots
+## 📸 Interactive Showcase
 
 ### Walkthrough
 
 ![DailyDex Walkthrough](docs/screenshots/demo-walkthrough.gif)
 
-### Product Views
+### React Creator Cockpit
 
-#### Overview
-
-![Overview](docs/screenshots/overview-light.png)
-
-#### Feed
-
-![Feed Cards](docs/screenshots/feed-cards.png)
-
-#### Saved Workflow Board
-
-![Saved Board](docs/screenshots/saved-board.png)
-
-#### Trends
-
-![Trends](docs/screenshots/trends.png)
-
-#### Mobile Overview
-
-![Mobile Overview](docs/screenshots/mobile-overview.png)
-
-#### Creator Brief
-
+#### Creator Brief & Content Opportunities
+The primary dashboard highlights the best content opportunities, recommended formats, and raw evidence.
 ![Creator Brief](docs/screenshots/creator-brief.png)
 
-#### Content Opportunities
-
-![Content Opportunities](docs/screenshots/content-opportunities.png)
-
-#### Creator Pipeline
-
+#### Strategic Content Pipeline
+Track and move ideas. Items marked `script_ready` feature a one-click **Forge in Studio** action.
 ![Creator Pipeline](docs/screenshots/creator-pipeline.png)
 
-## Quick Start
+#### Forge Studio & Content Agents
+Run recursive deep-dives, draft scripts, and review visual concepts inside a split-pane workstation.
+![Content Opportunities](docs/screenshots/content-opportunities.png)
 
-### Docker
+### Premium Generated Thumbnails
+The visual concept generator produces optimized thumbnail mockups corresponding to target topic clusters:
 
+| AI Agents | Coding AI | Open Source Models |
+|---|---|---|
+| ![AI Agents](docs/screenshots/ai_agents_thumb.png) | ![Coding AI](docs/screenshots/coding_ai_thumb.png) | ![Open Source Models](docs/screenshots/open_source_models_thumb.png) |
+
+| AI Tools | General Hype |
+|---|---|
+| ![AI Tools](docs/screenshots/ai_tools_thumb.png) | ![General Hype](docs/screenshots/general_hype_thumb.png) |
+
+---
+
+## 🛠️ Quick Start
+
+### Docker Setup
+To run the server in a container with a persistent SQLite database and cash directories:
 ```bash
 docker build -t dailydex .
 
@@ -94,555 +76,77 @@ docker run -d --name dailydex \
   --restart unless-stopped \
   dailydex
 ```
+Open `http://localhost:8888` in your browser.
 
-Open `http://localhost:8888`.
+### Local Python & React Setup
+1. **Start the Flask Backend**:
+   ```bash
+   python3 -m venv .venv-cockpit
+   source .venv-cockpit/bin/activate
+   pip install -r requirements.txt
+   python3 dashboard_new.py            # Serves API on port 8888
+   ```
+2. **Start the React Dev Server**:
+   ```bash
+   cd static/cockpit
+   npm install
+   npm run dev                         # Launches hot-reloaded frontend on port 5173
+   ```
 
-### Local Python
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python3 dashboard_new.py            # http://127.0.0.1:8888
-```
-
-The entrypoint reads `HOST` (default `127.0.0.1`), `PORT` (default `8888`), and
-`DEBUG` (`1` to enable the reloader/debugger).
-
-### macOS app (always-on, recommended for daily use)
-
-Installs DailyDex as two `launchd` agents so the cockpit is always running and the
-content refreshes itself hourly — no terminal left open.
-
+### macOS launchd Service (Always-On)
+To keep the content fetching, scoring, and studio generation running in the background:
 ```bash
 scripts/macos/install.sh
 ```
+This registers:
+- `com.dailydex.app`: Runs the Flask app on login.
+- `com.dailydex.refresh`: Fetches and scores external feeds hourly.
+- `com.dailydex.studio`: Runs content generation tasks every 6 hours.
 
-This builds a local `.venv-cockpit`, installs requirements, and loads:
+---
 
-| Agent | What it does |
-|---|---|
-| `com.dailydex.app` | Flask server on `http://127.0.0.1:8888`, `KeepAlive` (restarts on crash) + starts at login. |
-| `com.dailydex.refresh` | Runs `refresh_job.py` (fetch → score → cluster snapshot) at load and every 60 min, straight to the data files + SQLite — works whether or not the server is up. |
-| `com.dailydex.studio` | Runs `studio_job.py` (Creator Central) every 6h: picks the top stories, researches them, and autonomously writes shorts / video / podcast / blog drafts. |
+## ⚙️ Creator Configuration & Custom Profiles
+Inject your brand voice and channel format constraints by editing `config/creator_profile.json`:
+- **Identity & Perspective**: Hard constraints on niche, audience level, and signature angles.
+- **Banned Words**: Filter out cliché phrases like "game-changing", "revolutionary", and "delve".
+- **Automation Thresholds**: Configure `auto_research_cluster_score` and `auto_forge_score` to let background agents automatically queue, outline, and script high-value topics.
 
-Open `http://127.0.0.1:8888`.
+---
 
+## 🧪 Development & Verification
+Run the unit test suite to verify code contracts and agent dispatching:
 ```bash
-# Manage
-launchctl kickstart -k gui/$(id -u)/com.dailydex.app       # restart server now
-launchctl kickstart -p gui/$(id -u)/com.dailydex.refresh   # refresh content now
-tail -f data/logs/app.err.log                              # server log
-tail -f data/logs/refresh.out.log                          # refresh log
-
-scripts/macos/uninstall.sh                                 # remove both agents (keeps venv + data)
+./.venv-cockpit/bin/pytest
 ```
 
-Notes:
-- The app runs via the venv `python` (Flask `threaded=True`), **not** gunicorn —
-  gunicorn's startup re-exec trips macOS TCC when the venv lives under `~/Documents`.
-- Live creator-pack enrichment and the copilot need a Gemini key: set `GEMINI_API_KEY`,
-  then flip `LLM_PROVIDER`/`CREATOR_ENRICHER_PRIMARY` in
-  `scripts/macos/com.dailydex.refresh.plist.template` and re-run `install.sh`.
-- Trend `momentum`/`pulse` fill in as hourly snapshots accumulate (≈24h for full 24h momentum).
+---
 
-### Creator Central (autonomous content factory)
+## 📦 v0.1 Legacy / Classic Version
 
-The **Creator Central** cockpit screen turns the day's top stories into finished
-content with zero manual prompting. The `com.dailydex.studio` agent:
+The classic version of DailyDex was a server-rendered feed cockpit for triaging daily AI signals, sharing picks with friends, and voting via Telegram.
 
-1. picks the top N stories (by creator score),
-2. researches each via whatever model CLI is on the machine, then
-3. runs four generator skills and saves the drafts to SQLite.
+### Classic Screenshots
 
-| Skill | Output |
-|---|---|
-| `shorts` | 25–60s vertical script with `[Visual]`/`[Audio]` cues |
-| `video` | Long-form YouTube script — cold open, 3 beats, demo, outro |
-| `podcast` | ~5 min two-host dialogue |
-| `blog` | Full publishable Markdown post |
+#### Overview & Health Cards
+![Overview](docs/screenshots/overview-light.png)
 
-**Model backend is auto-detected** (`cli_registry.py`) — it probes for `opencode`,
-`claude`, `gemini`, `hermes`, `ollama`, and NVIDIA NIM, uses the best available,
-and falls back automatically. No API key required if `opencode` (free models) or a
-`claude`/`gemini` CLI session is present. Tune with `STUDIO_*` env vars
-(`STUDIO_TOP_N`, `STUDIO_DEEP_RESEARCH`, `STUDIO_OPENCODE_MODEL`, …).
+#### Scored Feed View
+![Feed Cards](docs/screenshots/feed-cards.png)
 
-The format specs are also published as Claude Code skills in
-`.claude/skills/creator-{shorts,video,podcast,blog}` so any agent CLI with
-`--skills` support generates them consistently.
+#### Saved workflow Board
+![Saved Board](docs/screenshots/saved-board.png)
 
-```bash
-# manual run / endpoints
-launchctl kickstart -p gui/$(id -u)/com.dailydex.studio   # generate now
-python3 cli_registry.py                                   # list detected model CLIs
-python3 studio_job.py                                     # run the factory in the foreground
-curl -X POST localhost:8888/api/studio/run                # trigger via the app
-```
+#### Trends & Radar Coordinates
+![Trends](docs/screenshots/trends.png)
 
-### Telegram Bot (optional)
+#### Mobile View
+![Mobile Overview](docs/screenshots/mobile-overview.png)
 
-1. Create a bot via [@BotFather](https://t.me/BotFather) on Telegram and copy the token.
-2. Set the environment variable:
-   ```bash
-   export TELEGRAM_BOT_TOKEN="your_token_here"
-   ```
-3. Run the bot in a separate terminal:
-   ```bash
-   python3 telegram_bot.py
-   ```
-4. Share your bot link with friends. They send `/start` to subscribe and `/digest` to get today's picks immediately.
+### Classic Features (v0.1 - v0.10)
+- **Telegram Bot Layer**: Invite friends to vote on daily digests via a Telegram bot (`telegram_bot.py`). Shows real-time vote count badges on feed cards.
+- **Classic UI Router**: Access the classic dashboard directly via `http://localhost:8888/classic`.
+- **Markdown Digest**: Generate formatted daily digests via `/api/digest` for newsletters or copy-pasting.
 
-Friends receive the top 5 scored items each day with signal bars and three inline buttons — **Read**, **Vote**, **Skip**. Votes are stored in the local SQLite database and appear as green `👍 N friends voted` badges on feed cards in your dashboard.
-
-To broadcast the digest manually from the dashboard admin, call:
-```
-POST /api/bot/send
-```
-
-## Daily Workflows
-
-### Daily check-in
-
-1. Open **Overview**
-2. Read the trust state and source health
-3. Review **Today's Top 5**
-4. Save anything worth revisiting
-
-### Creator workflow
-
-1. Switch to **DailyDex Creator**
-2. Open **Creator Brief**
-3. Pick the best video idea, a shorts idea, or a quick win
-4. Generate a research pack
-5. Move the idea through the content pipeline
-
-### Saved intelligence workflow
-
-1. Save items from Feed, GitHub, Models, or Research
-2. Move them into `to_test`
-3. Add notes and tags
-4. Promote useful items or discard stale ones
-
-### Digest workflow
-
-1. Open **Daily Digest**
-2. Generate the latest Markdown summary
-3. Copy or save the digest for sharing
-
-### Refresh workflow
-
-1. Click **Refresh Now**
-2. Wait for source health to update
-3. Verify fresh data across all tabs
-
-## Architecture
-
-```text
-DailyDex/
-├── dashboard_new.py          # Flask app and routes (incl. agent-run, research-pack edit)
-├── creator_intelligence.py   # creator scoring, briefs, clusters, and research packs
-├── llm_summary.py            # LLM provider abstraction — Gemini CLI, Ollama, Claude Code CLI
-├── fetch_news.py             # external source fetch pipeline
-├── scoring_engine.py         # scoring and ranking logic
-├── data_models.py            # SQLite state, source health, subscribers, and votes
-├── digest_generator.py       # Markdown digest generation
-├── telegram_bot.py           # Telegram bot — daily digest and friend voting
-├── templates/dashboard.html  # main server-rendered UI
-├── static/app.css            # design system and layout
-├── static/app.js             # live updates, interactions, agents, Forge Studio
-├── config.json               # runtime source configuration, variants, and telegram settings
-└── data/
-    ├── intelligence.db       # SQLite — saved items, votes, enrichment cache
-    ├── research_packs/       # per-topic markdown research packs
-    ├── cache/                # scored JSON cache
-    └── digests/              # generated markdown digests
-```
-
-## System Flow
-
-GitHub should render the Mermaid diagram below directly in the README. The editable source also lives in `docs/diagrams/dashboard-flow.mmd`.
-
-```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','primaryColor':'#dbeafe','primaryTextColor':'#0f172a','primaryBorderColor':'#3b82f6','lineColor':'#94a3b8','secondaryColor':'#eff6ff','tertiaryColor':'#fff7ed','fontFamily':'Inter, Arial, sans-serif'}}}%%
-flowchart LR
-    subgraph SRC[Collection Sources]
-        direction TB
-        GH[GitHub Trending]
-        HF[Hugging Face]
-        YT[YouTube Channels]
-        BL[Blogs and News Feeds]
-        AX[arXiv AI Papers]
-    end
-
-    subgraph PIPE[Intelligence Pipeline]
-        direction TB
-        FETCH[fetch_news.py]
-        RAW[data/data.json]
-        SCORE[scoring_engine.py]
-        SCORED[data/data_scored.json]
-        HEALTH[(source health)]
-    end
-
-    subgraph APP[DailyDex App]
-        direction TB
-        FLASK[dashboard_new.py]
-        STATE[(saved items and tracked topics)]
-        UI[dashboard.html + app.css + app.js]
-    end
-
-    subgraph LOOP[Live Update Loop]
-        direction TB
-        META[/api/dashboard-meta/]
-        REFRESH[POST /api/refresh]
-        LIVE[Hot-swap rendered UI]
-    end
-
-    subgraph BOT[Telegram Social Layer]
-        direction TB
-        TGBOT[telegram_bot.py]
-        SUBS[(subscribers)]
-        VOTES[(item votes)]
-    end
-
-    GH --> FETCH
-    HF --> FETCH
-    YT --> FETCH
-    BL --> FETCH
-    AX --> FETCH
-
-    FETCH --> RAW
-    FETCH --> HEALTH
-    RAW --> SCORE
-    SCORE --> SCORED
-
-    BROWSER[Browser Session] --> FLASK
-    FLASK --> SCORED
-    FLASK --> STATE
-    FLASK --> UI
-    UI --> BROWSER
-
-    BROWSER --> META
-    META --> LIVE
-    BROWSER --> REFRESH
-    REFRESH --> FETCH
-
-    SCORED --> TGBOT
-    TGBOT --> SUBS
-    TGBOT --> VOTES
-    VOTES --> FLASK
-    FLASK --> UI
-
-    classDef source fill:#eff6ff,stroke:#3b82f6,color:#1e3a8a,stroke-width:1.5px;
-    classDef pipeline fill:#f8fafc,stroke:#94a3b8,color:#0f172a,stroke-width:1.5px;
-    classDef app fill:#eef2ff,stroke:#6366f1,color:#312e81,stroke-width:1.5px;
-    classDef loop fill:#fff7ed,stroke:#f59e0b,color:#9a3412,stroke-width:1.5px;
-    classDef bot fill:#ecfdf5,stroke:#10b981,color:#065f46,stroke-width:1.5px;
-    classDef user fill:#ecfdf5,stroke:#10b981,color:#065f46,stroke-width:1.5px;
-
-    class GH,HF,YT,BL,AX source;
-    class FETCH,RAW,SCORE,SCORED,HEALTH pipeline;
-    class FLASK,STATE,UI app;
-    class META,REFRESH,LIVE loop;
-    class TGBOT,SUBS,VOTES bot;
-    class BROWSER user;
-```
-
-## API Surface
-
-- `GET /` - dashboard UI
-- `GET /health` - container health check
-- `GET /api/data` - raw source data
-- `GET /api/scored` - scored data payload
-- `GET /api/dashboard-meta` - lightweight live-update snapshot
-- `GET /api/source-health` - normalized source health summary
-- `POST /api/refresh` - trigger external fetch and refresh
-- `POST /api/save` - save an item
-- `GET /api/saved` - list saved items
-- `POST /api/research-pack` - generate a creator research pack
-- `GET /api/research-packs` - list saved research packs
-- `GET /api/research-pack/<filename>` - get raw markdown content of a research pack
-- `PUT /api/research-pack/<filename>` - save edited markdown back to disk
-- `POST /api/research-pack/<filename>/send-to-pipeline` - create a pipeline item from a research pack
-- `POST /api/agent-run` - run a Practicum AI content agent (`youtube`, `shorts`, `demo`)
-- `GET /api/creator-digest` - build the creator daily brief
-- `PUT /api/saved/<id>/status` - update saved status
-- `PUT /api/saved/<id>/notes` - update notes and tags
-- `DELETE /api/saved/<id>` - remove saved item
-- `POST /api/ignore` - hide an item
-- `GET /api/ignored` - list ignored items
-- `POST /api/track` - track a topic
-- `GET /api/track` - list tracked topics
-- `DELETE /api/track/<id>` - remove tracked topic
-- `GET /api/digest` - build today's Markdown digest
-- `GET /api/votes` - return friend vote counts per item URL
-- `POST /api/bot/send` - broadcast daily digest to all Telegram subscribers
-
-### Creator enrichment endpoints
-
-- `POST /api/enrich` - enqueue one item for Gemini creator-pack generation
-- `GET /api/enrich-status` - queue depth, worker state, provider label
-- `GET /api/enrich/<content_hash>` - fetch the cached creator pack
-- `POST /api/forge/<saved_id>` - generate multi-format Production Forge assets
-- `GET /api/forge-status/<saved_id>` - poll forge progress + result
-- `POST /api/agentic-run` - kick off the cluster-level agentic pipeline
-
-## Creator Enrichment Pipeline
-
-DailyDex turns scored AI items into real creator briefs by calling the **Gemini CLI** in
-the background. The pipeline is cache-first so the dashboard stays responsive on a
-Raspberry Pi 4:
-
-1. Scoring runs as usual and produces deterministic baselines for every item.
-2. Top items are enqueued to `creator_enricher.EnrichmentService`, which runs one
-   Gemini subprocess at a time and writes the full creator pack
-   (hook, beats, script, titles, thumbnails, b-roll, on-screen cues) to the
-   `creator_assets` SQLite table keyed by a content hash.
-3. The template merges cached LLM output on top of the baseline. Cards show an
-   `LLM ✓` / `Queued` / `Draft` badge so it is obvious what is real synthesis vs.
-   placeholder.
-4. The agentic runner (`/api/agentic-run`) walks **topic clusters** through the
-   same cache + a two-stage Gemini "recursive dive", saves the qualifying ones
-   into the creator pipeline at `idea` or `script_ready`, and (above a score
-   threshold) automatically fires the **Production Forge** to generate Shorts,
-   Podcast, LinkedIn, Blog, and Demo assets.
-
-### Brand voice configuration
-
-Tune the writer by editing `config/creator_profile.json`:
-
-- `tone`, `audience`, `niche`, `perspective` - identity injected into every prompt.
-- `banned_phrases`, `preferred_words` - hard guardrails.
-- `format_rules` - title length, hook length, thumbnail word count, short-script seconds.
-- `signature_angles` - recurring framing hooks specific to the channel.
-- `automation` - cluster thresholds: `auto_research_cluster_score`,
-  `auto_script_ready_score`, `auto_forge_score`, `max_auto_promotions_per_day`,
-  `enrichment_wait_seconds`.
-
-### Pi 4 deployment notes
-
-- The Docker image installs `@google/gemini-cli`. Build with
-  `--build-arg DAILYDEX_SKIP_GEMINI=1` if you want to run an Ollama fallback
-  (`LLM_PROVIDER=ollama`, `OLLAMA_MODEL=phi3:mini`).
-- The enricher runs as a daemon thread inside the Flask process, so the image
-  defaults to `GUNICORN_WORKERS=1`. If you scale workers, set
-  `CREATOR_ENRICHER_PRIMARY=0` on every replica except one to avoid duplicate
-  subprocess calls and a divergent queue.
-- Configurable env vars: `GEMINI_BIN`, `GEMINI_MODEL`, `GEMINI_TIMEOUT`,
-  `CREATOR_ENRICH_DAILY_LIMIT`, `CREATOR_PROFILE_PATH`, `LLM_PROVIDER`.
-
-## Development
-
-### Run tests
-
-```bash
-python3 -m pytest -q
-```
-
-### Validate key files
-
-```bash
-python3 -m py_compile dashboard_new.py data_models.py fetch_news.py telegram_bot.py
-node --check static/app.js
-```
-
-## DailyDex Creator Mode
-
-DailyDex Creator Mode is a separate variant focused on helping content creators answer one question fast: **what should I make today?**
-
-Switch to **DailyDex Creator** from the variant picker to get:
-
-- **Creator Brief** with the strongest video idea today
-- **Content Opportunities** that turn AI items into actionable story cards
-- **Shorts Ideas** with hooks, 30-second scripts, and visual suggestions
-- **Content Clusters** showing stories appearing across multiple source families
-- **Research Packs** saved as Markdown under `data/research_packs/`
-- **Creator Digest** for daily planning
-- **Creator Saved Pipeline** with statuses from `idea` to `published`
-
-## Creator Potential Score
-
-Every high-signal item can also receive a **Creator Potential Score** from 0 to 100.
-
-The score is separate from Signal Score and weighs:
-
-- novelty
-- audience interest
-- story tension
-- practical demo value
-- visual potential
-- credibility
-- shelf life
-- production effort
-- niche fit
-- differentiation
-
-## Content Opportunities
-
-Creator opportunity cards include:
-
-- topic and creator score
-- recommended content format
-- hook
-- title options
-- thumbnail text options
-- source evidence
-- production effort
-- demo idea
-- caveats
-- script starter fields
-
-## Content Clusters
-
-Creator Mode groups related signals from GitHub, Hugging Face, arXiv, YouTube, and blogs/news into reusable story clusters.
-
-Each cluster includes:
-
-- topic
-- source count
-- related items
-- average signal score
-- creator score
-- recommended angle
-- best content format
-
-## Research Packs
-
-Research packs are saved as Markdown under:
-
-```text
-data/research_packs/YYYY-MM-DD-topic.md
-```
-
-Each pack includes:
-
-- source links
-- key facts
-- counterpoints
-- demo idea
-- script outline
-- title ideas
-- thumbnail ideas
-
-## Creator Digest
-
-Creator Mode adds a dedicated digest format:
-
-```text
-# DailyDex Creator Brief - YYYY-MM-DD
-```
-
-It includes the best video idea, shorts ideas, long-form candidates, content clusters, quick wins, and the saved creator pipeline.
-
-## Creator Saved Pipeline
-
-Creator pipeline statuses:
-
-- `idea`
-- `researching`
-- `script_ready`
-- `recording`
-- `published`
-- `archived`
-
-### Manual fetch
-
-```bash
-python3 fetch_news.py
-```
-
-## Release Validation
-
-See [docs/release_validation_v0.9.md](docs/release_validation_v0.9.md) for manual validation checklist.
-
-## Repository Docs
-
-- `CONTRIBUTING.md`
-- `SECURITY.md`
-- `CHANGELOG.md`
-- `docs/diagrams/dashboard-flow.mmd`
-- `docs/release_validation_v0.9.md`
-- `docs/screenshots/README.md`
-
-## Roadmap
-
-- better source configuration via UI
-- smarter deduplication and clustering
-- richer saved-item workflow operations
-- deeper trend analytics with accessible chart fallbacks
-- more source families and better source filtering
-- YouTube API integration for publishing calendar and analytics
-- competitor channel tracking
-- trend-to-video automation
-- Reddit Pulse section (r/LocalLLaMA, r/MachineLearning)
-- ProductHunt AI launches feed
-- Model leaderboard delta tracking
-- Forge Studio streaming output for long agent runs
-- Agent history — replay and compare previous agent outputs per topic
-
-## Project Status
-
-v0.11 — Forge Studio + AI Practicum Agents
-
-This repo is actively evolving. Expect rapid iteration on data quality, workflow UX, and presentation.
-
-## What's New (v0.11)
-
-### Research Packs
-- Each research pack card now has an **Edit** button that opens an inline markdown editor — edit sources, add notes, and save back to the `.md` file without leaving the dashboard
-- **→ Pipeline** button on every pack creates a Content Pipeline item at `researching` status with the full pack content attached as notes
-
-### Content Pipeline
-- Items promoted to `script_ready` now show a prominent **⚒️ Open in Studio** button that jumps directly into Forge Studio
-
-### Forge Studio — AI Agents
-Forge Studio now has two tabs: **📋 Pipeline** (existing asset editor) and **🤖 AI Agents** (new).
-
-The Agents panel contains three specialised Practicum content agents, each with its own input form and editable output:
-
-| Agent | Purpose |
-|---|---|
-| 📺 **YouTube — The Practicum** | Generates 3 SEO-optimised title options, a full video description with timestamp placeholders, 5 tags, a thumbnail concept, and a full outline with talking points |
-| 🎬 **Shorts — The Practicum** | Writes a 60-second YouTube Short script, a full Podcast episode with host dialogue segments, or a live Demo narration script |
-| 💻 **Demo — The Practicum** | Produces a step-by-step demo guide, a 6–8 frame GIF storyboard, screenshot callout annotations, and an opening paragraph to read before the demo |
-
-Agent outputs are editable inline and can be copied to clipboard or sent directly to the Content Pipeline as `script_ready` items.
-
-All three agents run via the **Claude Code CLI** using your existing OAuth session — no API key required.
-
-### API additions
-- `GET /api/research-pack/<filename>` — fetch raw markdown of a research pack
-- `PUT /api/research-pack/<filename>` — save edited markdown back to disk
-- `POST /api/research-pack/<filename>/send-to-pipeline` — create a pipeline item from a research pack
-- `POST /api/agent-run` — run a Practicum content agent (`youtube`, `shorts`, or `demo`) and return the LLM output
-
-## What's New (v0.10)
-
-- **Telegram bot** — friends subscribe with `/start`, receive the daily top-5 digest with signal bars, and vote on items via inline buttons
-- **Friend vote badges** — feed cards show a green `👍 N friends voted` badge when friends have voted for an item
-- `GET /api/votes` — vote counts endpoint consumed by the dashboard
-- `POST /api/bot/send` — trigger digest broadcast from the admin UI
-- `telegram_bot.py` — standalone bot process with persistent URL hash map for vote tracking across restarts
-- `python-telegram-bot>=20.7` added to requirements
-
-## What's New (v0.9)
-
-- Multi-variant support: switch between DailyDex (default), DailyDex Local, DailyDex Research, and DailyDex Tools
-- Score filters: filter feed by 80+ Hot, 60-79, <60
-- Tab search: search within each tab
-- Keyboard shortcuts help: press `?` or click help button
-- Correlation Signals: topics appearing across 2+ sources
-- Topic Heatmap: frequency grid by source
-- Sidebar and desktop layout cleanup with verified navigation rendering
-- Mobile drawer behavior limited to phone-sized screens
-- Saved-item export and bulk actions
-
-## Contributing and Feedback
-
-Issues and pull requests are welcome.
-
-If you are using the dashboard for research, engineering leadership, or internal AI scouting, open a feature request and describe the workflow you want to support.
-
-## License
-
-MIT. See `LICENSE`.
+### Version History Archive
+- **v0.10**: Added the Telegram bot voting integration and dynamic dashboard friend vote count badges.
+- **v0.9**: Multi-variant supports, keyboard shortcut drawer (`?`), score classification filters (80+ Hot, 60-79, <60), and Topic heatmap frequency grids.

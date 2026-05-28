@@ -1,6 +1,22 @@
 // StudioView — Creator Central: autonomous, multi-format content factory.
 // Reads window.DD_DATA.studio = { stories, providers, skills, run }.
 
+// Elapsed timer shown while factory is running
+const RunTimer = ({ startMs }) => {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - startMs) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [startMs]);
+  const m = String(Math.floor(elapsed / 60)).padStart(2, "0");
+  const s = String(elapsed % 60).padStart(2, "0");
+  return (
+    <span className="mono" style={{ fontSize: 11, color: "var(--signal)", letterSpacing: "0.06em" }}>
+      ⏱ {m}:{s}
+    </span>
+  );
+};
+
 const STUDIO_FMT_META = {
   shorts:  { icon: "📱", label: "YouTube Short" },
   video:   { icon: "🎬", label: "Long-form Video" },
@@ -70,26 +86,59 @@ const StudioFormatCard = ({ storyKey, fmt, data, onRegen, busy, broll = [], cues
 };
 
 const StudioView = ({ onJump }) => {
-  const studio = window.DD_DATA.studio || {};
-  const providers = studio.providers || [];
-  const skills = studio.skills || [];
-  const stories = studio.stories || [];
-  const running = studio.run?.running;
+  const [studioData, setStudioData] = useState(window.DD_DATA.studio || {});
+  const providers = studioData.providers || [];
+  const skills = studioData.skills || [];
+  const stories = studioData.stories || [];
+  const running = studioData.run?.running;
   const [busyKey, setBusyKey] = useState(null);
   const [kicking, setKicking] = useState(false);
+  const [pollId, setPollId] = useState(null);
+  const [lastRunMs, setLastRunMs] = useState(null);
 
   const available = providers.filter(p => p.available);
 
+  // Poll /api/studio while factory is running, then reload DD_DATA on completion
+  useEffect(() => {
+    if (!kicking && !running) return;
+    const id = setInterval(async () => {
+      try {
+        const r = await fetch("/api/studio");
+        const data = await r.json();
+        setStudioData(data);
+        if (!data.run?.running) {
+          clearInterval(id);
+          setKicking(false);
+          // Sync the global DD_DATA so other views also refresh
+          if (window.DDX) {
+            const full = await window.DDX.reload();
+            if (full && full.studio) setStudioData(full.studio);
+          }
+        }
+      } catch (e) {}
+    }, 3000);
+    setPollId(id);
+    return () => clearInterval(id);
+  }, [kicking, running]);
+
   const runFactory = async () => {
+    if (kicking || running) return;
     setKicking(true);
-    try { await window.DDX?.studioRun(0); } catch (e) {}
-    setTimeout(() => { setKicking(false); window.DDX?.reload(); }, 1500);
+    setLastRunMs(Date.now());
+    try { await window.DDX?.studioRun(0); } catch (e) { setKicking(false); }
   };
   const regen = async (storyKey, fmt) => {
     setBusyKey(storyKey + ":" + fmt);
     try { await window.DDX?.studioRegenerate(storyKey, fmt); } catch (e) {}
     setBusyKey(null);
-    window.DDX?.reload();
+    // Refresh just the studio data
+    try {
+      const r = await fetch("/api/studio");
+      const data = await r.json();
+      setStudioData(data);
+    } catch (e) {
+      window.DDX?.reload();
+    }
   };
 
   return (
@@ -99,9 +148,15 @@ const StudioView = ({ onJump }) => {
         <span className="ch-bl"/><span className="ch-br"/>
         <PanelHeader no="01" actions={
           <>
-            <span className="chip" style={{ color: available.length ? "var(--signal-up)" : "var(--signal-down)" }}>
-              <span style={{ width: 5, height: 5, borderRadius: 999, background: "currentColor" }}/>
-              {available.length} model {available.length === 1 ? "CLI" : "CLIs"} online
+            {(kicking || running) && lastRunMs && (
+              <RunTimer startMs={lastRunMs}/>
+            )}
+            <span className="chip" style={{ color: available.length ? "var(--signal-up)" : "var(--text-mid)" }}>
+              <span style={{ width: 5, height: 5, borderRadius: 999, background: "currentColor",
+                animation: kicking || running ? "pulse 1s infinite" : "none" }}/>
+              {available.length > 0
+                ? `${available.length} provider${available.length > 1 ? "s" : ""} online`
+                : "No providers — set ANTHROPIC_API_KEY"}
             </span>
             <button className="btn primary" disabled={kicking || running} onClick={runFactory}>
               {kicking || running ? "Factory running…" : "Run factory now"}
