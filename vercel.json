@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "functions": {
+    "api/index.py": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
+    "api/cron/fetch.py": {
+      "memory": 512,
+      "maxDuration": 300
+    },
+    "api/cron/enrich.py": {
+      "memory": 512,
+      "maxDuration": 300
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/fetch",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/enrich",
+      "schedule": "30 6 * * *"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/cron/:path*",
+      "destination": "/api/cron/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/api/index"
+    }
+  ],
+  "env": {
+    "CREATOR_ENRICHER_PRIMARY": "0",
+    "VERCEL": "1"
+  }
+}
