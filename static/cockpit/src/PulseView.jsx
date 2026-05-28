@@ -23,9 +23,11 @@ const RadarPlot = ({ clusters, onPick, picked }) => {
     const maxR = size / 2 - 35;
     const r = minR + Math.min(1, c.first_seen_hrs / 168) * (maxR - minR);
     const mag = Math.hypot(c.angle_x, c.angle_y);
-    const ang = mag < 0.05
+    const baseAng = mag < 0.05
       ? (i * (360 / clusters.length) * Math.PI) / 180
       : Math.atan2(c.angle_y, c.angle_x);
+    // Add deterministic angular spread so they don't align on a straight line
+    const ang = baseAng + (i - clusters.length / 2) * 0.18;
     return {
       cluster: c,
       i,
@@ -101,6 +103,12 @@ const RadarPlot = ({ clusters, onPick, picked }) => {
       }
     }
   }
+
+  // Final clamping pass to guarantee all blips and text labels stay inside the canvas
+  adjustedBlips.forEach(b => {
+    b.x = Math.max(30, Math.min(size - 140, b.x));
+    b.y = Math.max(35, Math.min(size - 30, b.y));
+  });
 
   return (
     <div style={{ position: "relative", width: size, height: size, margin: "0 auto" }}>

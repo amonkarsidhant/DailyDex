@@ -664,13 +664,14 @@ class AgentRunner:
             leads_prompt,
             "You are a PhD-level AI research lead. Be specific, terse, and source-aware. No filler.",
             timeout=60,
+            log_fn=lambda msg: self._log(run_id, msg)
         )
         leads = (res.get("text") or "").strip()
 
         if not leads:
             self._log(run_id, "LLM returned nothing — check ANTHROPIC_API_KEY")
             self._stage(run_id, "Failed", 1.0)
-            return f"failed: no LLM response for {label}"
+            raise RuntimeError(f"no LLM response for research leads on '{label}'")
 
         self._log(run_id, "Research leads gathered.")
         self._stage(run_id, "Structuring strategic brief", 0.5)
@@ -690,6 +691,7 @@ class AgentRunner:
             synthesis_prompt,
             "Output strict JSON only. No commentary. No markdown.",
             timeout=60,
+            log_fn=lambda msg: self._log(run_id, msg)
         )
         raw = (syn_res.get("text") or "").strip()
 
@@ -699,6 +701,8 @@ class AgentRunner:
             brief = _extract_json(raw) or {}
         except Exception:
             pass
+        if not brief:
+            raise RuntimeError(f"failed to generate or extract JSON brief for '{label}'")
 
         self._stage(run_id, "Writing research pack", 0.8)
 
@@ -778,13 +782,14 @@ class AgentRunner:
             prompt,
             "You are a content strategist for a top AI YouTube channel. Write direct, demo-driven scripts.",
             timeout=90,
+            log_fn=lambda msg: self._log(run_id, msg)
         )
         script = (res.get("text") or "").strip()
 
         if not script:
             self._log(run_id, "LLM returned nothing — check ANTHROPIC_API_KEY")
             self._stage(run_id, "Failed", 1.0)
-            return f"script generation failed for {label}"
+            raise RuntimeError(f"script generation failed for '{label}'")
 
         self._stage(run_id, "Saving script", 0.9)
         full_text = f"# Script: {label}\n\n{script}"
@@ -831,7 +836,12 @@ class AgentRunner:
                 "- Predicted CTR reasoning (1 sentence)\n\n"
                 "Number each concept 1-{count}. Be specific and visual.".replace("{count}", str(count))
             )
-            res = _cr.generate(prompt, "You are a YouTube thumbnail designer.", timeout=60)
+            res = _cr.generate(
+                prompt,
+                "You are a YouTube thumbnail designer.",
+                timeout=60,
+                log_fn=lambda msg: self._log(run_id, msg)
+            )
             concepts = (res.get("text") or "").strip()
             if concepts:
                 full_text = f"# Thumbnail Concepts: {topic}\n\n{concepts}"
@@ -866,13 +876,14 @@ class AgentRunner:
             prompt,
             "You are a LinkedIn content strategist for AI professionals. Be specific, not generic.",
             timeout=60,
+            log_fn=lambda msg: self._log(run_id, msg)
         )
         carousel = (res.get("text") or "").strip()
 
         if not carousel:
             self._log(run_id, "LLM returned nothing — check ANTHROPIC_API_KEY")
             self._stage(run_id, "Failed", 1.0)
-            return f"carousel generation failed for {label}"
+            raise RuntimeError(f"carousel generation failed for '{label}'")
 
         self._stage(run_id, "Saving carousel", 0.9)
         full_text = f"# LinkedIn Carousel: {label}\n\n{carousel}"

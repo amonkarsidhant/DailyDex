@@ -298,7 +298,8 @@ def available_providers(force: bool = False) -> List[str]:
 # Generation
 # --------------------------------------------------------------------------- #
 def generate(prompt: str, system: Optional[str] = None, *,
-             prefer: Optional[str] = None, timeout: int = GEN_TIMEOUT) -> Dict:
+             prefer: Optional[str] = None, timeout: int = GEN_TIMEOUT,
+             log_fn: Optional[Callable[[str], None]] = None) -> Dict:
     """Generate text via the best available provider, with fallback.
 
     Returns {"text", "provider", "model", "elapsed_ms", "tried"}.
@@ -314,16 +315,28 @@ def generate(prompt: str, system: Optional[str] = None, *,
         p = _BY_NAME.get(name)
         if not p:
             continue
+        msg = f"Invoking CLI provider: {name} ({p.label})..."
+        if log_fn:
+            log_fn(msg)
         started = time.time()
         try:
             text = p.generate(prompt, system, timeout)
-        except Exception:
+        except Exception as e:
             text = None
+            if log_fn:
+                log_fn(f"CLI provider {name} failed: {e}")
         elapsed = int((time.time() - started) * 1000)
         tried.append({"provider": name, "ok": bool(text), "elapsed_ms": elapsed})
         if text:
+            msg_ok = f"CLI provider {name} succeeded in {elapsed}ms"
+            if log_fn:
+                log_fn(msg_ok)
             return {"text": text, "provider": name, "model": p.model,
                     "elapsed_ms": elapsed, "tried": tried}
+        else:
+            msg_fail = f"CLI provider {name} returned empty/failed in {elapsed}ms"
+            if log_fn:
+                log_fn(msg_fail)
     return {"text": None, "provider": None, "model": "", "elapsed_ms": 0, "tried": tried}
 
 

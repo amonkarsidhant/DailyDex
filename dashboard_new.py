@@ -1689,17 +1689,16 @@ def api_copilot():
         "You are DailyDex's creator copilot. DailyDex is a trend-intelligence dashboard that "
         "fetches AI news from GitHub, Hugging Face, YouTube, blogs, and arXiv, then groups it into "
         "cross-source story clusters with creator/signal scores and 24h momentum.\n"
-        f"The user is on the \"{view}\" screen. Answer ONLY from the live DailyDex data below — "
-        "reference real topics, scores, sources, and items. Never say you lack access to history or "
-        "data; the data is right here. If the question can't be answered from it, say what IS trending instead.\n"
+        f"The user is on the \"{view}\" screen. Answer the user's question, using the live DailyDex data below "
+        "where appropriate. Reference real topics, scores, sources, and items. "
+        "Provide thorough, strategic, and actionable insights. You can use markdown tables, lists, code fences, "
+        "or paragraphs to structure your response. No planning, no 'Okay, the user wants'. No preamble.\n"
         f"LIVE DATA (JSON):\n{json.dumps(context)[:6000]}\n"
-        "Output ONLY the final answer — no reasoning, no planning, no 'Okay, the user wants'. "
-        "1-3 punchy, opinionated sentences. Cite specific topics/numbers. No preamble."
     )
     started = time.time()
     answer = None
     model = "unknown"
-    max_tokens = int(cop_cfg.get("max_tokens", 200))
+    max_tokens = int(cop_cfg.get("max_tokens", 800))
     provider = cop_cfg.get("provider") or os.environ.get("LLM_PROVIDER", "")
 
     # ── primary path: llm_summary (legacy Gemini/Ollama/NVIDIA/Claude) ──
@@ -1730,8 +1729,8 @@ def api_copilot():
 
     if not answer:
         answer = "Copilot is offline — no LLM provider found. Set ANTHROPIC_API_KEY or install Claude/Gemini CLI."
-    # Cap length defensively (~max_tokens proxy).
-    max_chars = int(cop_cfg.get("max_tokens", 200)) * 6
+    # Cap length defensively (~max_tokens proxy), ensuring a minimum safety buffer
+    max_chars = max(6000, max_tokens * 8)
     answer = answer.strip()[:max_chars]
     return jsonify({
         "answer": answer,

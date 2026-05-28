@@ -89,7 +89,7 @@ def test_api_clusters_endpoint(client):
 
 def test_agent_dispatch_and_complete(app_env, monkeypatch):
     import cli_registry
-    def mock_generate(prompt, system=None, *, prefer=None, timeout=240):
+    def mock_generate(prompt, system=None, *, prefer=None, timeout=240, **kwargs):
         if "synthesis" in prompt.lower() or "Based on these research leads" in prompt or "Return a JSON object" in prompt:
             return {
                 "text": '{"strategic_title": "Mock Title", "shift": "Mock Shift", "superpower": "Mock Superpower", "hook_contrarian": "Mock hook contrarian", "hook_speed": "Mock hook speed", "narrative_beats": ["Beat 1", "Beat 2", "Beat 3", "Beat 4", "Beat 5"], "thumbnail_visuals": ["Concept 1", "Concept 2", "Concept 3"], "inversion": "Mock Inversion"}',
@@ -130,7 +130,7 @@ def test_agents_snapshot_shape(client):
 def test_agent_runner_concurrency_different_types(app_env, monkeypatch):
     """Different agent types run on independent worker threads."""
     import cli_registry
-    def mock_generate(prompt, system=None, *, prefer=None, timeout=240):
+    def mock_generate(prompt, system=None, *, prefer=None, timeout=240, **kwargs):
         if "synthesis" in prompt.lower() or "Based on these research leads" in prompt or "Return a JSON object" in prompt:
             return {
                 "text": '{"strategic_title": "Mock Title", "shift": "Mock Shift", "superpower": "Mock Superpower", "hook_contrarian": "Mock hook contrarian", "hook_speed": "Mock hook speed", "narrative_beats": ["Beat 1", "Beat 2", "Beat 3", "Beat 4", "Beat 5"], "thumbnail_visuals": ["Concept 1", "Concept 2", "Concept 3"], "inversion": "Mock Inversion"}',

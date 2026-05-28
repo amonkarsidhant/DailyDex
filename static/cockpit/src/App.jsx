@@ -68,6 +68,7 @@ const App = () => {
     research: ResearchView,
     pipeline: PipelineView,
     studio:   StudioView,
+    copilot:  CopilotChatView,
   };
   const CurrentView = Views[view] || PulseView;
 

@@ -249,18 +249,54 @@ def _strip_think(text: str) -> str:
         text = text[len("<think>"):].strip()
     return text
 
+_last_used_provider_label: Optional[str] = None
+
 
 def query_llm(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:
+    global _last_used_provider_label
+    res = None
     if PROVIDER == "ollama":
-        return query_ollama(prompt, system_prompt)
-    if PROVIDER == "claude":
-        return query_claude_code_cli(prompt, system_prompt)
-    if PROVIDER == "nvidia":
-        return query_nvidia(prompt, system_prompt)
-    return query_gemini_cli(prompt, system_prompt)
+        res = query_ollama(prompt, system_prompt)
+        if res and res.strip():
+            _last_used_provider_label = f"ollama:{OLLAMA_MODEL}"
+            return res
+    elif PROVIDER == "claude":
+        res = query_claude_code_cli(prompt, system_prompt)
+        if res and res.strip():
+            _last_used_provider_label = f"claude:{CLAUDE_MODEL}"
+            return res
+    elif PROVIDER == "nvidia":
+        res = query_nvidia(prompt, system_prompt)
+        if res and res.strip():
+            _last_used_provider_label = f"nvidia:{NVIDIA_MODEL}"
+            return res
+    elif PROVIDER == "gemini":
+        res = query_gemini_cli(prompt, system_prompt)
+        if res and res.strip():
+            _last_used_provider_label = f"gemini:{GEMINI_MODEL or 'default'}"
+            return res
+    else:
+        res = query_gemini_cli(prompt, system_prompt)
+        if res and res.strip():
+            _last_used_provider_label = f"gemini:{GEMINI_MODEL or 'default'}"
+            return res
+
+    # Fallback to dynamic CLI registry discovery
+    try:
+        import cli_registry as _cr
+        probe_res = _cr.generate(prompt, system_prompt, timeout=GEMINI_TIMEOUT)
+        if probe_res.get("text"):
+            _last_used_provider_label = f"{probe_res.get('provider', 'unknown')}:{probe_res.get('model', '')}"
+            return probe_res["text"]
+    except Exception as e:
+        print(f"Fallback to cli_registry failed: {e}")
+
+    return None
 
 
 def llm_provider_label() -> str:
+    if _last_used_provider_label:
+        return _last_used_provider_label
     if PROVIDER == "ollama":
         return f"ollama:{OLLAMA_MODEL}"
     if PROVIDER == "claude":

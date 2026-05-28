@@ -48,6 +48,7 @@ const Nav = ({ view, setView }) => {
     { key: "research",  icon: <I.Research size={15}/>, label: "Research", sub: "evidence packs" },
     { key: "pipeline",  icon: <I.Pipeline size={15}/>, label: "Pipeline", sub: "+ calendar"        },
     { key: "studio",    icon: <I.Studio size={15}/>,   label: "Creator Central", sub: "autonomous content" },
+    { key: "copilot",   icon: <I.Spark size={15}/>,    label: "Copilot Chat",    sub: "AI strategist" },
   ];
   return (
     <nav className="nav" style={{ display: "flex", flexDirection: "column" }}>
@@ -251,6 +252,8 @@ const AgentRail = () => {
   const [active, setActive] = useState(window.DD_DATA.agents || []);
   const [recent, setRecent] = useState([]);
   const [picking, setPicking] = useState(false);
+  const [enrichStatus, setEnrichStatus] = useState(null);
+  const lastActiveRef = useRef(false);
 
   const pull = async () => {
     if (!window.DDX) return;
@@ -258,6 +261,19 @@ const AgentRail = () => {
       const snap = await window.DDX.agents();
       setActive(snap.active || []);
       setRecent(snap.recent_done || []);
+    } catch (e) {}
+    try {
+      const res = await fetch("/api/enrich-status");
+      if (res.ok) {
+        const estatus = await res.json();
+        setEnrichStatus(estatus);
+        const isCurrentlyActive = estatus.enabled && (estatus.queued > 0 || estatus.in_flight > 0);
+        if (lastActiveRef.current && !isCurrentlyActive) {
+          // Finished enrichment, trigger reload
+          window.DDX.reload();
+        }
+        lastActiveRef.current = isCurrentlyActive;
+      }
     } catch (e) {}
   };
 
@@ -302,6 +318,57 @@ const AgentRail = () => {
       )}
 
       <div style={{ flex: 1, overflowY: "auto" }}>
+        {/* Background Enrichment Service Status */}
+        {enrichStatus && enrichStatus.enabled && (
+          <div style={{
+            margin: "12px 14px",
+            padding: "10px 12px",
+            background: "var(--bg-2)",
+            border: "1px solid var(--line)",
+            borderRadius: 6,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span className={enrichStatus.queued > 0 || enrichStatus.in_flight > 0 ? "blink" : ""} 
+                      style={{
+                        width: 6, height: 6, borderRadius: 999,
+                        background: enrichStatus.queued > 0 || enrichStatus.in_flight > 0 ? "var(--signal)" : "var(--text-lo)",
+                        boxShadow: enrichStatus.queued > 0 || enrichStatus.in_flight > 0 ? "0 0 6px var(--signal)" : "none"
+                      }}/>
+                <span className="micro" style={{ letterSpacing: "0.06em", color: "var(--text-hi)" }}>Background AI Engine</span>
+              </div>
+              <span className="mono" style={{ fontSize: 9, color: "var(--text-lo)", textTransform: "uppercase" }}>{enrichStatus.provider}</span>
+            </div>
+            
+            {(enrichStatus.queued > 0 || enrichStatus.in_flight > 0) ? (
+              <div style={{ marginTop: 6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 11, color: "var(--text)" }}>Enriching creator packs...</span>
+                  <span className="mono tnum" style={{ fontSize: 10, color: "var(--signal)" }}>
+                    {enrichStatus.in_flight} active · {enrichStatus.queued} queued
+                  </span>
+                </div>
+                <div style={{ height: 3, background: "var(--bg-3)", borderRadius: 2, marginTop: 6, overflow: "hidden", position: "relative" }}>
+                  <div style={{
+                    height: "100%", width: "40%", background: "var(--signal)", borderRadius: 2,
+                    animation: "scan 1.5s linear infinite"
+                  }}/>
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-lo)" }}>
+                <span>All topics up-to-date</span>
+                <span className="mono">{enrichStatus.enriched_today} enriched today</span>
+              </div>
+            )}
+            {enrichStatus.last_error && (
+              <div className="mono" style={{ fontSize: 9, color: "var(--signal-down)", marginTop: 6, wordBreak: "break-all" }}>
+                Error: {enrichStatus.last_error}
+              </div>
+            )}
+          </div>
+        )}
+
         {active.length === 0 && (
           <div className="mono" style={{ padding: "16px 14px", fontSize: 11, color: "var(--text-lo)" }}>
             No agents running. Dispatch one ↑ or below.
@@ -343,6 +410,18 @@ const CompletedRow = ({ topic, what, when }) => (
 );
 
 // ─── Copilot dock ───────────────────────────────────────────────────────────
+const cleanMarkdownForTicker = (txt) => {
+  if (!txt) return "";
+  let clean = txt;
+  if (clean.includes("|")) {
+    clean = clean.split("|")[0].trim();
+  }
+  clean = clean.replace(/\*\*?/g, "");
+  clean = clean.replace(/`/g, "");
+  clean = clean.replace(/^\s*[-*+]\s+/mg, "");
+  return clean.replace(/\s+/g, " ").trim();
+};
+
 const CopilotDock = ({ context }) => {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
@@ -395,7 +474,7 @@ const CopilotDock = ({ context }) => {
             flex: 1, padding: "8px 12px", background: "var(--bg-2)", border: "1px solid var(--line)",
             borderRadius: 6, color: "var(--text-hi)", fontSize: 12.5, lineHeight: 1.4,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>{answer}</div>
+          }}>{cleanMarkdownForTicker(answer)}</div>
         ) : (
           <>
             <div style={{ display: "flex", gap: 6, overflow: "hidden" }}>

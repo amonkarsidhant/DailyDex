@@ -65,7 +65,7 @@
     "linkedin_time": "10:00"
   },
   "copilot": {
-    "max_tokens": 200,
+    "max_tokens": 1000,
     "system_voice": "punchy-pragmatic",
     "provider": "nvidia",
     "model": "stepfun-ai/step-3.5-flash",

@@ -19,6 +19,7 @@
   <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/marked@12.0.1/marked.min.js" crossorigin="anonymous"></script>
 
   <!-- Live backend bridge (plain JS, defines window.DDX) -->
   <script src="{{ url_for('static', filename='cockpit/cockpit-live.js') }}"></script>
@@ -35,6 +36,7 @@
   <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/ResearchView.jsx') }}"></script>
   <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/PipelineView.jsx') }}"></script>
   <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/StudioView.jsx') }}"></script>
+  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/CopilotChatView.jsx') }}"></script>
   <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/App.jsx') }}"></script>
 </body>
 </html>

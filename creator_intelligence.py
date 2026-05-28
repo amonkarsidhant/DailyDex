@@ -685,6 +685,7 @@ def build_content_opportunities(scored_data: Dict, clusters: List[Dict], limit: 
                 "cta": item.get("cta", ""),
                 "cluster_source_count": cluster.get("source_count", 1),
                 "cluster_sources": cluster.get("sources", [source_type]),
+                "enrichment_status": item.get("enrichment_status", "unenriched"),
             })
     opportunities.sort(key=lambda row: (row.get("creator_score", 0), row.get("signal_score", 0)), reverse=True)
     return opportunities[:limit]

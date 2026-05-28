@@ -2,6 +2,19 @@
 """Data models for DailyDex - SQLite + JSON storage"""
 
 import sqlite3
+
+_original_connect = sqlite3.connect
+def custom_connect(*args, **kwargs):
+    if "timeout" not in kwargs:
+        kwargs["timeout"] = 30.0
+    conn = _original_connect(*args, **kwargs)
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+    except Exception:
+        pass
+    return conn
+sqlite3.connect = custom_connect
+
 import json
 import time
 import os

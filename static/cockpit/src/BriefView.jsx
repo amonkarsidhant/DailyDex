@@ -423,6 +423,33 @@ const BriefView = ({ onJump }) => {
   const titles = hero ? (titleSets?.[hero.slug] || {}) : {};
   const heroThumb = hero ? thumbnails?.find(t => t.topic === hero.slug) : null;
   const [titleKey, setTitleKey] = useState(Object.keys(titles)[0] || "practical");
+  const [enriching, setEnriching] = useState(false);
+
+  const handleEnrich = async () => {
+    if (enriching) return;
+    setEnriching(true);
+    try {
+      const itemToEnrich = opp || (hero.related_items && hero.related_items[0]);
+      if (!itemToEnrich) return;
+      await fetch("/api/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: itemToEnrich.url,
+          title: itemToEnrich.title,
+          source_type: itemToEnrich.source_type,
+          force: true
+        })
+      });
+      if (window.DDX) {
+        window.DDX.reload();
+      }
+    } catch (e) {
+      alert("Failed to enqueue AI enrichment: " + e.message);
+    } finally {
+      setEnriching(false);
+    }
+  };
 
   if (!hero) {
     return (
@@ -497,6 +524,29 @@ const BriefView = ({ onJump }) => {
           }>
           {P.hero_title}
         </PanelHeader>
+
+        {(!opp || (opp.enrichment_status !== "ready" && opp.enrichment_status !== "ready_with_warnings")) && (
+          <div style={{
+            margin: "12px 24px 0",
+            padding: "12px 16px",
+            background: "rgba(240, 183, 47, 0.08)",
+            border: "1px solid rgba(240, 183, 47, 0.25)",
+            borderRadius: 6,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <I.Spark size={16} stroke="var(--signal)" />
+              <div style={{ fontSize: 13, color: "var(--text-hi)" }}>
+                <strong>Heuristic Brief:</strong> This brief is currently generated from static heuristics. Run AI Enrichment to synthesize dynamic, AI-structured insights.
+              </div>
+            </div>
+            <button className="btn primary" onClick={handleEnrich} disabled={enriching} style={{ gap: 6 }}>
+              {enriching ? "Enqueuing..." : "✨ Run AI Enrichment"}
+            </button>
+          </div>
+        )}
 
         <div style={{ display: "grid", gridTemplateColumns: "1.05fr 1fr", padding: "20px 24px", gap: 28 }}>
           <div>
