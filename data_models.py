@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
-"""Data models for DailyDex - SQLite + JSON storage"""
+"""Data models for DailyDex - SQLite + PostgreSQL storage"""
 
-import sqlite3
+# db_compat provides a transparent sqlite3-compatible interface that
+# automatically routes to Postgres when DATABASE_URL is set, or falls
+# back to plain sqlite3 for local development.
+import db_compat as sqlite3
 
-_original_connect = sqlite3.connect
-def custom_connect(*args, **kwargs):
-    if "timeout" not in kwargs:
-        kwargs["timeout"] = 30.0
-    conn = _original_connect(*args, **kwargs)
-    try:
-        conn.execute("PRAGMA journal_mode=WAL;")
-    except Exception:
-        pass
-    return conn
-sqlite3.connect = custom_connect
+if not sqlite3.DATABASE_URL:
+    # SQLite-only: apply WAL mode and increased timeout for concurrency.
+    _orig_sq3_connect = sqlite3.connect
+    def custom_connect(*args, **kwargs):
+        import sqlite3 as _sq3
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = 30.0
+        conn = _orig_sq3_connect(*args, **kwargs)
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+        except Exception:
+            pass
+        return conn
+    sqlite3.connect = custom_connect
 
 import json
 import time
@@ -325,6 +331,71 @@ class IntelligenceDB:
                 ON studio_content(updated_at DESC)
         """)
 
+        # CEO closed-loop: publication analytics table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS publication_analytics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_id INTEGER NOT NULL,
+                platform TEXT NOT NULL,
+                published_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                views INTEGER DEFAULT 0,
+                impressions INTEGER DEFAULT 0,
+                ctr REAL DEFAULT 0.0,
+                engagement_rate REAL DEFAULT 0.0,
+                status TEXT DEFAULT 'live',
+                FOREIGN KEY (item_id) REFERENCES saved_items(id)
+            )
+        """)
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_publication_analytics_item_platform 
+                ON publication_analytics(item_id, platform)
+        """)
+
+        # 9:16 Shorts / Repurposed clips table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS repurposed_clips (
+                id TEXT PRIMARY KEY,
+                parent_item_id INTEGER NOT NULL,
+                title TEXT,
+                start_time TEXT,
+                end_time TEXT,
+                hook_text TEXT,
+                virality_score REAL DEFAULT 0.0,
+                status TEXT DEFAULT 'draft',
+                published_url TEXT,
+                created_at REAL NOT NULL,
+                FOREIGN KEY (parent_item_id) REFERENCES saved_items(id)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_repurposed_clips_parent 
+                ON repurposed_clips(parent_item_id)
+        """)
+
+        # Title & Thumbnail A/B Tests table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ab_tests (
+                id TEXT PRIMARY KEY,
+                item_id INTEGER NOT NULL,
+                status TEXT DEFAULT 'active',
+                variant_a_title TEXT,
+                variant_a_image TEXT,
+                variant_b_title TEXT,
+                variant_b_image TEXT,
+                variant_a_ctr REAL DEFAULT 0.0,
+                variant_b_ctr REAL DEFAULT 0.0,
+                variant_a_views INTEGER DEFAULT 0,
+                variant_b_views INTEGER DEFAULT 0,
+                started_at REAL NOT NULL,
+                ended_at REAL,
+                FOREIGN KEY (item_id) REFERENCES saved_items(id)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ab_tests_item 
+                ON ab_tests(item_id)
+        """)
+
         conn.commit()
         conn.close()
 
@@ -478,7 +549,7 @@ class IntelligenceDB:
         conn.close()
         return True
 
-    def _deserialize_row(self, row: sqlite3.Row) -> Dict:
+    def _deserialize_row(self, row) -> Dict:
         """Map Row to dict and deserialize structured columns."""
         item = dict(row)
         for key in ["tags", "sources", "outline", "three_beat_structure", "thumbnail_text"]:
@@ -1271,6 +1342,200 @@ class IntelligenceDB:
         rows = cursor.fetchall()
         conn.close()
         return {row[0]: row[1] for row in rows}
+
+    def create_or_update_publication(self, item_id: int, platform: str, views: int = 0,
+                                     impressions: int = 0, ctr: float = 0.0,
+                                     engagement_rate: float = 0.0, status: str = 'live') -> None:
+        """Upsert a publication record for a saved item and platform"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO publication_analytics (item_id, platform, views, impressions, ctr, engagement_rate, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(item_id, platform) DO UPDATE SET
+                views=excluded.views,
+                impressions=excluded.impressions,
+                ctr=excluded.ctr,
+                engagement_rate=excluded.engagement_rate,
+                status=excluded.status
+        """, (item_id, platform, views, impressions, ctr, engagement_rate, status))
+        conn.commit()
+        conn.close()
+
+    def get_publication_analytics(self) -> List[Dict]:
+        """Get all publication analytics with details from the saved item"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT p.*, s.title, s.category, s.format, s.published_url
+            FROM publication_analytics p
+            JOIN saved_items s ON p.item_id = s.id
+            ORDER BY p.published_at DESC
+        """)
+        rows = cursor.fetchall()
+        conn.close()
+        
+        results = []
+        for r in rows:
+            results.append({
+                "id": r["id"],
+                "item_id": r["item_id"],
+                "platform": r["platform"],
+                "published_at": r["published_at"],
+                "views": r["views"],
+                "impressions": r["impressions"],
+                "ctr": r["ctr"],
+                "engagement_rate": r["engagement_rate"],
+                "status": r["status"],
+                "title": r["title"],
+                "category": r["category"],
+                "format": r["format"],
+                "published_url": r["published_url"],
+            })
+        return results
+
+
+    def get_top_performing_categories(self, limit: int = 3) -> List[str]:
+        """Get top categories based on views from published items"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT s.category, SUM(p.views) as total_views
+            FROM publication_analytics p
+            JOIN saved_items s ON p.item_id = s.id
+            WHERE s.category IS NOT NULL AND s.category != ''
+            GROUP BY s.category
+            ORDER BY total_views DESC
+            LIMIT ?
+        """, (limit,))
+        rows = cursor.fetchall()
+        conn.close()
+        return [r[0] for r in rows if r[0]]
+
+    # ── repurposed_clips database helpers ──
+    def insert_repurposed_clip(self, clip: Dict) -> str:
+        import uuid
+        import time
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        clip_id = clip.get("id") or f"clip-{uuid.uuid4().hex[:12]}"
+        cursor.execute("""
+            INSERT INTO repurposed_clips (id, parent_item_id, title, start_time, end_time, hook_text, virality_score, status, published_url, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            clip_id,
+            clip.get("parent_item_id"),
+            clip.get("title", ""),
+            clip.get("start_time", ""),
+            clip.get("end_time", ""),
+            clip.get("hook_text", ""),
+            clip.get("virality_score", 0.0),
+            clip.get("status", "draft"),
+            clip.get("published_url", ""),
+            clip.get("created_at") or time.time()
+        ))
+        conn.commit()
+        conn.close()
+        return clip_id
+
+    def list_repurposed_clips(self, parent_item_id: int) -> List[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM repurposed_clips WHERE parent_item_id = ? ORDER BY created_at DESC", (parent_item_id,))
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+
+    def update_repurposed_clip(self, clip_id: str, **fields) -> bool:
+        if not fields:
+            return False
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        keys = []
+        values = []
+        for k, v in fields.items():
+            keys.append(f"{k} = ?")
+            values.append(v)
+        values.append(clip_id)
+        cursor.execute(f"UPDATE repurposed_clips SET {', '.join(keys)} WHERE id = ?", values)
+        ok = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return ok
+
+    # ── ab_tests database helpers ──
+    def insert_ab_test(self, test: Dict) -> str:
+        import uuid
+        import time
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        test_id = test.get("id") or f"test-{uuid.uuid4().hex[:12]}"
+        cursor.execute("""
+            INSERT INTO ab_tests (id, item_id, status, variant_a_title, variant_a_image, variant_b_title, variant_b_image, variant_a_ctr, variant_b_ctr, variant_a_views, variant_b_views, started_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            test_id,
+            test.get("item_id"),
+            test.get("status", "active"),
+            test.get("variant_a_title", ""),
+            test.get("variant_a_image", ""),
+            test.get("variant_b_title", ""),
+            test.get("variant_b_image", ""),
+            test.get("variant_a_ctr", 0.0),
+            test.get("variant_b_ctr", 0.0),
+            test.get("variant_a_views", 0),
+            test.get("variant_b_views", 0),
+            test.get("started_at") or time.time()
+        ))
+        conn.commit()
+        conn.close()
+        return test_id
+
+    def get_active_ab_test(self, item_id: int) -> Optional[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM ab_tests WHERE item_id = ? AND status = 'active' ORDER BY started_at DESC LIMIT 1", (item_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def list_ab_tests(self, item_id: int) -> List[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM ab_tests WHERE item_id = ? ORDER BY started_at DESC", (item_id,))
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+
+    def update_ab_test_metrics(self, test_id: str, **fields) -> bool:
+        if not fields:
+            return False
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        keys = []
+        values = []
+        for k, v in fields.items():
+            keys.append(f"{k} = ?")
+            values.append(v)
+        values.append(test_id)
+        cursor.execute(f"UPDATE ab_tests SET {', '.join(keys)} WHERE id = ?", values)
+        ok = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return ok
+
+    def list_all_active_ab_tests(self) -> List[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM ab_tests WHERE status = 'active'")
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
 
 
 class IntelligenceJSON:

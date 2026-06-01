@@ -9,6 +9,26 @@ const ThumbsView = ({ onJump }) => {
   const titles = titleSets[topic] || {};
   const cluster = clusters.find(c => c.slug === topic);
   const [picked, setPicked] = useState(topicThumbs[0]?.id);
+  const [generatingId, setGeneratingId] = useState(null);
+
+  const handleGenerate = async (p) => {
+    setGeneratingId(p.id);
+    try {
+      const res = await window.DDX.generateThumbnailImage(
+        cluster?.topic || topic, "dark_tech", p.text || p.text_primary, 1, p.id
+      );
+      if (res.ok) {
+        alert("✓ Real image generated via Flux!");
+        await window.DDX.reload();
+      } else {
+        alert("Generation failed. Check your fal.ai API key.");
+      }
+    } catch (e) {
+      alert("Error: " + e.message);
+    } finally {
+      setGeneratingId(null);
+    }
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -100,8 +120,11 @@ const ThumbsView = ({ onJump }) => {
                         <div className="mono" style={{ fontSize: 11, color: "var(--text-mid)", letterSpacing: "0.04em" }}>
                           {p.kind.toUpperCase()} · variant {topicThumbs.findIndex(x => x.id === p.id) + 1}
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                           <span className="mono tnum" style={{ fontSize: 12, color: "var(--signal-up)", fontWeight: 600 }}>CTR-likelihood {p.ctr}</span>
+                          <button className="btn primary" disabled={generatingId === p.id} onClick={() => handleGenerate(p)} style={{ fontSize: 11, padding: "4px 8px" }}>
+                            {generatingId === p.id ? "🎨 Generating..." : p.image_path ? "🖼 Regenerate Image" : "🖼 Generate Flux Image"}
+                          </button>
                           <button className="btn ghost" onClick={() => {
                             if (window.DDX && p) window.DDX.pickThumbnail(p.id).then(() => { alert("Thumbnail picked."); window.DDX.reload(); });
                           }}><I.Save size={11}/> Save</button>

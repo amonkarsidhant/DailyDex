@@ -32,3 +32,19 @@ data/research_packs/*.md
 
 # local cockpit venv (not committed)
 .venv-cockpit/
+
+# secrets — never commit
+.env
+.env.local
+.env.*.local
+.vercel
+.env.bak.*
+
+# local scratch folder
+scratch/
+
+# agent & fuse lock files
+.antigravitycli/
+**/.fuse_hidden*
+
+

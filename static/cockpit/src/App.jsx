@@ -11,6 +11,7 @@ const App = () => {
   const [now, setNow] = useState("");
   const [dataVersion, setDataVersion] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [onboarded, setOnboarded] = useState(window.DD_DATA?.creator_identity?.onboarding_completed === true);
 
   // expose tweaks for nav rendering without prop-drilling
   window.__tweaks = t;
@@ -68,9 +69,15 @@ const App = () => {
     research: ResearchView,
     pipeline: PipelineView,
     studio:   StudioView,
+    profile:  ProfileView,
     copilot:  CopilotChatView,
+    settings: SettingsView,
   };
   const CurrentView = Views[view] || PulseView;
+
+  if (!onboarded) {
+    return <OnboardingView onComplete={() => setOnboarded(true)} />;
+  }
 
   return (
     <div className="app">

@@ -429,8 +429,10 @@ const BriefView = ({ onJump }) => {
     if (enriching) return;
     setEnriching(true);
     try {
-      const itemToEnrich = opp || (hero.related_items && hero.related_items[0]);
-      if (!itemToEnrich) return;
+      // Always enrich from a raw related_item — opp is a cluster opportunity object
+      // and doesn't carry url/title fields that /api/enrich requires.
+      const itemToEnrich = hero.related_items?.[0];
+      if (!itemToEnrich?.url && !itemToEnrich?.title) return;
       await fetch("/api/enrich", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -550,8 +552,20 @@ const BriefView = ({ onJump }) => {
 
         <div style={{ display: "grid", gridTemplateColumns: "1.05fr 1fr", padding: "20px 24px", gap: 28 }}>
           <div>
-            <div className="label" style={{ color: "var(--signal)" }}>
-              Today's pick · creator score {hero.creator_score} · {hero.related_items?.length || 0} items across {hero.sources?.length || 0} source types
+            <div className="label" style={{ color: "var(--signal)", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+              <span>Today's pick · creator score {hero.creator_score} · {hero.related_items?.length || 0} items across {hero.sources?.length || 0} source types</span>
+              {hero.affinity_bonus > 0 && (
+                <span className="chip" style={{
+                  color: "var(--signal-up)",
+                  borderColor: "rgba(124, 255, 178, 0.4)",
+                  background: "rgba(124, 255, 178, 0.08)",
+                  padding: "1px 6px",
+                  fontSize: 9,
+                  borderRadius: 4
+                }}>
+                  📈 +{hero.affinity_bonus} ROI Affinity Boost
+                </span>
+              )}
             </div>
             <h1 style={{
               fontSize: 46, lineHeight: 1.02, letterSpacing: "-0.025em",
@@ -631,6 +645,21 @@ const BriefView = ({ onJump }) => {
                 Why this scored {hero.creator_score}
                 {!opp && <span style={{ color: "var(--text-lo)", fontWeight: 400, marginLeft: 6 }}>· estimated from cluster signals</span>}
               </div>
+              
+              {hero.affinity_bonus > 0 && (
+                <div style={{
+                  margin: "8px 0 12px 0",
+                  padding: "8px 10px",
+                  background: "rgba(124, 255, 178, 0.05)",
+                  border: "1px dashed rgba(124, 255, 178, 0.3)",
+                  borderRadius: 4,
+                  fontSize: 11,
+                  color: "var(--text)",
+                  lineHeight: 1.35
+                }}>
+                  ✨ <strong>ROI Loop Affinity Boost:</strong> This topic matches top-performing categories from recent publications, receiving an automatic <strong>+{hero.affinity_bonus} boost</strong> to its Creator Score.
+                </div>
+              )}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
                 <FactorRow k="Audience interest" v={fAudience}/>
                 <FactorRow k="Story tension"     v={fTension}/>

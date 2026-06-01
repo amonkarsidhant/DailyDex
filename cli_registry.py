@@ -100,6 +100,37 @@ def _combine(prompt: str, system: Optional[str]) -> str:
     return f"{system}\n\n{prompt}" if system else prompt
 
 
+def _get_profile_model(provider_name: str, fallback_model: str) -> str:
+    """Helper to dynamically fetch model specified in creator_profile.json."""
+    prof_data = None
+    try:
+        import llm_summary
+        prof_data = llm_summary.load_creator_profile()
+    except Exception:
+        pass
+
+    if not prof_data:
+        try:
+            profile_path = os.environ.get(
+                "CREATOR_PROFILE_PATH",
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "creator_profile.json")
+            )
+            if os.path.exists(profile_path):
+                with open(profile_path, "r", encoding="utf-8") as f:
+                    prof_data = json.load(f)
+        except Exception:
+            pass
+
+    if prof_data and isinstance(prof_data, dict):
+        try:
+            cop_cfg = prof_data.get("copilot") or {}
+            if cop_cfg.get("provider") == provider_name:
+                return cop_cfg.get("model") or fallback_model
+        except Exception:
+            pass
+    return fallback_model
+
+
 # -- opencode: authed, free models, no API key -- preferred autonomous engine --
 _OPENCODE_MODEL = os.environ.get("STUDIO_OPENCODE_MODEL", "opencode/deepseek-v4-flash-free")
 
@@ -110,7 +141,8 @@ def _opencode_detect() -> bool:
     return bool(out and "/" in out)
 
 def _opencode_gen(prompt: str, system: Optional[str], timeout: int) -> Optional[str]:
-    return _run(["opencode", "run", "-m", _OPENCODE_MODEL, _combine(prompt, system)], timeout)
+    model = _get_profile_model("opencode", _OPENCODE_MODEL)
+    return _run(["opencode", "run", "-m", model, _combine(prompt, system)], timeout)
 
 
 # -- claude code CLI: OAuth session, no key --
@@ -121,7 +153,8 @@ def _claude_detect() -> bool:
     return bool(shutil.which(_CLAUDE_BIN) or shutil.which("claude"))
 
 def _claude_gen(prompt: str, system: Optional[str], timeout: int) -> Optional[str]:
-    return _run([_CLAUDE_BIN, "-p", _combine(prompt, system), "--model", _CLAUDE_MODEL], timeout)
+    model = _get_profile_model("claude", _CLAUDE_MODEL)
+    return _run([_CLAUDE_BIN, "-p", _combine(prompt, system), "--model", model], timeout)
 
 
 # -- hermes: agent CLI with --skills / --yolo --
@@ -131,9 +164,10 @@ def _hermes_detect() -> bool:
     return bool(shutil.which("hermes"))
 
 def _hermes_gen(prompt: str, system: Optional[str], timeout: int) -> Optional[str]:
+    model = _get_profile_model("hermes", _HERMES_MODEL)
     args = ["hermes", "-z", _combine(prompt, system), "--yolo"]
-    if _HERMES_MODEL:
-        args += ["-m", _HERMES_MODEL]
+    if model:
+        args += ["-m", model]
     return _run(args, timeout)
 
 
@@ -148,9 +182,10 @@ def _gemini_detect() -> bool:
     return out is not None
 
 def _gemini_gen(prompt: str, system: Optional[str], timeout: int) -> Optional[str]:
+    model = _get_profile_model("gemini", _GEMINI_MODEL)
     args = ["gemini", "-p", _combine(prompt, system)]
-    if _GEMINI_MODEL:
-        args += ["--model", _GEMINI_MODEL]
+    if model:
+        args += ["--model", model]
     return _run(args, timeout)
 
 
@@ -174,7 +209,8 @@ def _ollama_model() -> str:
     return "llama3.2"
 
 def _ollama_gen(prompt: str, system: Optional[str], timeout: int) -> Optional[str]:
-    return _run(["ollama", "run", _ollama_model(), _combine(prompt, system)], timeout)
+    model = _get_profile_model("ollama", _ollama_model())
+    return _run(["ollama", "run", model, _combine(prompt, system)], timeout)
 
 
 # -- NVIDIA NIM: OpenAI-compatible HTTP, needs NVIDIA_API_KEY --
@@ -184,7 +220,8 @@ def _nvidia_detect() -> bool:
 def _nvidia_gen(prompt: str, system: Optional[str], timeout: int) -> Optional[str]:
     try:
         import llm_summary
-        return llm_summary.query_nvidia(prompt, system)
+        model = _get_profile_model("nvidia", os.environ.get("NVIDIA_MODEL", ""))
+        return llm_summary.query_nvidia(prompt, system, model=model)
     except Exception:
         return None
 
@@ -331,7 +368,8 @@ def generate(prompt: str, system: Optional[str] = None, *,
             msg_ok = f"CLI provider {name} succeeded in {elapsed}ms"
             if log_fn:
                 log_fn(msg_ok)
-            return {"text": text, "provider": name, "model": p.model,
+            actual_model = _get_profile_model(name, p.model)
+            return {"text": text, "provider": name, "model": actual_model,
                     "elapsed_ms": elapsed, "tried": tried}
         else:
             msg_fail = f"CLI provider {name} returned empty/failed in {elapsed}ms"

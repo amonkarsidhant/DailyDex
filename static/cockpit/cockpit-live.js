@@ -59,11 +59,75 @@
 
     // Creator Central
     studio() { return jget("/api/studio"); },
-    studioRun(topN) { return jpost("/api/studio/run", { top_n: topN || 0 }); },
+    studioRun(topN, slugs) { return jpost("/api/studio/run", { top_n: topN || 0, slugs: slugs || null }); },
     studioRegenerate(storyKey, fmt, provider) {
       return jpost(`/api/studio/${encodeURIComponent(storyKey)}/${fmt}/regenerate`,
                    provider ? { provider } : {});
     },
+    studioStream(onLog) {
+      const es = new EventSource("/api/studio/stream");
+      es.onmessage = (e) => { try { onLog(JSON.parse(e.data)); } catch (_) {} };
+      return es;
+    },
+    editorialApprove() { return jpost("/api/editorial/approve", {}); },
+    publish(item_id, platform) { return jpost("/api/publish", { item_id, platform }); },
+    simulateAnalytics() { return jpost("/api/analytics/simulate", {}); },
+
+    // Advanced Creator Integrations
+    syncNotion(itemId) {
+      return jpost("/api/integrations/notion/sync", { item_id: itemId });
+    },
+    repurposeVideo(itemId) {
+      return jpost("/api/integrations/repurpose", { item_id: itemId });
+    },
+    getRepurposedClips(parentItemId) {
+      return jget(`/api/integrations/repurpose?parent_item_id=${parentItemId}`);
+    },
+    publishRepurposedClip(clipId) {
+      return jpost(`/api/integrations/repurpose/${clipId}/publish`, {});
+    },
+    startABTest(itemId, variantATitle, variantBTitle, variantAImage, variantBImage) {
+      return jpost("/api/integrations/ab-test", {
+        item_id: itemId,
+        variant_a_title: variantATitle,
+        variant_b_title: variantBTitle,
+        variant_a_image: variantAImage || "",
+        variant_b_image: variantBImage || ""
+      });
+    },
+    getActiveABTest(itemId) {
+      return jget(`/api/integrations/ab-test/active?item_id=${itemId}`);
+    },
+
+    // Settings (BYOK)
+    getSettings() { return jget("/api/settings"); },
+    saveSettings(updates) {
+      return fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      }).then(r => r.json());
+    },
+    deleteSetting(key) {
+      return fetch(`/api/settings/${key}`, { method: "DELETE" }).then(r => r.json());
+    },
+    validateYouTubeKey(api_key) {
+      return jpost("/api/settings/validate/youtube", { api_key });
+    },
+    validateFalKey(api_key) {
+      return jpost("/api/settings/validate/fal", { api_key });
+    },
+    getProviderInfo() { return jget("/api/settings/provider-info"); },
+
+    // Real image generation (Flux via fal.ai)
+    generateThumbnailImage(topic, style, extra_context, num_variants, variant_id) {
+      return jpost("/api/thumbnails/generate-image", {
+        topic, style: style || "dark_tech",
+        extra_context, num_variants: num_variants || 1,
+        variant_id: variant_id || null,
+      });
+    },
+    getThumbnailStyles() { return jget("/api/thumbnails/styles"); },
   };
 
   window.DDX = DDX;

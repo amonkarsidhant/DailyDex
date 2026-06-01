@@ -1,0 +1,49 @@
+{
+  "hook": "Small model. Local agent. Actually ships code without a GPU.",
+  "intro_context": "acme/coder-model is a compact coding model on HuggingFace designed for local agentic workflows, clustered with the acme/agent-repo tool harness and a paper on practical agentic pipelines. The pitch: a model small enough to run on edge hardware that still produces useful code edits.",
+  "three_key_points": [
+    "Lean coding model tuned for agent-in-the-loop edits, not chat completions.",
+    "Runs on commodity hardware — no A100 required, tested on a Pi 4.",
+    "Clusters with acme/agent-repo for hash-anchored file edits and LSP-backed context."
+  ],
+  "three_beat_structure": [
+    "Hook: A coding model that fits in 4GB of RAM and still ships working diffs.",
+    "Payoff: Live test on a Pi 4 — clone, load, and ask it to fix a real bug.",
+    "CTA: Pull the model, wire it to your terminal agent, and see if it outperforms your current setup."
+  ],
+  "demo_segment": "SSH into a Pi 4, pull the model from HuggingFace, pipe a broken Python function through the agent harness, and show the diff output with wall-clock timing.",
+  "caveats": "Description for acme/coder-model is empty on HuggingFace. Benchmark numbers and exact parameter count are unconfirmed. Agent integration assumes acme/agent-repo tool harness.",
+  "closing_takeaway": "The ceiling on small coding models is higher than most people think. Test it before you write it off.",
+  "call_to_action": "Clone acme/agent-repo, plug in coder-model, post your tok/s and diff quality.",
+  "short_script": "acme/coder-model dropped on HuggingFace and it is tiny enough for a Pi 4. Clustered with an agent harness and a paper on practical workflows. The catch is there is no detailed spec yet so you have to test it blind. Still, a model this small that ships real diffs is worth a weekend project.",
+  "visual_idea": "Split screen: HuggingFace model card on the left, Pi 4 terminal running an agent loop on the right.",
+  "cta": "Pull the model and post your results.",
+  "suggested_titles": {
+    "curiosity": "The coding model that fits in 4GB and still works",
+    "practical": "acme/coder-model: a local coding agent you can run tonight",
+    "contrarian": "You don't need a 70B parameter model to ship code",
+    "tutorial": "How to run acme/coder-model on a Pi 4 with acme/agent-repo"
+  },
+  "thumbnail_text": [
+    "4GB MODEL",
+    "SHIPS CODE",
+    "PI 4 READY"
+  ],
+  "broll_list": [
+    "HuggingFace model card page for acme/coder-model with download count",
+    "Pi 4 board with terminal showing model loading in under 30 seconds",
+    "Side-by-side diff of broken code vs. model-suggested fix"
+  ],
+  "on_screen_cues": [
+    "0 GPU needed",
+    "30s cold start",
+    "agent-ready"
+  ],
+  "insight": "Model size is not capability. The smallest model you can actually run locally is worth more than the best model behind an API. Distribution matters more than ceiling.",
+  "hooks": [
+    "A coding model that runs on a Pi 4 should not work. It does.",
+    "The agent workflow paper that changes how you think about small models.",
+    "Ship local code agents with a model that fits in 4GB."
+  ],
+  "tags": ["coding-ai", "local-model", "agentic-workflows"]
+}

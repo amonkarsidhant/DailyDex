@@ -430,8 +430,9 @@ class EnrichmentService:
                 schema_version=int(pack.get("schema_version") or llm_summary.CREATOR_PACK_SCHEMA_VERSION),
             )
             with self._state_lock:
-                if ok:
+                if status in {"ready", "ready_with_warnings"}:
                     self._state.enriched_today += 1
+                    self._state.last_error = ""
                 else:
                     self._state.failed_today += 1
                     self._state.last_error = error
@@ -646,20 +647,57 @@ class AgentRunner:
 
         import cli_registry as _cr
         import re
+        import json
 
-        self._log(run_id, f"Researching: {label}")
-        self._stage(run_id, "Gathering research leads", 0.2)
+        # Check for compilation target
+        compilation = None
+        try:
+            scored_data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "data_scored.json")
+            if not os.path.exists(scored_data_path):
+                scored_data_path = os.path.join("data", "data_scored.json")
+            if os.path.exists(scored_data_path):
+                with open(scored_data_path, encoding="utf-8") as f:
+                    scored_data = json.load(f)
+                from creator_intelligence import build_weekly_compilations
+                compilations = build_weekly_compilations(scored_data)
+                compilation = next((c for c in compilations if c["slug"] == target_id), None)
+        except Exception as e:
+            self._log(run_id, f"Error checking compilations: {e}")
 
-        leads_prompt = (
-            f"Research the AI topic: '{label}'\n\n"
-            "Identify and explain:\n"
-            "1. The primary technical framework, repo, or paper driving this trend — be specific.\n"
-            "2. The Munger Inversion: what are the real risks, failure modes, or counter-arguments?\n"
-            "3. The Creator Opportunity: what concrete demo would prove or disprove the hype?\n"
-            "4. Who are the key people / organizations involved?\n"
-            "5. What should a YouTube creator make about this — and what angle is most under-served?\n\n"
-            "Be technical and direct. No preamble. No markdown headings. Max 400 words."
-        )
+        if compilation:
+            self._log(run_id, f"Compiling research leads for listicle: {compilation['title']}")
+            self._stage(run_id, "Gathering listicle research leads", 0.2)
+            leads_prompt = (
+                f"Research the listicle theme: '{compilation['title']}'\n"
+                f"Theme Description: {compilation['theme_description']}\n\n"
+                f"We are compiling the following items/repositories:\n"
+            )
+            for i, item in enumerate(compilation['items']):
+                leads_prompt += f"{i+1}. {item.get('title')} ({item.get('url')})\n"
+                leads_prompt += f"   Description: {item.get('description') or 'No description'}\n\n"
+
+            leads_prompt += (
+                "For this listicle compilation, identify and explain:\n"
+                "1. The underlying developer trend or friction driving interest in this cluster (why now?).\n"
+                "2. The Munger Inversion for the theme: what is the counter-hype risk or trade-off of using these open-source tools instead of proprietary ones?\n"
+                "3. The Creator Opportunity: how can a creator showcase these tools in a single video without losing viewer attention (e.g. comparing setup times or memory usage)?\n\n"
+                "Be technical, direct, and source-aware. No preamble. No markdown headings. Max 500 words."
+            )
+        else:
+            self._log(run_id, f"Researching: {label}")
+            self._stage(run_id, "Gathering research leads", 0.2)
+
+            leads_prompt = (
+                f"Research the AI topic: '{label}'\n\n"
+                "Identify and explain:\n"
+                "1. The primary technical framework, repo, or paper driving this trend — be specific.\n"
+                "2. The Munger Inversion: what are the real risks, failure modes, or counter-arguments?\n"
+                "3. The Creator Opportunity: what concrete demo would prove or disprove the hype?\n"
+                "4. Who are the key people / organizations involved?\n"
+                "5. What should a YouTube creator make about this — and what angle is most under-served?\n\n"
+                "Be technical and direct. No preamble. No markdown headings. Max 400 words."
+            )
+
         res = _cr.generate(
             leads_prompt,
             "You are a PhD-level AI research lead. Be specific, terse, and source-aware. No filler.",
@@ -758,32 +796,84 @@ class AgentRunner:
         label = topic or target_id or "topic"
         import cli_registry as _cr
         import re
+        import json
 
-        self._log(run_id, f"Writing video script for: {label}")
-        self._stage(run_id, "Drafting cold-open hook", 0.2)
+        # Check for compilation target
+        compilation = None
+        try:
+            scored_data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "data_scored.json")
+            if not os.path.exists(scored_data_path):
+                scored_data_path = os.path.join("data", "data_scored.json")
+            if os.path.exists(scored_data_path):
+                with open(scored_data_path, encoding="utf-8") as f:
+                    scored_data = json.load(f)
+                from creator_intelligence import build_weekly_compilations
+                compilations = build_weekly_compilations(scored_data)
+                compilation = next((c for c in compilations if c["slug"] == target_id), None)
+        except Exception as e:
+            self._log(run_id, f"Error checking compilations: {e}")
 
-        prompt = (
-            f"Write a complete YouTube video script outline (14-18 min) for an AI creator.\n"
-            f"Topic: {label}\n\n"
-            "Structure:\n"
-            "## COLD OPEN (30s verbatim)\n"
-            "Write the exact words to say. Bold claim, no intro.\n\n"
-            "## SECTION 1 — [Title] (4-5 min)\n"
-            "Bullet talking points. Include a specific technical detail or stat.\n\n"
-            "## SECTION 2 — [Title] (5-6 min)\n"
-            "Bullet talking points. Include a demo or code moment.\n\n"
-            "## SECTION 3 — [Title] (3-4 min)\n"
-            "Bullet talking points. The contrarian take or what most creators miss.\n\n"
-            "## OUTRO + CTA (1 min verbatim)\n"
-            "Exact words. Subscribe ask + comment question.\n\n"
-            "Be specific — cite real repos, real benchmarks, real company names. No filler."
-        )
-        res = _cr.generate(
-            prompt,
-            "You are a content strategist for a top AI YouTube channel. Write direct, demo-driven scripts.",
-            timeout=90,
-            log_fn=lambda msg: self._log(run_id, msg)
-        )
+        if compilation:
+            self._log(run_id, f"Writing YouTube Compilation Script for: {compilation['title']}")
+            self._stage(run_id, "Drafting overarching hook", 0.15)
+            
+            prompt = (
+                f"Write a complete, high-energy YouTube listicle video script storyboard for a developer/AI creator channel.\n"
+                f"Compilation Title: {compilation['title']}\n"
+                f"Core Theme: {compilation['theme_description']}\n\n"
+                f"Here are the specific tools/repositories to cover in this script:\n"
+            )
+            for i, item in enumerate(compilation['items']):
+                prompt += f"{i+1}. {item.get('title')} ({item.get('url')})\n"
+                prompt += f"   Description: {item.get('description') or 'No description provided.'}\n"
+                prompt += f"   Stats: Signal Score {item.get('signal_score')} | Creator Score {item.get('creator_score')}\n\n"
+                
+            prompt += (
+                "Please generate a structured script/storyboard. Format it with clean markdown headings:\n\n"
+                "## OVERARCHING HOOK (1-2 min verbatim)\n"
+                "Write the exact words to say. State a bold, contrarian claim about the theme. Keep it fast-paced.\n\n"
+                "For each of the tools above, generate a section:\n"
+                "## [Tool Number] — [Tool Name] ([Link/URL])\n"
+                "1. **The 30-Second Pitch (verbatim)**: A high-tempo explanation of what it does and why it's blowing up this week.\n"
+                "2. **Terminal/Setup commands**: Provide specific CLI commands (git clone, npm install, docker run, etc.) for developer-viewers to get started immediately.\n"
+                "3. **Show & Tell Demo Flow**: Visual guidelines telling the creator what to show on-screen (e.g. 'Point camera to local UI, click run, highlight the latency difference').\n\n"
+                "## CTA OUTRO (1 min verbatim)\n"
+                "Exact closing words, subscribe call to action, and a specific developer question to drive engagement in the comments.\n\n"
+                "Make the script feel builder-first, technical, and concrete. Avoid generic filler words."
+            )
+            
+            res = _cr.generate(
+                prompt,
+                "You are a top tech YouTuber like The Next New Thing or Andrew Warner, presenting top coding tools with hands-on CLI setups and on-screen demos.",
+                timeout=120,
+                log_fn=lambda msg: self._log(run_id, msg)
+            )
+        else:
+            self._log(run_id, f"Writing video script for: {label}")
+            self._stage(run_id, "Drafting cold-open hook", 0.2)
+
+            prompt = (
+                f"Write a complete YouTube video script outline (14-18 min) for an AI creator.\n"
+                f"Topic: {label}\n\n"
+                "Structure:\n"
+                "## COLD OPEN (30s verbatim)\n"
+                "Write the exact words to say. Bold claim, no intro.\n\n"
+                "## SECTION 1 — [Title] (4-5 min)\n"
+                "Bullet talking points. Include a specific technical detail or stat.\n\n"
+                "## SECTION 2 — [Title] (5-6 min)\n"
+                "Bullet talking points. Include a demo or code moment.\n\n"
+                "## SECTION 3 — [Title] (3-4 min)\n"
+                "Bullet talking points. The contrarian take or what most creators miss.\n\n"
+                "## OUTRO + CTA (1 min verbatim)\n"
+                "Exact words. Subscribe ask + comment question.\n\n"
+                "Be specific — cite real repos, real benchmarks, real company names. No filler."
+            )
+            res = _cr.generate(
+                prompt,
+                "You are a content strategist for a top AI YouTube channel. Write direct, demo-driven scripts.",
+                timeout=90,
+                log_fn=lambda msg: self._log(run_id, msg)
+            )
         script = (res.get("text") or "").strip()
 
         if not script:
@@ -815,7 +905,22 @@ class AgentRunner:
         count = int((payload or {}).get("count", 6))
         self._stage(run_id, "Generating variants", 0.3)
         made = 0
-        if self.intel_db and target_id:
+        import json
+        compilation = None
+        try:
+            scored_data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "data_scored.json")
+            if not os.path.exists(scored_data_path):
+                scored_data_path = os.path.join("data", "data_scored.json")
+            if os.path.exists(scored_data_path):
+                with open(scored_data_path, encoding="utf-8") as f:
+                    scored_data = json.load(f)
+                from creator_intelligence import build_weekly_compilations
+                compilations = build_weekly_compilations(scored_data)
+                compilation = next((c for c in compilations if c["slug"] == target_id), None)
+        except Exception:
+            pass
+
+        if self.intel_db and target_id and not compilation:
             try:
                 from creator_intelligence import generate_thumbnail_variants
                 variants = generate_thumbnail_variants(self.intel_db, target_id, topic, count=count)
@@ -826,16 +931,28 @@ class AgentRunner:
                 self._log(run_id, f"variant generation error: {exc}")
         if not made:
             # Fallback: generate textual thumbnail concepts via LLM
-            self._log(run_id, "No DB target — generating thumbnail concepts via LLM")
+            self._log(run_id, "Generating thumbnail concepts via LLM")
             import cli_registry as _cr
-            prompt = (
-                f"Generate {count} YouTube thumbnail concepts for a video about: {topic}\n\n"
-                "For each concept describe:\n"
-                "- Visual layout (what's in frame)\n"
-                "- Text overlay (max 5 words, high contrast)\n"
-                "- Predicted CTR reasoning (1 sentence)\n\n"
-                "Number each concept 1-{count}. Be specific and visual.".replace("{count}", str(count))
-            )
+            if compilation:
+                prompt = (
+                    f"Generate {count} YouTube thumbnail concepts for a listicle video about: {compilation['title']}\n"
+                    f"Theme Description: {compilation['theme_description']}\n"
+                    f"Tools included: {', '.join([item.get('title', '') for item in compilation['items']])}\n\n"
+                    "For each concept describe:\n"
+                    "- Visual layout (what's in frame, e.g. VS comparison split, terminal screen, emoji reactions)\n"
+                    "- Text overlay (max 5 words, high contrast)\n"
+                    "- Predicted CTR reasoning (1 sentence)\n\n"
+                    "Number each concept 1-{count}. Be specific and visual.".replace("{count}", str(count))
+                )
+            else:
+                prompt = (
+                    f"Generate {count} YouTube thumbnail concepts for a video about: {topic}\n\n"
+                    "For each concept describe:\n"
+                    "- Visual layout (what's in frame)\n"
+                    "- Text overlay (max 5 words, high contrast)\n"
+                    "- Predicted CTR reasoning (1 sentence)\n\n"
+                    "Number each concept 1-{count}. Be specific and visual.".replace("{count}", str(count))
+                )
             res = _cr.generate(
                 prompt,
                 "You are a YouTube thumbnail designer.",

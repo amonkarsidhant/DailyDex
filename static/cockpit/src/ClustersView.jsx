@@ -426,6 +426,131 @@ const makeInto = (c, format) => {
   }).then(() => { alert(`Saved "${c.topic}" as ${format} idea.`); window.DDX.reload(); });
 };
 
+const makeIntoCompilation = (comp, format) => {
+  if (!window.DDX) return;
+  window.DDX.saveToPipeline({
+    title: comp.title, working_title: comp.title, topic: comp.title, category: "Compilation",
+    format, creator_score: comp.creator_score, signal_score: comp.signal_score,
+    pipeline_type: "creator", status: "idea",
+  }).then(() => { alert(`Saved "${comp.title}" as ${format} compilation.`); window.DDX.reload(); });
+};
+
+const CompilationCard = ({ comp, expanded, onToggle }) => {
+  return (
+    <div className="panel" style={{ overflow: "hidden" }}>
+      {/* Header — always visible */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 16, padding: "16px 18px",
+        cursor: "pointer",
+      }} onClick={onToggle}>
+        <div style={{
+          width: 64, height: 64, borderRadius: 8, display: "grid", placeItems: "center",
+          background: `radial-gradient(circle at 30% 30%, var(--signal)33, var(--signal)08)`,
+          border: `1px solid var(--signal)55`,
+        }}>
+          <div className="mono tnum" style={{ color: "var(--signal)", fontWeight: 700, fontSize: 22 }}>
+            {comp.creator_score}
+          </div>
+        </div>
+
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <h3 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.015em",
+              color: "var(--text-hi)", margin: 0 }}>{comp.title}</h3>
+            <FormatBadge format={comp.recommended_format}/>
+            <span className="chip" style={{ color: "var(--signal-up)",
+              borderColor: "rgba(124,255,178,0.3)", background: "rgba(124,255,178,0.05)" }}>listicle</span>
+          </div>
+          <p style={{ fontSize: 13.5, lineHeight: 1.5, color: "var(--text)", margin: "8px 0 0",
+            textWrap: "pretty", maxWidth: 760 }}>{comp.theme_description}</p>
+          <div style={{ display: "flex", gap: 14, marginTop: 12, alignItems: "center" }}>
+            <span className="mono" style={{ fontSize: 11, color: "var(--text-lo)" }}>
+              {comp.items.length} matched tools
+              {" · "}avg signal <span style={{ color: "var(--text-hi)" }}>{comp.signal_score}</span>
+            </span>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+          <div className="mono" style={{ fontSize: 10, color: "var(--text-lo)" }}>THEMED COMPILATION</div>
+          <button className="btn ghost" style={{ padding: "4px 8px" }} onClick={onToggle}>
+            {expanded ? "−" : "+"} details
+          </button>
+        </div>
+      </div>
+
+      {/* Expanded detail */}
+      {expanded && (
+        <div style={{
+          display: "grid", gridTemplateColumns: "1.2fr 1fr",
+          padding: "0 18px 18px", gap: 22,
+          borderTop: "1px solid var(--line)", paddingTop: 16,
+        }}>
+          {/* Left: Matched items */}
+          <div>
+            <div className="label" style={{ marginBottom: 10 }}>Matched Tools in Listicle</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {comp.items.map((it, i) => (
+                <div key={i} style={{
+                  display: "grid", gridTemplateColumns: "24px 1fr auto",
+                  gap: 12, alignItems: "flex-start",
+                  padding: "10px 12px", background: "var(--bg-2)",
+                  border: "1px solid var(--line)", borderRadius: 4,
+                }}>
+                  <span className="mono" style={{ color: "var(--text-lo)", fontSize: 12, marginTop: 1 }}>{i+1}.</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ color: "var(--text-hi)", fontSize: 13, fontWeight: 600 }}>
+                      {it.url
+                        ? <a href={it.url} target="_blank" rel="noreferrer"
+                            style={{ color: "inherit", textDecoration: "none" }}
+                            onClick={e => e.stopPropagation()}>{it.title}</a>
+                        : it.title}
+                    </div>
+                    {it.description && (
+                      <p style={{ fontSize: 11.5, color: "var(--text)", margin: "4px 0 0", lineHeight: 1.4 }}>
+                        {it.description}
+                      </p>
+                    )}
+                    <div className="mono" style={{ fontSize: 9.5, color: "var(--text-lo)", marginTop: 4 }}>
+                      source: <span style={{ color: "var(--text-hi)" }}>{it.source_type}</span>
+                      {" · "}creator score: <span style={{ color: "var(--text-hi)" }}>{it.creator_score}</span>
+                      {" · "}signal: <span style={{ color: "var(--text-hi)" }}>{it.signal_score}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right: format tiles + live agentic actions */}
+          <div>
+            <div className="label" style={{ marginBottom: 8 }}>Make this into</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <ActionTile label="YouTube Listicle"  icon={<I.YT size={14}/>}    sub="10–15 min"       hot onClick={() => makeIntoCompilation(comp, "YouTube compilation")}/>
+              <ActionTile label="Shorts Reel"      icon={<I.Play size={11}/>}  sub="< 60s"            onClick={() => makeIntoCompilation(comp, "YouTube short compilation")}/>
+              <ActionTile label="LinkedIn Post"   icon={<I.Doc size={14}/>}   sub="Text + Link" onClick={() => makeIntoCompilation(comp, "LinkedIn post")}/>
+              <ActionTile label="Newsletter Brief" icon={<I.Paper size={14}/>} sub="~1,500w"          onClick={() => makeIntoCompilation(comp, "Newsletter compilation")}/>
+            </div>
+
+            <div className="label" style={{ marginTop: 18, marginBottom: 8 }}>
+              Agentic actions · results stream in below each button
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <AutoRow icon="✎" label="Draft listicle script"
+                desc="cold open + countdown pitches + setup + screen cues" agent="script_writer" c={{ topic: comp.title, slug: comp.slug }}/>
+              <AutoRow icon="🔎" label="Compile research pack"
+                desc="multi-repo lead analysis + contrarian shifts" agent="topic_researcher" c={{ topic: comp.title, slug: comp.slug }}/>
+              <AutoRow icon="▣" label="Listicle thumbnail concepts"
+                desc="6 visual layout variants with CTR projections" agent="thumbnail_director" c={{ topic: comp.title, slug: comp.slug }}/>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 const ActionTile = ({ label, icon, sub, hot, onClick }) => (
   <button onClick={onClick} style={{
     display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
@@ -447,7 +572,8 @@ const ActionTile = ({ label, icon, sub, hot, onClick }) => (
 // ── ClustersView ──────────────────────────────────────────────────────────
 
 const ClustersView = ({ onJump }) => {
-  const { clusters } = window.DD_DATA;
+  const { clusters, compilations } = window.DD_DATA;
+  const [activeTab, setActiveTab] = useState("single"); // "single" or "listicle"
   const [expandedId, setExpandedId] = useState(clusters[0] ? clusters[0].slug : null);
   const [sortMode, setSortMode] = useState("momentum");
 
@@ -481,35 +607,86 @@ const ClustersView = ({ onJump }) => {
         <span className="ch-bl"/><span className="ch-br"/>
         <PanelHeader no="01"
           actions={
-            <>
-              {["momentum", "score", "fresh"].map(m => (
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              {/* Tab Selector */}
+              <div style={{
+                display: "flex",
+                background: "var(--bg-2)",
+                padding: "2px",
+                borderRadius: "4px",
+                border: "1px solid var(--line)"
+              }}>
+                <button className="btn ghost" onClick={() => { setActiveTab("single"); setExpandedId(clusters[0] ? clusters[0].slug : null); }}
+                  style={{
+                    padding: "3px 8px", fontSize: 11,
+                    background: activeTab === "single" ? "var(--bg-0)" : "transparent",
+                    borderColor: "transparent",
+                    color: activeTab === "single" ? "var(--text-hi)" : "var(--text-lo)",
+                  }}>Single Trends</button>
+                <button className="btn ghost" onClick={() => { setActiveTab("listicle"); setExpandedId(compilations && compilations[0] ? compilations[0].slug : null); }}
+                  style={{
+                    padding: "3px 8px", fontSize: 11,
+                    background: activeTab === "listicle" ? "var(--bg-0)" : "transparent",
+                    borderColor: "transparent",
+                    color: activeTab === "listicle" ? "var(--text-hi)" : "var(--text-lo)",
+                  }}>Listicle Compilations</button>
+              </div>
+
+              {activeTab === "single" && ["momentum", "score", "fresh"].map(m => (
                 <button key={m} className="btn ghost" onClick={() => setSortMode(m)}
                   style={{
                     color: sortMode === m ? "var(--text-hi)" : "var(--text-mid)",
                     borderColor: sortMode === m ? "var(--signal)" : "var(--line-2)",
                   }}>{m}</button>
               ))}
-            </>
+            </div>
           }>
-          Content clusters · {clusters.length} active stories
+          {activeTab === "single"
+            ? `Content clusters · ${clusters.length} active stories`
+            : `Weekly themed listicles · ${(compilations || []).length} compilations`}
         </PanelHeader>
         <div style={{ padding: "16px 20px" }}>
-          <p className="serif" style={{
-            fontSize: 22, lineHeight: 1.3, color: "var(--text-hi)", margin: 0,
-            fontStyle: "italic", maxWidth: 720,
-          }}>
-            A cluster is a topic appearing across{" "}
-            <span style={{ color: "var(--signal)" }}>two or more source families</span> in the last week.
-            Expand any story — agents run live, stream logs, and deliver results inline.
-          </p>
+          {activeTab === "single" ? (
+            <p className="serif" style={{
+              fontSize: 22, lineHeight: 1.3, color: "var(--text-hi)", margin: 0,
+              fontStyle: "italic", maxWidth: 720,
+            }}>
+              A cluster is a topic appearing across{" "}
+              <span style={{ color: "var(--signal)" }}>two or more source families</span> in the last week.
+              Expand any story — agents run live, stream logs, and deliver results inline.
+            </p>
+          ) : (
+            <p className="serif" style={{
+              fontSize: 22, lineHeight: 1.3, color: "var(--text-hi)", margin: 0,
+              fontStyle: "italic", maxWidth: 720,
+            }}>
+              Weekly compilations group the highest-signal developer tools under{" "}
+              <span style={{ color: "var(--signal)" }}>high-demand YouTube themes</span>.
+              Draft countdown script storyboards, setup commands, and CTR-optimized listicle layouts.
+            </p>
+          )}
         </div>
       </div>
 
-      {sorted.map(c => (
-        <ClusterCard key={c.slug} c={c}
-          expanded={expandedId === c.slug}
-          onToggle={() => setExpandedId(expandedId === c.slug ? null : c.slug)}/>
-      ))}
+      {activeTab === "single" ? (
+        sorted.map(c => (
+          <ClusterCard key={c.slug} c={c}
+            expanded={expandedId === c.slug}
+            onToggle={() => setExpandedId(expandedId === c.slug ? null : c.slug)}/>
+        ))
+      ) : (
+        (!compilations || compilations.length === 0) ? (
+          <div className="panel" style={{ padding: "24px", textAlign: "center", color: "var(--text-lo)" }}>
+            No weekly themed compilations generated yet.
+          </div>
+        ) : (
+          compilations.map(comp => (
+            <CompilationCard key={comp.slug} comp={comp}
+              expanded={expandedId === comp.slug}
+              onToggle={() => setExpandedId(expandedId === comp.slug ? null : comp.slug)}/>
+          ))
+        )
+      )}
     </div>
   );
 };

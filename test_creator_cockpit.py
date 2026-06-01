@@ -182,8 +182,10 @@ def test_schedule_create_requires_fields(client):
 # ── Phase 4: copilot ──────────────────────────────────────────────────────
 
 def test_copilot_mocked_llm(app_env, monkeypatch):
-    import llm_summary
-    monkeypatch.setattr(llm_summary, "query_llm", lambda q, system_prompt=None: "Demo first.")
+    import cli_registry
+    monkeypatch.setattr(cli_registry, "generate", lambda prompt, system=None, **kwargs: {
+        "text": "Demo first.", "provider": "gemini", "model": "mock-model", "elapsed_ms": 10, "tried": []
+    })
     monkeypatch.setattr(app_env["module"], "_load_creator_profile_safe",
                         lambda: {"copilot": {"provider": "gemini", "max_tokens": 200}})
     client = app_env["module"].app.test_client()
@@ -211,6 +213,10 @@ def test_copilot_nvidia_provider(app_env, monkeypatch):
         return "Coding AI wins."
 
     monkeypatch.setattr(llm_summary, "query_nvidia", fake_nvidia)
+    monkeypatch.setattr(llm_summary, "load_creator_profile",
+                        lambda *args, **kwargs: {"copilot": {"provider": "nvidia",
+                                                             "model": "minimaxai/minimax-m2.7",
+                                                             "max_tokens": 200}})
     monkeypatch.setattr(module, "_load_creator_profile_safe",
                         lambda: {"copilot": {"provider": "nvidia",
                                              "model": "minimaxai/minimax-m2.7",

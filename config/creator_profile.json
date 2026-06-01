@@ -1,8 +1,8 @@
 {
-  "channel_name": "DailyDex Creator",
-  "niche": "Practical AI for indie builders and self-hosters",
+  "channel_name": "My AI Channel",
+  "niche": "Practical AI tutorials and local self-hosting demos.",
   "audience": "Engineers, hackers, and creators who care about local-first AI, agentic workflows, and shipping real demos on commodity hardware (e.g. Raspberry Pi, mini PCs, single-GPU rigs).",
-  "tone": "Skeptical, hands-on, slightly opinionated. No hype. Prefer concrete demos over abstract claims. Concise, technical, and direct.",
+  "tone": "Skeptical, hands-on, slightly opinionated. No hype.",
   "perspective": "First-person from a builder who actually tests things on a Raspberry Pi 4 and is allergic to vapor announcements.",
   "banned_phrases": [
     "game changer",
@@ -61,7 +61,10 @@
   "persona": "multi",
   "schedule": {
     "preferred_record_window": "10:00-12:00",
-    "publish_days": ["Sat", "Sun"],
+    "publish_days": [
+      "Sat",
+      "Sun"
+    ],
     "linkedin_time": "10:00"
   },
   "copilot": {
@@ -110,21 +113,41 @@
           "contrarian": "You do not need a GPU to self-host a useful LLM",
           "tutorial": "How to run Llamafile 0.9 on a Raspberry Pi 4 today"
         },
-        "thumbnail_text": ["ONE FILE", "NO GPU", "PI 4 READY"],
+        "thumbnail_text": [
+          "ONE FILE",
+          "NO GPU",
+          "PI 4 READY"
+        ],
         "broll_list": [
           "Top-down shot of the Pi 4 board with the SSH terminal overlaid",
           "Stopwatch animation timing the cold start",
           "tok/s graph filling in live during a prompt"
         ],
-        "on_screen_cues": ["6 tok/s", "0 deps", "3.7GB RAM"],
+        "on_screen_cues": [
+          "6 tok/s",
+          "0 deps",
+          "3.7GB RAM"
+        ],
         "insight": "Distribution beats raw quality for self-hosters. A binary you can scp is worth more than a slightly smarter model behind a paywall.",
         "hooks": [
           "Local LLMs lost the binary war until last week.",
           "One file. No CUDA. Real tokens on a Pi 4.",
           "If self-hosting is dead, why did this just go viral?"
         ],
-        "tags": ["llamafile", "local-ai", "pi"]
+        "tags": [
+          "llamafile",
+          "local-ai",
+          "pi"
+        ]
       }
     }
-  ]
+  ],
+  "creator_identity": {
+    "provider": "local",
+    "name": "Local Guest",
+    "email": "guest@dailydex.dev",
+    "avatar": "https://api.dicebear.com/7.x/identicon/svg?seed=guest",
+    "channel_id": "UC-LocalGuest",
+    "onboarding_completed": true
+  }
 }

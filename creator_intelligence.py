@@ -185,6 +185,11 @@ def build_topic_clusters(scored_data: Dict, intel_db=None) -> List[Dict]:
 
         # Trend time-series fields (Phase 1).
         history = intel_db.read_cluster_history(topic, hours=168) if intel_db else []
+        affinity_bonus = 0
+        for item, _ in cluster["raw_items"]:
+            if item.get("creator_score_breakdown") and isinstance(item.get("creator_score_breakdown"), dict):
+                affinity_bonus = max(affinity_bonus, item.get("creator_score_breakdown").get("affinity_bonus", 0))
+
         cluster_out = {
             "topic": topic,
             "slug": slugify_topic(topic),
@@ -193,6 +198,7 @@ def build_topic_clusters(scored_data: Dict, intel_db=None) -> List[Dict]:
             "related_items": related_items[:6],
             "average_signal_score": avg_signal,
             "creator_score": avg_creator,
+            "affinity_bonus": affinity_bonus,
             "why_this_is_a_story": f"{topic} is showing up across {source_count} source families, which usually means audience curiosity is already forming.",
             "recommended_angle": "Show what changed, who it matters for, and the fastest concrete demo." if cluster["demoable"] else "Explain the shift, show supporting evidence, and call out what is still uncertain.",
             "best_content_format": best_format,
@@ -555,6 +561,13 @@ def enrich_scored_data_with_creator_fields(scored_data: Dict, intel_db=None) -> 
     for cluster in build_topic_clusters(scored_data):
         support_map[cluster["topic"]] = cluster
 
+    top_categories = []
+    if intel_db is not None:
+        try:
+            top_categories = intel_db.get_top_performing_categories(limit=3)
+        except Exception:
+            pass
+
     for source_type in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews"]:
         enriched_items = []
         for item in scored_data.get(source_type, []) or []:
@@ -562,6 +575,20 @@ def enrich_scored_data_with_creator_fields(scored_data: Dict, intel_db=None) -> 
             support = support_map.get(topic, {"topic": topic, "source_count": 1, "sources": [source_type], "related_items": []})
             factors = _creator_factors(item, source_type, support)
             creator_score = _creator_score(factors)
+
+            # ROI feedback loop: apply affinity boost if item category matches top performing categories
+            affinity_bonus = 0
+            item_categories = item.get("categories") or []
+            if not isinstance(item_categories, list):
+                item_categories = [item_categories]
+            if item.get("category"):
+                item_categories.append(item.get("category"))
+
+            if any(cat in top_categories for cat in item_categories if cat):
+                affinity_bonus = 15
+                creator_score = min(100, creator_score + affinity_bonus)
+            
+            factors["affinity_bonus"] = affinity_bonus
             best_format = _format_for_item(item, source_type, factors, support)
             effort_label = _production_effort_label(factors["production_effort"])
             titles = _title_ideas(topic, item, best_format)
@@ -723,6 +750,90 @@ def build_creator_saved_groups(saved_items: List[Dict]) -> List[Dict]:
                 entries.append(item)
         groups.append({"key": status_key, "label": label, "group_entries": entries})
     return groups
+
+
+def build_weekly_compilations(scored_data: Dict) -> List[Dict]:
+    """Compile scored items into themed listicles for multi-item content delivery."""
+    all_items = []
+    seen_urls = set()
+    for source in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews"]:
+        for item in scored_data.get(source, []) or []:
+            url = item.get("url")
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                # Ensure we have clean dictionaries with standard fields
+                item_copy = dict(item)
+                item_copy["source_type"] = source
+                all_items.append(item_copy)
+
+    # Sort all items by creator_score first, then signal_score
+    all_items.sort(key=lambda x: (x.get("creator_score", 0), x.get("signal_score", 0)), reverse=True)
+
+    # Helper to check keywords in title/description
+    def matches_keywords(item, keywords):
+        text = ((item.get("title") or "") + " " + (item.get("description") or "") + " " + " ".join(item.get("tags") or [])).lower()
+        return any(kw in text for kw in keywords)
+
+    themes = [
+        {
+            "title": "Top 5 Local AI & Self-Hosted Tools",
+            "slug": "top-5-local-ai-self-hosted",
+            "theme_description": "Run powerful AI models entirely offline and self-host your own AI infrastructure. These top-trending open-source tools help you ditch the cloud.",
+            "keywords": ["local", "self-hosted", "ollama", "llama.cpp", "edge", "offline", "local-first", "host"],
+        },
+        {
+            "title": "Top 5 AI Coding Assistants & Agents",
+            "slug": "top-5-ai-coding-agents",
+            "theme_description": "AI agents and coding tools are moving at a breakneck pace. Here are the top repositories that automate development and build software autonomously.",
+            "keywords": ["agent", "autonomous", "coding", "code", "coder", "developer", "mcp", "programming", "copilot"],
+        },
+        {
+            "title": "Top Notion & Gamma Open-Source Alternatives",
+            "slug": "top-notion-gamma-alternatives",
+            "theme_description": "Ditch proprietary workspace apps. These developer-first productivity platforms, infinite canvases, and markdown editors are taking over GitHub this week.",
+            "keywords": ["notion", "gamma", "editor", "canvas", "wiki", "note", "document", "markdown", "appflowy", "affine", "docmost"],
+        },
+    ]
+
+    compilations = []
+
+    # 1. Themed listicles
+    for t in themes:
+        matched = [item for item in all_items if matches_keywords(item, t["keywords"])]
+        if len(matched) >= 3:
+            comp_items = matched[:5]
+            avg_creator = sum(item.get("creator_score", 0) for item in comp_items) / len(comp_items)
+            avg_signal = sum(item.get("signal_score", 0) for item in comp_items) / len(comp_items)
+            compilations.append({
+                "title": t["title"],
+                "slug": t["slug"],
+                "theme_description": t["theme_description"],
+                "items": comp_items,
+                "creator_score": int(avg_creator),
+                "signal_score": int(avg_signal),
+                "recommended_format": "YouTube Listicle (Long-form)",
+            })
+
+    # 2. General "Top GitHub Repos of the Week" (always present)
+    github_items = [item for item in all_items if item.get("source_type") == "github"]
+    if len(github_items) >= 3:
+        comp_items = github_items[:5]
+        avg_creator = sum(item.get("creator_score", 0) for item in comp_items) / len(comp_items)
+        avg_signal = sum(item.get("signal_score", 0) for item in comp_items) / len(comp_items)
+        compilations.append({
+            "title": "Top 5 Trending GitHub Repos This Week",
+            "slug": "top-5-trending-github-repos",
+            "theme_description": "The highest-signal open-source repositories and packages trending on GitHub. Perfect for developer show-and-tell reviews.",
+            "items": comp_items,
+            "creator_score": int(avg_creator),
+            "signal_score": int(avg_signal),
+            "recommended_format": "YouTube Listicle (Long-form)",
+        })
+
+    return compilations
+
+
+
 
 
 def slugify_topic(value: str) -> str:

@@ -7,3 +7,7 @@ gunicorn>=21.0.0
 pytest>=8.0.0
 python-telegram-bot[job-queue]>=20.7
 yfinance>=0.2.0
+
+# Postgres / Supabase (used when DATABASE_URL is set)
+psycopg2-binary>=2.9.9
+supabase>=2.4.0

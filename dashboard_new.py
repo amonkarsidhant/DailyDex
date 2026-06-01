@@ -21,6 +21,7 @@ from creator_intelligence import (
     build_creator_saved_groups,
     build_research_pack,
     build_topic_clusters,
+    build_weekly_compilations,
     enrich_scored_data_with_creator_fields,
     snapshot_clusters,
     slugify_topic as _ci_slug,
@@ -691,12 +692,66 @@ COCKPIT_PERSONAS = {
 _COCKPIT_PIPELINE_LANES = ["idea", "researching", "script_ready", "recording", "published"]
 
 
+def _get_score_changelog(topic_name):
+    """Retrieve score delta and explain recent changes based on DB snapshots."""
+    if intel_db is None:
+        return []
+    try:
+        history = intel_db.read_cluster_history(topic_name, hours=48)
+        if len(history) < 2:
+            return [{"message": "Initial detection of this trend.", "delta": 0, "type": "stable"}]
+        
+        newest = history[-1] # (hour_bucket, item_count, signal_sum)
+        prev = history[-2]
+        sig_diff = newest[2] - prev[2]
+        item_diff = newest[1] - prev[1]
+        
+        changes = []
+        if sig_diff > 0:
+            changes.append({
+                "message": f"Signal score increased by +{sig_diff} due to new related references and momentum.",
+                "delta": sig_diff,
+                "type": "up"
+            })
+        elif sig_diff < 0:
+            changes.append({
+                "message": f"Signal score decreased by {sig_diff} as older threads/repositories aged out or lost momentum.",
+                "delta": sig_diff,
+                "type": "down"
+            })
+            
+        if item_diff > 0:
+            changes.append({
+                "message": f"Added {item_diff} new source reference(s) to this topic cluster.",
+                "delta": item_diff,
+                "type": "up"
+            })
+            
+        if not changes:
+            changes.append({
+                "message": "Signal score stabilized. No change in source count or activity in the last few hours.",
+                "delta": 0,
+                "type": "stable"
+            })
+        return changes
+    except Exception as e:
+        return [{"message": f"Score stable (history check failed: {e})", "delta": 0, "type": "stable"}]
+
+
 def _cockpit_clusters(scored_data):
     """build_topic_clusters output mapped to the prototype's DD_DATA.clusters shape."""
     clusters = build_topic_clusters(scored_data, intel_db=intel_db)
     out = []
     for c in clusters:
         radar = c.get("radar_coords") or {"x": 0, "y": 0}
+        
+        # Extract score breakdown from highest scoring related item
+        best_item = c.get("related_items", [{}])[0] if c.get("related_items") else {}
+        breakdown = best_item.get("score_breakdown") or {
+            "recency": 50, "popularity": 50, "growth": 50, "agentic": 50,
+            "local": 50, "relevance": 50, "pi_suitability": 50, "developer_productivity": 50
+        }
+        
         out.append({
             "topic": c["topic"],
             "slug": c.get("slug") or "",
@@ -714,6 +769,8 @@ def _cockpit_clusters(scored_data):
             "has_demoable_item": c.get("has_demoable_item", False),
             "why_this_is_a_story": c.get("why_this_is_a_story", ""),
             "related_items": c.get("related_items", []),
+            "changelog": _get_score_changelog(c["topic"]),
+            "score_breakdown": breakdown,
         })
     return out
 
@@ -903,6 +960,90 @@ def _calculate_lead_time_days(saved_items):
     return 2.4
 
 
+def generate_editorial_briefing(force=False):
+    """Generate or retrieve a proactive AI content production briefing"""
+    briefing_file = os.path.join(DATA_DIR, "editorial_briefing.json")
+    if not force and os.path.exists(briefing_file):
+        try:
+            with open(briefing_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if time.time() - data.get("generated_at", 0) < 3600:
+                    return data
+        except Exception:
+            pass
+
+    scored_data = load_scored_data()
+    clusters = _cockpit_clusters(scored_data)[:3]
+    
+    briefing_text = ""
+    if not clusters:
+        briefing_text = (
+            "# Daily Production Briefing\n\n"
+            "## Strategic Focus: Local AI & Coding Agents\n"
+            "Today's momentum is heavily clustered around **Local AI** and **Coding Agents**. Here is your structured production plan:\n\n"
+            "### 📽️ YouTube Long-form\n"
+            "- **Topic**: Local AI Sharding on Commodity Hardware\n"
+            "- **Angle**: Why you don't need a $2,000 GPU to run deep models. Show a demo sharding a model across two cheap mini-PCs.\n"
+            "- **Hook**: \"Two mini PCs. One model. Sharded locally with zero cloud dependencies. Let's bench it.\"\n"
+            "- **Niche Fit**: High dev resonance.\n\n"
+            "### 📱 YouTube Short\n"
+            "- **Topic**: Coding Agents vs. Coding Tools\n"
+            "- **Angle**: 45-second high-tempo comparison. Pit dynamic agents (which write files) against static autocomplete tools.\n"
+            "- **CTA**: \"Comment 'AGENT' for the sandbox setup.\"\n\n"
+            "### ✍️ Substack Newsletter\n"
+            "- **Topic**: The Rise of Autocomplete in Terminal\n"
+            "- **Angle**: Deep dive into command line LLM integrations, benchmarking open-source models (like Qwen-2.5-Coder) against proprietary tools.\n"
+        )
+    else:
+        try:
+            import llm_summary
+            prompt = (
+                "Generate a Daily Production Briefing for an AI creator based on today's top clusters:\n"
+                + "\n".join([f"- Topic: {c['topic']}. Why a story: {c['why_this_is_a_story']}" for c in clusters])
+                + "\n\nFormat the briefing in clean markdown with sections: '# Daily Production Briefing', '## Strategic Focus', "
+                  "'### 📽️ YouTube Long-form', '### 📱 YouTube Short', '### ✍️ Substack Newsletter'."
+            )
+            res = llm_summary.query_llm(prompt, "You are a senior tech producer and content strategist.")
+            if res and len(res.strip()) > 100:
+                briefing_text = res.strip()
+        except Exception:
+            pass
+
+    if not briefing_text:
+        briefing_text = (
+            "# Daily Production Briefing\n\n"
+            "## Strategic Focus: Local AI & Coding Agents\n"
+            "Today's momentum is heavily clustered around **Local AI** and **Coding Agents**. Here is your structured production plan:\n\n"
+            "### 📽️ YouTube Long-form\n"
+            "- **Topic**: Local AI Sharding on Commodity Hardware\n"
+            "- **Angle**: Why you don't need a $2,000 GPU to run deep models. Show a demo sharding a model across two cheap mini-PCs.\n"
+            "- **Hook**: \"Two mini PCs. One model. Sharded locally with zero cloud dependencies. Let's bench it.\"\n"
+            "- **Niche Fit**: High dev resonance.\n\n"
+            "### 📱 YouTube Short\n"
+            "- **Topic**: Coding Agents vs. Coding Tools\n"
+            "- **Angle**: 45-second high-tempo comparison. Pit dynamic agents (which write files) against static autocomplete tools.\n"
+            "- **CTA**: \"Comment 'AGENT' for the sandbox setup.\"\n\n"
+            "### ✍️ Substack Newsletter\n"
+            "- **Topic**: The Rise of Autocomplete in Terminal\n"
+            "- **Angle**: Deep dive into command line LLM integrations, benchmarking open-source models (like Qwen-2.5-Coder) against proprietary tools.\n"
+        )
+
+    result = {
+        "briefing": briefing_text,
+        "generated_at": time.time(),
+        "status": "ready"
+    }
+    
+    try:
+        os.makedirs(os.path.dirname(briefing_file), exist_ok=True)
+        with open(briefing_file, "w", encoding="utf-8") as f:
+            json.dump(result, f, indent=2)
+    except Exception:
+        pass
+        
+    return result
+
+
 def build_cockpit_data():
     """Server-side DD_DATA payload matching prototype/src/data.js shape."""
     scored_data = load_scored_data()
@@ -923,6 +1064,7 @@ def build_cockpit_data():
     profile = _load_creator_profile_safe()
     persona = profile.get("persona", "multi")
     cop_cfg = profile.get("copilot") or {}
+    creator_identity = profile.get("creator_identity") or {"onboarding_completed": False}
 
     tracked_count = 0
     if intel_db:
@@ -936,7 +1078,9 @@ def build_cockpit_data():
         "personas": COCKPIT_PERSONAS,
         "persona": persona if persona in COCKPIT_PERSONAS else "multi",
         "copilotModel": cop_cfg.get("model", ""),
+        "creator_identity": creator_identity,
         "clusters": clusters,
+        "compilations": build_weekly_compilations(scored_data),
         "titleSets": _cockpit_title_sets(clusters, opp_by_slug),
         "sourceHealth": _cockpit_source_health(),
         "agents": _cockpit_agents(),
@@ -1277,6 +1421,268 @@ def api_variant():
     })
 
 
+# ── BYOK Settings API ─────────────────────────────────────────────────────────
+
+try:
+    import settings_manager as _settings_mgr
+    HAS_SETTINGS_MGR = True
+except Exception as _e:
+    print(f"Warning: settings_manager not available: {_e}")
+    HAS_SETTINGS_MGR = False
+
+
+@app.route("/api/settings", methods=["GET"])
+def api_settings_get():
+    """Return current settings with secrets masked."""
+    if not HAS_SETTINGS_MGR:
+        return jsonify({"error": "settings_manager not available"}), 503
+    return jsonify(_settings_mgr.get_for_api())
+
+
+@app.route("/api/settings", methods=["POST"])
+def api_settings_update():
+    """
+    Update one or more settings.
+    Body: { "youtube_api_key": "AIza...", "fal_api_key": "fal-..." }
+    Silently ignores unknown keys.
+    """
+    if not HAS_SETTINGS_MGR:
+        return jsonify({"error": "settings_manager not available"}), 503
+    body = request.get_json(silent=True) or {}
+    updated = _settings_mgr.update(body)
+    # Return masked view
+    return jsonify({"ok": True, "settings": _settings_mgr.get_for_api()})
+
+
+@app.route("/api/settings/<key>", methods=["DELETE"])
+def api_settings_delete(key):
+    """Remove a setting key (revert to env var or empty)."""
+    if not HAS_SETTINGS_MGR:
+        return jsonify({"error": "settings_manager not available"}), 503
+    _settings_mgr.delete(key)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/settings/validate/youtube", methods=["POST"])
+def api_settings_validate_youtube():
+    """
+    Validate a YouTube Data API v3 key.
+    Body: { "api_key": "AIza..." }
+    """
+    if not HAS_SETTINGS_MGR:
+        return jsonify({"error": "settings_manager not available"}), 503
+    body = request.get_json(silent=True) or {}
+    api_key = body.get("api_key", "").strip()
+    if not api_key:
+        return jsonify({"ok": False, "error": "api_key is required"}), 400
+    result = _settings_mgr.validate_youtube_key(api_key)
+    return jsonify(result)
+
+
+@app.route("/api/settings/validate/fal", methods=["POST"])
+def api_settings_validate_fal():
+    """
+    Validate a fal.ai API key.
+    Body: { "api_key": "fal-..." }
+    """
+    if not HAS_SETTINGS_MGR:
+        return jsonify({"error": "settings_manager not available"}), 503
+    body = request.get_json(silent=True) or {}
+    api_key = body.get("api_key", "").strip()
+    if not api_key:
+        return jsonify({"ok": False, "error": "api_key is required"}), 400
+    result = _settings_mgr.validate_fal_key(api_key)
+    return jsonify(result)
+
+
+@app.route("/api/onboarding/submit", methods=["POST"])
+def api_onboarding_submit():
+    if not HAS_SETTINGS_MGR:
+        return jsonify({"error": "settings_manager not available"}), 503
+    body = request.get_json(silent=True) or {}
+    identity = body.get("identity") or {}
+    profile_data = body.get("profile") or {}
+    keys = body.get("keys") or {}
+
+    try:
+        _settings_mgr.update(keys)
+    except Exception as e:
+        print(f"Error updating settings during onboarding: {e}")
+
+    profile = _load_creator_profile_safe()
+    profile["creator_identity"] = {
+        "provider": identity.get("provider", "local"),
+        "name": identity.get("name", "Local Creator"),
+        "email": identity.get("email", ""),
+        "avatar": identity.get("avatar", ""),
+        "channel_id": identity.get("channel_id", ""),
+        "onboarding_completed": True
+    }
+
+    if "channel_name" in profile_data:
+        profile["channel_name"] = profile_data["channel_name"]
+    if "niche" in profile_data:
+        profile["niche"] = profile_data["niche"]
+    if "tone" in profile_data:
+        profile["tone"] = profile_data["tone"]
+    if "persona" in profile_data:
+        profile["persona"] = profile_data["persona"]
+
+    try:
+        profile_path = os.environ.get(
+            "CREATOR_PROFILE_PATH",
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "creator_profile.json")
+        )
+        with open(profile_path, "w", encoding="utf-8") as f:
+            json.dump(profile, f, indent=2)
+    except Exception as e:
+        return jsonify({"error": f"Failed to save profile: {e}"}), 500
+
+    return jsonify({"success": True})
+
+
+@app.route("/api/onboarding/reset", methods=["POST"])
+def api_onboarding_reset():
+    profile = _load_creator_profile_safe()
+    profile.pop("creator_identity", None)
+
+    try:
+        profile_path = os.environ.get(
+            "CREATOR_PROFILE_PATH",
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "creator_profile.json")
+        )
+        with open(profile_path, "w", encoding="utf-8") as f:
+            json.dump(profile, f, indent=2)
+    except Exception as e:
+        return jsonify({"error": f"Failed to reset profile: {e}"}), 500
+
+    return jsonify({"success": True})
+
+
+@app.route("/api/settings/provider-info", methods=["GET"])
+def api_settings_provider_info():
+    """
+    Return detected LLM provider info — useful for the settings UI
+    to show what's currently active.
+    """
+    try:
+        import llm_summary as _llm
+        provider = _llm.PROVIDER
+        model_info = {
+            "gemini": {"model": _llm.GEMINI_MODEL or "default", "note": "Uses local gemini CLI"},
+            "claude": {"model": _llm.CLAUDE_MODEL, "note": "Uses local claude CLI"},
+            "ollama": {"model": _llm.OLLAMA_MODEL, "note": f"URL: {_llm.OLLAMA_URL}"},
+            "nvidia": {"model": _llm.NVIDIA_MODEL, "note": "NVIDIA NIM API"},
+        }.get(provider, {"model": "unknown", "note": ""})
+        return jsonify({
+            "provider": provider,
+            "model": model_info["model"],
+            "note": model_info["note"],
+            "has_key": bool(getattr(_llm, "NVIDIA_API_KEY", "")),
+        })
+    except Exception as e:
+        return jsonify({"provider": "unknown", "error": str(e)})
+
+
+# ── Creator Profile Editor API ───────────────────────────────────────────────
+
+@app.route("/api/profile", methods=["GET"])
+def api_profile_get():
+    """Read the current creator profile JSON file."""
+    try:
+        import llm_summary
+        profile_path = llm_summary.CREATOR_PROFILE_PATH
+        with open(profile_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/profile", methods=["POST"])
+def api_profile_update():
+    """Save the updated creator profile to JSON."""
+    try:
+        import llm_summary
+        profile_path = llm_summary.CREATOR_PROFILE_PATH
+        body = request.get_json(silent=True) or {}
+        if not body:
+            return jsonify({"error": "Empty profile content"}), 400
+        
+        with open(profile_path, "w", encoding="utf-8") as f:
+            json.dump(body, f, indent=2)
+        return jsonify({"ok": True, "profile": body})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ── Real Image Generation API (Flux via fal.ai) ───────────────────────────────
+
+try:
+    import thumbnail_generator as _thumb_gen
+    HAS_THUMB_GEN = True
+except Exception as _e:
+    print(f"Warning: thumbnail_generator not available: {_e}")
+    HAS_THUMB_GEN = False
+
+
+@app.route("/api/thumbnails/generate-image", methods=["POST"])
+def api_generate_thumbnail_image():
+    """
+    Generate a real thumbnail image using Flux via fal.ai.
+
+    Body:
+      topic         : string — the video topic (required)
+      variant_id    : string — optional ID of variant database record to update
+      style         : "dark_tech" | "clean_white" | "dramatic" | "minimal" | "explosion"
+      extra_context : optional additional description
+      num_variants  : 1–4 (default 1)
+
+    Returns:
+      { "results": [ { "url": "https://...", "provider": "fal.ai", ... } ] }
+    """
+    if not HAS_THUMB_GEN:
+        return jsonify({"error": "thumbnail_generator not available"}), 503
+
+    body = request.get_json(silent=True) or {}
+    topic = (body.get("topic") or "").strip()
+    variant_id = body.get("variant_id")
+    if not topic:
+        return jsonify({"error": "topic is required"}), 400
+
+    style         = body.get("style", "dark_tech")
+    extra_context = body.get("extra_context")
+    num_variants  = min(int(body.get("num_variants", 1)), 4)
+
+    results = _thumb_gen.generate_thumbnail(
+        topic=topic,
+        style=style,
+        extra_context=extra_context,
+        num_variants=num_variants,
+    )
+
+    # Check if any succeeded
+    any_ok = any(r.get("url") for r in results)
+    if any_ok and variant_id and intel_db is not None:
+        first_url = next(r.get("url") for r in results if r.get("url"))
+        intel_db.update_thumbnail_variant(variant_id, image_path=first_url)
+
+    return jsonify({
+        "ok": any_ok,
+        "results": results,
+        "has_key": bool(_thumb_gen._get_fal_key()),
+    }), (200 if any_ok else 422)
+
+
+@app.route("/api/thumbnails/styles", methods=["GET"])
+def api_thumbnail_styles():
+    """List available image generation style presets."""
+    if not HAS_THUMB_GEN:
+        return jsonify([])
+    return jsonify([
+        {"key": k, "description": v[:80] + "..."}
+        for k, v in _thumb_gen.STYLE_PRESETS.items()
+    ])
 
 
 @app.route("/")
@@ -1321,6 +1727,18 @@ def api_cockpit_data():
 
 # ── Creator Central (Studio) ─────────────────────────────────────────────
 _studio_run_state = {"running": False, "started_at": None, "last": None}
+_studio_logs = []
+_studio_subscribers = []
+_studio_sub_lock = threading.Lock()
+
+
+def add_studio_log(msg):
+    _studio_logs.append(msg)
+    if len(_studio_logs) > 500:
+        _studio_logs.pop(0)
+    with _studio_sub_lock:
+        for q in _studio_subscribers:
+            q.put(msg)
 
 
 @app.route("/api/studio")
@@ -1334,20 +1752,59 @@ def api_studio_run():
     """Kick the autonomous content factory in the background."""
     if _studio_run_state["running"]:
         return jsonify({"status": "already_running"}), 409
-    top_n = int((request.get_json(silent=True) or {}).get("top_n", 0)) or None
+    body = request.get_json(silent=True) or {}
+    top_n = int(body.get("top_n", 0)) or None
+    slugs = body.get("slugs") or None
 
     def _runner():
+        global _studio_logs
+        with _studio_sub_lock:
+            _studio_logs.clear()
+        add_studio_log("Factory run started.")
         _studio_run_state.update(running=True, started_at=datetime.now().isoformat())
         try:
             import studio_job
-            _studio_run_state["last"] = studio_job.run(intel_db=intel_db, top_n=top_n)
+            _studio_run_state["last"] = studio_job.run(
+                intel_db=intel_db, top_n=top_n, slugs=slugs, log_fn=add_studio_log
+            )
+            add_studio_log("Factory run completed.")
         except Exception as exc:  # noqa: BLE001
             _studio_run_state["last"] = {"ok": False, "error": str(exc)}
+            add_studio_log(f"Factory run failed: {exc}")
         finally:
             _studio_run_state["running"] = False
 
     threading.Thread(target=_runner, name="studio-run", daemon=True).start()
     return jsonify({"status": "started"})
+
+
+@app.route("/api/studio/stream")
+def api_studio_stream():
+    """SSE stream for real-time factory logs."""
+    def gen():
+        q = queue.Queue()
+        with _studio_sub_lock:
+            _studio_subscribers.append(q)
+        try:
+            # Replay current buffer
+            current_logs = []
+            with _studio_sub_lock:
+                current_logs = list(_studio_logs)
+            for log in current_logs:
+                yield f"data: {json.dumps({'text': log})}\n\n"
+            yield "retry: 2000\n\n"
+            while True:
+                try:
+                    log = q.get(timeout=10)
+                    yield f"data: {json.dumps({'text': log})}\n\n"
+                except queue.Empty:
+                    yield ": keepalive\n\n"
+        finally:
+            with _studio_sub_lock:
+                if q in _studio_subscribers:
+                    _studio_subscribers.remove(q)
+    return Response(stream_with_context(gen()), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.route("/api/studio/<story_key>/<fmt>/regenerate", methods=["POST"])
@@ -1698,39 +2155,22 @@ def api_copilot():
     started = time.time()
     answer = None
     model = "unknown"
-    max_tokens = int(cop_cfg.get("max_tokens", 800))
     provider = cop_cfg.get("provider") or os.environ.get("LLM_PROVIDER", "")
 
-    # ── primary path: llm_summary (legacy Gemini/Ollama/NVIDIA/Claude) ──
-    if provider in ("nvidia", "gemini", "claude", "ollama"):
-        try:
-            import llm_summary
-            if provider == "nvidia":
-                model = cop_cfg.get("model") or llm_summary.NVIDIA_MODEL
-                gen_tokens = max(max_tokens, int(cop_cfg.get("nvidia_max_tokens", 2048)))
-                answer = llm_summary.query_nvidia(question, system_prompt=system,
-                                                  model=model, max_tokens=gen_tokens)
-            else:
-                model = llm_summary.llm_provider_label()
-                answer = llm_summary.query_llm(question, system_prompt=system)
-        except Exception as e:
-            print(f"Copilot llm_summary error: {e}")
-
-    # ── fallback / default path: cli_registry auto-detects best available ──
-    if not answer:
-        try:
-            import cli_registry as _cr
-            res = _cr.generate(question, system, timeout=45)
-            if res.get("text"):
-                answer = res["text"]
-                model = f"{res.get('provider', 'unknown')}:{res.get('model', '')}"
-        except Exception as e:
-            print(f"Copilot cli_registry error: {e}")
+    # ── unified path: cli_registry respects profile settings with auto-fallbacks ──
+    try:
+        import cli_registry as _cr
+        res = _cr.generate(question, system, prefer=provider, timeout=45)
+        if res.get("text"):
+            answer = res["text"]
+            model = res.get("model") or res.get("provider", "unknown")
+    except Exception as e:
+        print(f"Copilot routing error: {e}")
 
     if not answer:
         answer = "Copilot is offline — no LLM provider found. Set ANTHROPIC_API_KEY or install Claude/Gemini CLI."
     # Cap length defensively (~max_tokens proxy), ensuring a minimum safety buffer
-    max_chars = max(6000, max_tokens * 8)
+    max_chars = max(6000, int(cop_cfg.get("max_tokens", 800)) * 8)
     answer = answer.strip()[:max_chars]
     return jsonify({
         "answer": answer,
@@ -1977,6 +2417,59 @@ def api_update_notes(item_id):
             updates[key] = data.get(key)
     intel_db.update_item(item_id, updates)
     return jsonify({"success": True, "message": "Notes and tags updated."})
+
+
+@app.route("/api/saved/<int:item_id>/validate", methods=["POST"])
+def api_saved_validate(item_id):
+    if intel_db is None:
+        return jsonify({"error": "no_db"}), 503
+    item = intel_db.get_saved_item(item_id)
+    if not item:
+        return jsonify({"error": "not_found"}), 404
+        
+    parts = [
+        item.get("title") or "",
+        item.get("url") or "",
+        item.get("notes") or "",
+    ]
+    
+    outline = item.get("outline")
+    if isinstance(outline, str):
+        try:
+            outline_list = json.loads(outline)
+            if isinstance(outline_list, list):
+                parts.extend(outline_list)
+            else:
+                parts.append(outline)
+        except Exception:
+            parts.append(outline)
+    elif isinstance(outline, list):
+        parts.extend(outline)
+        
+    assets = item.get("production_assets")
+    if isinstance(assets, str):
+        try:
+            assets = json.loads(assets)
+        except Exception:
+            pass
+    if isinstance(assets, dict):
+        for key, val in assets.items():
+            if isinstance(val, str):
+                parts.append(val)
+            elif isinstance(val, list):
+                parts.extend(val)
+                
+    combined_text = "\n".join(str(p) for p in parts if p)
+    
+    from command_validator import validate_script_commands
+    results = validate_script_commands(combined_text)
+    
+    return jsonify({
+        "success": True,
+        "item_id": item_id,
+        "results": results
+    })
+
 
 
 @app.route("/api/saved")
@@ -2557,6 +3050,390 @@ def api_forge_status(item_id):
         "assets": assets or {},
         "updated_at": item.get("updated_at"),
     })
+
+
+@app.route("/api/editorial/briefing", methods=["GET", "POST"])
+def api_editorial_briefing():
+    force = (request.method == "POST")
+    try:
+        data = generate_editorial_briefing(force=force)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/editorial/approve", methods=["POST"])
+def api_editorial_approve():
+    if intel_db is None:
+        return jsonify({"error": "no_db"}), 503
+    try:
+        scored_data = load_scored_data()
+        clusters = _cockpit_clusters(scored_data)
+        if not clusters:
+            return jsonify({"error": "No clusters available to approve"}), 400
+
+        formats = [
+            {"fmt": "video", "idx": 0, "agents": ["topic_researcher", "script_writer"]},
+            {"fmt": "short", "idx": 1, "agents": ["script_writer", "thumbnail_director"]},
+            {"fmt": "newsletter", "idx": 2, "agents": ["topic_researcher"]}
+        ]
+
+        import uuid
+        from datetime import datetime, timedelta
+        base = datetime.now()
+        rec_day = (base + timedelta(days=1)).strftime("%Y-%m-%d")
+        pub_day = (base + timedelta(days=2)).strftime("%Y-%m-%d")
+
+        dispatched_runs = []
+        saved_items_count = 0
+
+        for f_info in formats:
+            idx = f_info["idx"]
+            if idx >= len(clusters):
+                c = clusters[0]
+            else:
+                c = clusters[idx]
+
+            topic_title = c.get("topic")
+            slug = c.get("slug")
+            category = c.get("category") or "General"
+            
+            item_id = intel_db.save_item({
+                "title": topic_title,
+                "url": slug,
+                "category": category,
+                "signal_score": c.get("momentum") or 50,
+                "creator_score": c.get("creator_score") or 50,
+                "pipeline_type": "creator",
+                "status": "to_read",
+                "format": f_info["fmt"],
+                "outline": [c.get("why_this_is_a_story") or ""]
+            })
+            saved_items_count += 1
+
+            sid_rec = f"sched-{uuid.uuid4().hex[:12]}"
+            intel_db.insert_schedule(sid_rec, str(item_id), rec_day, "record", time="10:00")
+
+            sid_pub = f"sched-{uuid.uuid4().hex[:12]}"
+            intel_db.insert_schedule(sid_pub, str(item_id), pub_day, "publish", time="12:00")
+
+            if agent_runner:
+                for agent_t in f_info["agents"]:
+                    try:
+                        run_id = agent_runner.dispatch(
+                            agent_t,
+                            topic=topic_title,
+                            target_id=slug
+                        )
+                        dispatched_runs.append({"agent": agent_t, "run_id": run_id})
+                    except Exception as ae:
+                         print(f"[editorial_approve] failed to dispatch {agent_t} for {topic_title}: {ae}")
+
+        return jsonify({
+            "ok": True,
+            "saved_count": saved_items_count,
+            "dispatched": dispatched_runs,
+            "scheduled_days": {"record": rec_day, "publish": pub_day}
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/publish", methods=["POST"])
+def api_publish():
+    if intel_db is None:
+        return jsonify({"error": "no_db"}), 503
+    payload = request.get_json(silent=True) or {}
+    item_id = payload.get("item_id")
+    platform = payload.get("platform")
+    if not item_id or not platform:
+        return jsonify({"error": "missing item_id or platform"}), 400
+
+    item = None
+    try:
+        int_id = int(item_id)
+        item = intel_db.get_saved_item(int_id)
+    except (ValueError, TypeError):
+        pass
+
+    if not item:
+        saved_items = intel_db.get_saved_items()
+        item = next((i for i in saved_items if i.get("url") == item_id or i.get("title") == item_id or str(i.get("id")) == str(item_id)), None)
+
+    if not item:
+        return jsonify({"error": f"item not found: {item_id}"}), 404
+
+    item_id = item["id"]
+
+    # Save as 'publishing' state
+    intel_db.create_or_update_publication(
+        item_id=item_id,
+        platform=platform,
+        views=0,
+        impressions=0,
+        ctr=0.0,
+        engagement_rate=0.0,
+        status="publishing"
+    )
+
+    # Spawn thread to simulate publishing success
+    import threading
+    import random
+    def _publisher_simulator():
+        time.sleep(3.0)
+        # Choose initial random stats
+        views = random.randint(10, 50)
+        impressions = random.randint(150, 400)
+        ctr = round(views / impressions, 4) if impressions > 0 else 0.0
+        engagement_rate = round(views * 0.08 / impressions, 4) if impressions > 0 else 0.0
+        try:
+            intel_db.create_or_update_publication(
+                item_id=item_id,
+                platform=platform,
+                views=views,
+                impressions=impressions,
+                ctr=ctr,
+                engagement_rate=engagement_rate,
+                status="live"
+            )
+        except Exception as e:
+            print(f"[publish_sim] failed: {e}")
+
+    thread = threading.Thread(target=_publisher_simulator, name=f"publish-{item_id}-{platform}", daemon=True)
+    thread.start()
+
+    return jsonify({"ok": True, "status": "publishing"})
+
+
+@app.route("/api/analytics/simulate", methods=["POST"])
+def api_analytics_simulate():
+    if intel_db is None:
+        return jsonify({"error": "no_db"}), 503
+    
+    import random
+    try:
+        publications = intel_db.get_publication_analytics()
+        updated_count = 0
+        for pub in publications:
+            if pub.get("status") == "live":
+                from analytics_sync import sync_publication_metrics
+                synced = sync_publication_metrics(pub)
+                
+                if synced:
+                    views = synced["views"]
+                    impressions = synced["impressions"]
+                    ctr = synced["ctr"]
+                    engagement_rate = synced["engagement_rate"]
+                    status = synced["status"]
+                else:
+                    views = pub.get("views", 0) + random.randint(120, 1400)
+                    impressions = pub.get("impressions", 0) + random.randint(1800, 12000)
+                    ctr = round(views / impressions, 4) if impressions > 0 else 0.0
+                    engagement_rate = round(views * 0.07 / impressions, 4) if impressions > 0 else 0.0
+                    status = "live"
+                    if views > 25000:
+                        status = "completed"
+                    
+                intel_db.create_or_update_publication(
+                    item_id=pub.get("item_id"),
+                    platform=pub.get("platform"),
+                    views=views,
+                    impressions=impressions,
+                    ctr=ctr,
+                    engagement_rate=engagement_rate,
+                    status=status
+                )
+                updated_count += 1
+
+        # Simulate active A/B tests
+        try:
+            active_tests = intel_db.list_all_active_ab_tests()
+            for ab in active_tests:
+                new_a_views = ab.get("variant_a_views", 0) + random.randint(20, 150)
+                new_b_views = ab.get("variant_b_views", 0) + random.randint(20, 150)
+                new_a_ctr = round(random.uniform(0.035, 0.070), 4)
+                new_b_ctr = round(random.uniform(0.045, 0.090), 4)
+                intel_db.update_ab_test_metrics(
+                    ab["id"],
+                    variant_a_views=new_a_views,
+                    variant_b_views=new_b_views,
+                    variant_a_ctr=new_a_ctr,
+                    variant_b_ctr=new_b_ctr
+                )
+                updated_count += 1
+        except Exception as ab_err:
+            print(f"[ab_sim] failed: {ab_err}")
+                
+        return jsonify({"ok": True, "updated": updated_count})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ── Notion Sync Endpoint ──
+@app.route("/api/integrations/notion/sync", methods=["POST"])
+def api_integrations_notion_sync():
+    if intel_db is None:
+        return jsonify({"error": "no_db"}), 503
+    body = request.get_json(silent=True) or {}
+    item_id = body.get("item_id")
+    if not item_id:
+        return jsonify({"error": "item_id required"}), 400
+
+    try:
+        int_id = int(item_id)
+        item = intel_db.get_saved_item(int_id)
+    except (ValueError, TypeError, Exception):
+        item = None
+
+    if not item:
+        try:
+            saved_items = intel_db.get_saved_items()
+            item = next((i for i in saved_items if str(i.get("id")) == str(item_id) or i.get("url") == item_id or i.get("title") == item_id or i.get("working_title") == item_id), None)
+        except Exception:
+            item = None
+
+    # Generate mock Notion page URL
+    resolved_id = item["id"] if item else item_id
+    notion_url = f"https://notion.so/dailydex/brief-{resolved_id}"
+    
+    if item:
+        try:
+            assets = item.get("production_assets")
+            if isinstance(assets, str):
+                assets = json.loads(assets or "{}")
+            elif not isinstance(assets, dict):
+                assets = {}
+            assets["notion_page_url"] = notion_url
+            intel_db.set_production_assets(item["id"], assets)
+        except Exception as e:
+            return jsonify({"error": f"Failed to save notion link: {e}"}), 500
+
+    return jsonify({"success": True, "notion_url": notion_url})
+
+
+# ── Repurpose Clips Endpoint (Shorts clipping) ──
+@app.route("/api/integrations/repurpose", methods=["GET", "POST"])
+def api_integrations_repurpose():
+    if intel_db is None:
+        return jsonify({"error": "no_db"}), 503
+
+    if request.method == "POST":
+        body = request.get_json(silent=True) or {}
+        item_id = body.get("item_id")
+        if not item_id:
+            return jsonify({"error": "item_id required"}), 400
+
+        # Check existing clips
+        existing = intel_db.list_repurposed_clips(item_id)
+        if existing:
+            return jsonify({"success": True, "clips": existing})
+
+        # Generate 3 mock vertical shorts
+        try:
+            item = intel_db.get_saved_item(int(item_id))
+            title = item.get("title") or "Unknown"
+        except Exception:
+            title = "Video Content"
+
+        mock_clips = [
+            {
+                "parent_item_id": item_id,
+                "title": f"The Hook: Why {title} changes everything",
+                "start_time": "00:00",
+                "end_time": "00:45",
+                "hook_text": "One file, zero setup. You have to see this.",
+                "virality_score": 92.4,
+                "status": "draft"
+            },
+            {
+                "parent_item_id": item_id,
+                "title": f"Deep Dive: Setting up {title} in under a minute",
+                "start_time": "01:15",
+                "end_time": "02:00",
+                "hook_text": "Here is the exact terminal command to run.",
+                "virality_score": 87.1,
+                "status": "draft"
+            },
+            {
+                "parent_item_id": item_id,
+                "title": f"The Catch: Banned terms in {title}",
+                "start_time": "03:00",
+                "end_time": "03:45",
+                "hook_text": "Before you host this, here's what they don't tell you.",
+                "virality_score": 84.8,
+                "status": "draft"
+            }
+        ]
+
+        saved_clips = []
+        for c in mock_clips:
+            clip_id = intel_db.insert_repurposed_clip(c)
+            c["id"] = clip_id
+            saved_clips.append(c)
+
+        return jsonify({"success": True, "clips": saved_clips})
+
+    else: # GET
+        parent_id = request.args.get("parent_item_id")
+        if not parent_id:
+            return jsonify({"error": "parent_item_id query param required"}), 400
+        clips = intel_db.list_repurposed_clips(int(parent_id))
+        return jsonify({"success": True, "clips": clips})
+
+
+@app.route("/api/integrations/repurpose/<clip_id>/publish", methods=["POST"])
+def api_integrations_repurpose_publish(clip_id):
+    if intel_db is None:
+        return jsonify({"error": "no_db"}), 503
+
+    published_url = f"https://youtube.com/shorts/{clip_id}"
+    ok = intel_db.update_repurposed_clip(clip_id, status="live", published_url=published_url)
+    if not ok:
+        return jsonify({"error": "Clip not found"}), 404
+
+    return jsonify({"success": True, "published_url": published_url})
+
+
+# ── Title & Thumbnail A/B Testing Endpoint ──
+@app.route("/api/integrations/ab-test", methods=["POST"])
+def api_integrations_ab_test():
+    if intel_db is None:
+        return jsonify({"error": "no_db"}), 503
+    body = request.get_json(silent=True) or {}
+    item_id = body.get("item_id")
+    variant_a_title = body.get("variant_a_title", "")
+    variant_b_title = body.get("variant_b_title", "")
+    
+    if not item_id or not variant_a_title or not variant_b_title:
+        return jsonify({"error": "item_id, variant_a_title, and variant_b_title required"}), 400
+
+    # End any active tests for this item first
+    active_test = intel_db.get_active_ab_test(item_id)
+    if active_test:
+        import time
+        intel_db.update_ab_test_metrics(active_test["id"], status="completed", ended_at=time.time())
+
+    test_id = intel_db.insert_ab_test({
+        "item_id": item_id,
+        "variant_a_title": variant_a_title,
+        "variant_b_title": variant_b_title,
+        "variant_a_image": body.get("variant_a_image", ""),
+        "variant_b_image": body.get("variant_b_image", ""),
+        "status": "active"
+    })
+
+    return jsonify({"success": True, "test_id": test_id})
+
+
+@app.route("/api/integrations/ab-test/active", methods=["GET"])
+def api_integrations_ab_test_active():
+    if intel_db is None:
+        return jsonify({"error": "no_db"}), 503
+    item_id = request.args.get("item_id")
+    if not item_id:
+        return jsonify({"error": "item_id required"}), 400
+    test = intel_db.get_active_ab_test(int(item_id))
+    return jsonify({"success": True, "test": test})
 
 
 if __name__ == "__main__":

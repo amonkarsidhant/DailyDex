@@ -48,6 +48,7 @@ const Nav = ({ view, setView }) => {
     { key: "research",  icon: <I.Research size={15}/>, label: "Research", sub: "evidence packs" },
     { key: "pipeline",  icon: <I.Pipeline size={15}/>, label: "Pipeline", sub: "+ calendar"        },
     { key: "studio",    icon: <I.Studio size={15}/>,   label: "Creator Central", sub: "autonomous content" },
+    { key: "profile",   icon: <I.User size={15}/>,     label: "Profile",   sub: "tone & voice"        },
     { key: "copilot",   icon: <I.Spark size={15}/>,    label: "Copilot Chat",    sub: "AI strategist" },
   ];
   return (
@@ -80,6 +81,19 @@ const Nav = ({ view, setView }) => {
       <div style={{ padding: "8px 0", display: "flex", flexDirection: "column", gap: 2 }}>
         <div className="micro" style={{ padding: "8px 16px 4px" }}>Workspace</div>
         {items.map(it => <NavItem key={it.key} {...it} active={view === it.key} onClick={() => setView(it.key)} />)}
+      </div>
+
+      {/* Settings at bottom */}
+      <div style={{ padding: "8px 0", borderTop: "1px solid var(--line)" }}>
+        <div className="micro" style={{ padding: "8px 16px 4px" }}>Config</div>
+        <NavItem
+          key="settings"
+          icon={<I.Settings size={15}/>}
+          label="Settings"
+          sub="BYOK · API keys"
+          active={view === "settings"}
+          onClick={() => setView("settings")}
+        />
       </div>
 
       {/* Saved / tracked counts at bottom */}
@@ -241,6 +255,140 @@ const AgentCard = ({ a }) => {
   );
 };
 
+const EditorialBoard = () => {
+  const briefing = window.DD_DATA?.editorial_briefing;
+  const [loading, setLoading] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [expanded, setExpanded] = useState(false);
+
+  const handleRegen = async () => {
+    setLoading(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/editorial/briefing", { method: "POST" });
+      if (res.ok) {
+        if (window.DDX) await window.DDX.reload();
+        setMsg("Briefing regenerated.");
+      } else {
+        setMsg("Failed to regenerate.");
+      }
+    } catch (e) {
+      setMsg("Error regenerating briefing");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    setApproving(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/editorial/approve", { method: "POST" });
+      if (res.ok) {
+        const result = await res.json();
+        setMsg(`Approved! Saved ${result.saved_count} topics and dispatched agents.`);
+        if (window.DDX) await window.DDX.reload();
+      } else {
+        const err = await res.json();
+        setMsg(err.error || "Approval failed");
+      }
+    } catch (e) {
+      setMsg("Failed to approve & queue");
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  if (!briefing || !briefing.briefing) return null;
+
+  return (
+    <div style={{
+      margin: "12px 14px 6px",
+      padding: "12px",
+      background: "linear-gradient(135deg, rgba(240, 183, 47, 0.08) 0%, rgba(20, 15, 10, 0.4) 100%)",
+      border: "1px solid rgba(240, 183, 47, 0.25)",
+      borderRadius: 8,
+      boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ color: "var(--signal)", display: "flex" }}><I.Spark size={14}/></span>
+          <span className="micro" style={{ letterSpacing: "0.06em", color: "var(--text-hi)", fontWeight: 600 }}>Editorial Board</span>
+        </div>
+        <span className="mono" style={{ fontSize: 9, color: "var(--text-lo)" }}>Proactive Strategy</span>
+      </div>
+
+      <div style={{
+        maxHeight: expanded ? "300px" : "110px",
+        overflowY: "auto",
+        fontSize: 12,
+        color: "var(--text)",
+        lineHeight: 1.4,
+        marginBottom: 10,
+        position: "relative",
+        borderBottom: expanded ? "none" : "1px dashed var(--line)",
+        paddingBottom: 6
+      }}>
+        <div 
+          className="briefing-markdown"
+          dangerouslySetInnerHTML={{
+            __html: window.marked ? window.marked.parse(briefing.briefing) : briefing.briefing
+          }} 
+        />
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+        <button 
+          className="btn ghost" 
+          style={{ fontSize: 10, padding: "4px 8px", height: "auto" }} 
+          onClick={() => setExpanded(e => !e)}
+        >
+          {expanded ? "Show Less" : "Expand Plan"}
+        </button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button 
+            className="btn ghost icon" 
+            style={{ padding: "4px 8px", height: "auto", minWidth: 0 }} 
+            onClick={handleRegen} 
+            disabled={loading}
+            title="Regenerate plan"
+          >
+            {loading ? "..." : <I.Refresh size={10}/>}
+          </button>
+          <button 
+            className="btn primary" 
+            style={{ 
+              fontSize: 11, 
+              padding: "4px 10px", 
+              height: "auto",
+              background: "linear-gradient(90deg, var(--signal) 0%, var(--signal-hot) 100%)",
+              border: "none",
+              color: "#1a1100",
+              fontWeight: 600
+            }} 
+            onClick={handleApprove} 
+            disabled={approving}
+          >
+            {approving ? "Queuing..." : "Approve & Queue All"}
+          </button>
+        </div>
+      </div>
+
+      {msg && (
+        <div style={{ 
+          marginTop: 8, 
+          fontSize: 10, 
+          color: msg.includes("Approved") || msg.includes("regenerated") ? "var(--signal-up)" : "var(--signal-down)",
+          textAlign: "right"
+        }}>
+          {msg}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AGENT_OPTIONS = [
   ["topic_researcher", "Topic Researcher"],
   ["script_writer", "Script Writer"],
@@ -312,12 +460,14 @@ const AgentRail = () => {
         <div style={{ padding: "8px 14px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 6 }}>
           {AGENT_OPTIONS.map(([type, label]) => (
             <button key={type} className="btn ghost" style={{ textTransform: "none", letterSpacing: 0 }}
-                    onClick={() => dispatch(type)}>{label}</button>
+              onClick={() => dispatch(type)}>{label}</button>
           ))}
         </div>
       )}
 
       <div style={{ flex: 1, overflowY: "auto" }}>
+        <EditorialBoard />
+
         {/* Background Enrichment Service Status */}
         {enrichStatus && enrichStatus.enabled && (
           <div style={{

@@ -12,6 +12,10 @@ const PipelineView = ({ onJump }) => {
   const [dragId, setDragId] = useState(null);       // item id being dragged
   const [dragOver, setDragOver] = useState(null);   // lane key being hovered
 
+  useEffect(() => {
+    setPipeline(window.DD_DATA.pipeline);
+  }, [window.DD_DATA.pipeline]);
+
   // Page the calendar by fetching the schedule for the chosen week.
   useEffect(() => {
     if (weekOffset === 0) { setCal(calendar); return; }
@@ -336,29 +340,325 @@ const DayCol = ({ day, isToday }) => {
 };
 
 const PublishedRow = ({ p }) => {
-  // Guard against missing retention/views (newly published items may lack analytics)
+  const [activeTest, setActiveTest] = useState(null);
+  const [showABConfig, setShowABConfig] = useState(false);
+  const [altTitle, setAltTitle] = useState("");
+  const [submittingAB, setSubmittingAB] = useState(false);
+
+  const [showShortsModal, setShowShortsModal] = useState(false);
+  const [clips, setClips] = useState([]);
+  const [loadingClips, setLoadingClips] = useState(false);
+  const [publishingClipId, setPublishingClipId] = useState(null);
+
+  // Fetch active A/B test
+  const fetchActiveTest = () => {
+    if (!window.DDX) return;
+    window.DDX.getActiveABTest(p.id)
+      .then(res => {
+        if (res.success) {
+          setActiveTest(res.test);
+        }
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchActiveTest();
+  }, [p.id]);
+
+  // Load clips when shorts modal is opened
+  const loadClips = async () => {
+    if (!window.DDX) return;
+    setLoadingClips(true);
+    try {
+      const res = await window.DDX.repurposeVideo(p.id);
+      if (res.success) {
+        setClips(res.clips || []);
+      }
+    } catch (e) {
+      alert("Failed to generate clips: " + e.message);
+    } finally {
+      setLoadingClips(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showShortsModal) {
+      loadClips();
+    }
+  }, [showShortsModal]);
+
+  const handleStartABTest = async (e) => {
+    e.preventDefault();
+    if (!altTitle.trim() || !window.DDX) return;
+    setSubmittingAB(true);
+    try {
+      const currentTitle = p.working_title || p.title || "Original Title";
+      const res = await window.DDX.startABTest(p.id, currentTitle, altTitle);
+      if (res.success) {
+        setAltTitle("");
+        setShowABConfig(false);
+        fetchActiveTest();
+        if (window.DDX?.reload) await window.DDX.reload();
+      } else {
+        alert("A/B Test failed to start: " + (res.error || "Unknown error"));
+      }
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setSubmittingAB(false);
+    }
+  };
+
+  const handlePublishClip = async (clipId) => {
+    if (!window.DDX) return;
+    setPublishingClipId(clipId);
+    try {
+      const res = await window.DDX.publishRepurposedClip(clipId);
+      if (res.success) {
+        loadClips();
+      }
+    } catch (e) {
+      alert("Failed to publish clip: " + e.message);
+    } finally {
+      setPublishingClipId(null);
+    }
+  };
+
   const retention = typeof p.retention === "number" ? p.retention : 0.5;
   const views = p.views != null ? p.views : "—";
-  // synthesize a retention curve based on the value
   const curve = Array.from({ length: 24 }, (_, i) => {
     const t = i / 23;
     return Math.max(0.15, retention * Math.pow(1 - t, 0.35) + (Math.sin(i * 0.6) * 0.04));
   });
+
   return (
-    <div style={{ background: "var(--bg-1)", padding: "14px 16px", display: "grid", gridTemplateColumns: "1fr auto", gap: 18, alignItems: "center" }}>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-          <FormatBadge format={p.format}/>
-          <span className="mono" style={{ fontSize: 10, color: "var(--text-lo)" }}>{p.published_at || "—"}</span>
+    <div style={{ background: "var(--bg-1)", padding: "16px", borderBottom: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 18, alignItems: "center" }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <FormatBadge format={p.format}/>
+            <span className="mono" style={{ fontSize: 10, color: "var(--text-lo)" }}>{p.published_at || "—"}</span>
+          </div>
+          <div style={{ color: "var(--text-hi)", fontSize: 14, fontWeight: 600, lineHeight: 1.3, marginBottom: 6, textWrap: "balance" }}>
+            {p.working_title || p.topic || "Untitled"}
+          </div>
+          <div style={{ display: "flex", gap: 14, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-mid)" }}>
+            <span>▶ <span style={{ color: "var(--text-hi)" }}>{views}</span></span>
+            <span>retention <span style={{ color: retention > 0.6 ? "var(--signal-up)" : "var(--signal)" }}>{Math.round(retention * 100)}%</span></span>
+            <span>score <span style={{ color: "var(--text-hi)" }}>{p.creator_score || "—"}</span></span>
+          </div>
         </div>
-        <div style={{ color: "var(--text-hi)", fontSize: 14, fontWeight: 600, lineHeight: 1.3, marginBottom: 6, textWrap: "balance" }}>{p.working_title || p.topic || "Untitled"}</div>
-        <div style={{ display: "flex", gap: 14, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-mid)" }}>
-          <span>▶ <span style={{ color: "var(--text-hi)" }}>{views}</span></span>
-          <span>retention <span style={{ color: retention > 0.6 ? "var(--signal-up)" : "var(--signal)" }}>{Math.round(retention * 100)}%</span></span>
-          <span>score <span style={{ color: "var(--text-hi)" }}>{p.creator_score || "—"}</span></span>
-        </div>
+        <Sparkline data={curve} w={160} h={48} color="var(--src-youtube)" />
       </div>
-      <Sparkline data={curve} w={160} h={48} color="var(--src-youtube)" />
+
+      {activeTest && (
+        <div style={{
+          background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 6,
+          padding: "12px", display: "flex", flexDirection: "column", gap: 10
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 11, color: "var(--text-hi)", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+              📊 Title A/B Testing Engine
+              <span className="chip" style={{ fontSize: 9, background: "rgba(240,183,47,0.06)", borderColor: "var(--signal)", color: "var(--signal)" }}>ACTIVE</span>
+            </span>
+            <span className="mono" style={{ fontSize: 10, color: activeTest.variant_b_ctr >= activeTest.variant_a_ctr ? "var(--signal-up)" : "var(--signal)" }}>
+              Leading: {activeTest.variant_b_ctr >= activeTest.variant_a_ctr ? "Variant B" : "Variant A"}
+            </span>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontSize: 11.5 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                <span style={{ color: "var(--text-mid)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%" }}>
+                  <strong>A:</strong> {activeTest.variant_a_title}
+                </span>
+                <span className="mono" style={{ color: "var(--text-hi)" }}>
+                  {activeTest.variant_a_views} views ({((activeTest.variant_a_ctr || 0) * 100).toFixed(1)}% CTR)
+                </span>
+              </div>
+              <div style={{ height: 4, background: "var(--bg-3)", borderRadius: 2, overflow: "hidden" }}>
+                <div style={{
+                  height: "100%", background: "var(--text-lo)",
+                  width: `${Math.min(100, (activeTest.variant_a_ctr || 0) * 1000)}%`
+                }}/>
+              </div>
+            </div>
+
+            <div style={{ fontSize: 11.5 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                <span style={{ color: "var(--text-hi)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%" }}>
+                  <strong>B:</strong> {activeTest.variant_b_title}
+                </span>
+                <span className="mono" style={{ color: "var(--signal-up)" }}>
+                  {activeTest.variant_b_views} views ({((activeTest.variant_b_ctr || 0) * 100).toFixed(1)}% CTR)
+                </span>
+              </div>
+              <div style={{ height: 4, background: "var(--bg-3)", borderRadius: 2, overflow: "hidden" }}>
+                <div style={{
+                  height: "100%", background: "var(--signal-up)",
+                  width: `${Math.min(100, (activeTest.variant_b_ctr || 0) * 1000)}%`
+                }}/>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showABConfig && (
+        <form onSubmit={handleStartABTest} style={{
+          background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 6,
+          padding: "12px", display: "flex", flexDirection: "column", gap: 10
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-hi)" }}>Configure A/B Title Test</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label style={{ fontSize: 10, color: "var(--text-lo)" }}>ALTERNATIVE TITLE (VARIANT B)</label>
+            <input
+              type="text"
+              placeholder="e.g. You Won't Believe How This Code Runs!"
+              value={altTitle}
+              onChange={e => setAltTitle(e.target.value)}
+              required
+              style={{
+                background: "var(--bg-3)", border: "1px solid var(--line-2)",
+                borderRadius: 4, padding: "6px 10px", color: "var(--text-hi)",
+                fontSize: 12, outline: "none"
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: 6, justifyItems: "flex-end", justifyContent: "flex-end" }}>
+            <button type="button" className="btn ghost" style={{ fontSize: 11, padding: "4px 10px" }}
+                    onClick={() => setShowABConfig(false)}>Cancel</button>
+            <button type="submit" className="btn primary" style={{ fontSize: 11, padding: "4px 12px" }}
+                    disabled={submittingAB || !altTitle.trim()}>
+              {submittingAB ? "Starting…" : "Start Test"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <button className="btn ghost" style={{ fontSize: 11, padding: "4px 10px" }}
+                onClick={() => setShowShortsModal(true)}>
+          📱 Slice 9:16 Shorts
+        </button>
+        {!activeTest && !showABConfig && (
+          <button className="btn ghost" style={{ fontSize: 11, padding: "4px 10px" }}
+                  onClick={() => setShowABConfig(true)}>
+            🔄 Configure A/B Test
+          </button>
+        )}
+      </div>
+
+      {showShortsModal && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
+          background: "rgba(5, 7, 10, 0.8)", display: "flex", justifyContent: "center",
+          alignItems: "center", zIndex: 1000, backdropFilter: "blur(4px)"
+        }}>
+          <div className="panel" style={{
+            width: "600px", maxWidth: "90%", background: "var(--bg-1)",
+            border: "1px solid var(--line)", borderRadius: 8, padding: 0,
+            overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "85vh"
+          }}>
+            <div style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              padding: "12px 18px", borderBottom: "1px solid var(--line)", background: "var(--bg-2)"
+            }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-hi)", display: "flex", alignItems: "center", gap: 6 }}>
+                📱 Multi-Format Auto-Repurposer (9:16 Shorts)
+              </span>
+              <button className="btn ghost" style={{ minWidth: 0, padding: "4px 8px" }}
+                      onClick={() => setShowShortsModal(false)}>✕</button>
+            </div>
+
+            <div style={{ padding: "18px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
+              {loadingClips ? (
+                <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-lo)", fontSize: 12 }}>
+                  <span className="blink">✂️ Slicing high-impact segments and hooks...</span>
+                </div>
+              ) : clips.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-lo)", fontSize: 12 }}>
+                  No vertical shorts clips generated for this item.
+                </div>
+              ) : (
+                clips.map(clip => (
+                  <div key={clip.id} style={{
+                    display: "flex", gap: 14, background: "var(--bg-2)",
+                    border: "1px solid var(--line)", borderRadius: 6, padding: "12px"
+                  }}>
+                    <div style={{
+                      width: "80px", height: "130px", background: "linear-gradient(135deg, var(--bg-3) 0%, #111 100%)",
+                      borderRadius: 4, border: "1px solid var(--line-2)", flexShrink: 0,
+                      display: "flex", flexDirection: "column", justifyContent: "flex-end",
+                      padding: "6px", position: "relative", overflow: "hidden"
+                    }}>
+                      <div style={{
+                        position: "absolute", top: 4, left: 4, fontSize: 8,
+                        background: "rgba(0,0,0,0.6)", padding: "1px 4px", borderRadius: 2,
+                        color: "var(--text-hi)", fontFamily: "var(--font-mono)"
+                      }}>{clip.start_time}</div>
+                      <div style={{
+                        fontSize: 8, color: "#fff", lineHeight: 1.2,
+                        textShadow: "0 1px 3px rgba(0,0,0,0.8)", overflow: "hidden",
+                        display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical",
+                        textAlign: "center", background: "rgba(0,0,0,0.4)", borderRadius: 2, padding: "2px"
+                      }}>
+                        "{clip.hook_text}"
+                      </div>
+                    </div>
+
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+                          <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-hi)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60%" }}>
+                            {clip.title}
+                          </span>
+                          <span className="chip" style={{
+                            fontSize: 9.5, borderColor: "rgba(124,255,178,0.3)",
+                            background: "rgba(124,255,178,0.06)", color: "var(--signal-up)"
+                          }}>
+                            🔥 {clip.virality_score}% virality
+                          </span>
+                        </div>
+                        <div className="mono" style={{ fontSize: 10, color: "var(--text-lo)", marginBottom: 6 }}>
+                          Duration: {clip.start_time} – {clip.end_time}
+                        </div>
+                        <p style={{ fontSize: 11, color: "var(--text-mid)", margin: 0, fontStyle: "italic", lineHeight: 1.4 }}>
+                          Hook: "{clip.hook_text}"
+                        </p>
+                      </div>
+
+                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                        {clip.status === "live" ? (
+                          <a href={clip.published_url} target="_blank" rel="noopener noreferrer"
+                             className="btn ghost" style={{ fontSize: 11, padding: "4px 10px", color: "var(--signal-up)" }}>
+                            ✅ Live ↗
+                          </a>
+                        ) : (
+                          <button className="btn primary" style={{ fontSize: 11, padding: "4px 12px" }}
+                                  disabled={publishingClipId === clip.id}
+                                  onClick={() => handlePublishClip(clip.id)}>
+                            {publishingClipId === clip.id ? "Publishing…" : "🚀 Publish Short"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div style={{
+              padding: "10px 18px", borderTop: "1px solid var(--line)",
+              background: "var(--bg-2)", display: "flex", justifyContent: "flex-end"
+            }}>
+              <button className="btn ghost" style={{ fontSize: 11, padding: "6px 14px" }}
+                      onClick={() => setShowShortsModal(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -289,6 +289,44 @@ const PulseDetail = ({ cluster, onJump }) => {
                  color={cluster.momentum > 0 ? "var(--signal-up)" : "var(--signal-down)"}/>
             <KPI label="First seen" value={cluster.first_seen_hrs + "h"} sub="ago"/>
           </div>
+          
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+            <div className="micro" style={{ marginBottom: 8 }}>Creator Score Breakdown</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                <span style={{ color: "var(--text-mid)" }}>📅 Recency</span>
+                <span className="mono" style={{ color: "var(--text-hi)" }}>{cluster.score_breakdown?.recency ?? 50}/100</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                <span style={{ color: "var(--text-mid)" }}>🔥 Popularity & Growth</span>
+                <span className="mono" style={{ color: "var(--text-hi)" }}>{cluster.score_breakdown?.popularity ?? 50}/100</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                <span style={{ color: "var(--text-mid)" }}>🤖 Agentic Suitability</span>
+                <span className="mono" style={{ color: "var(--text-hi)" }}>{cluster.score_breakdown?.agentic ?? 50}/100</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                <span style={{ color: "var(--text-mid)" }}>🔌 Local Suitability</span>
+                <span className="mono" style={{ color: "var(--text-hi)" }}>{cluster.score_breakdown?.local ?? 50}/100</span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+            <div className="micro" style={{ marginBottom: 8 }}>Score Changelog</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 100, overflowY: "auto" }}>
+              {(cluster.changelog || []).map((ch, idx) => (
+                <div key={idx} style={{
+                  fontSize: 11, lineHeight: 1.35, padding: "5px 8px", borderRadius: 4,
+                  background: ch.type === "up" ? "rgba(124,255,178,0.06)" : ch.type === "down" ? "rgba(255,107,107,0.06)" : "var(--bg-0)",
+                  borderLeft: `2px solid ${ch.type === "up" ? "var(--signal-up)" : ch.type === "down" ? "var(--signal-down)" : "var(--line-hi)"}`,
+                  color: "var(--text-hi)",
+                }}>
+                  {ch.message}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Source evidence */}

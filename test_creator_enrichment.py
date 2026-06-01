@@ -247,3 +247,63 @@ def test_enrich_status_route_reports_provider(stub_llm, creator_client):
     assert body["enabled"] is True
     assert "provider" in body
     assert "cache_counts" in body
+
+
+def test_weekly_compilations_and_listicle_script_writer(stub_llm, tmp_path, monkeypatch):
+    from creator_intelligence import build_weekly_compilations
+    from data_models import IntelligenceDB
+    from creator_enricher import AgentRunner
+    import cli_registry
+    import creator_intelligence
+
+    # Mock scored data
+    scored_data = {
+        "github": [
+            {"title": "awesome-ollama", "url": "https://github.com/ollama/awesome", "description": "Local models self-hosted edge", "creator_score": 90, "signal_score": 95},
+            {"title": "llama.cpp", "url": "https://github.com/ggerganov/llama.cpp", "description": "Local inference on edge", "creator_score": 85, "signal_score": 92},
+            {"title": "docmost", "url": "https://github.com/docmost/docmost", "description": "Open-source Notion alternative wiki documentation editor", "creator_score": 88, "signal_score": 90},
+            {"title": "appflowy", "url": "https://github.com/AppFlowy-IO/AppFlowy", "description": "Notion alternative self-hosted", "creator_score": 82, "signal_score": 85},
+            {"title": "open-webui", "url": "https://github.com/open-webui/open-webui", "description": "Ollama local WebUI chatbot", "creator_score": 80, "signal_score": 85},
+        ]
+    }
+
+    # Test build_weekly_compilations
+    compilations = build_weekly_compilations(scored_data)
+    assert len(compilations) > 0
+    slugs = [c["slug"] for c in compilations]
+    assert "top-5-local-ai-self-hosted" in slugs or "top-5-trending-github-repos" in slugs
+
+    db = IntelligenceDB(str(tmp_path / "test.db"))
+    
+    mocked_compilation = {
+        "title": "Top 5 Local AI & Self-Hosted Tools",
+        "slug": "top-5-local-ai-self-hosted",
+        "theme_description": "Run powerful AI models offline.",
+        "items": [
+            {"title": "awesome-ollama", "url": "https://github.com/ollama/awesome", "description": "Local models", "creator_score": 90, "signal_score": 95},
+        ]
+    }
+    
+    monkeypatch.setattr(creator_intelligence, "build_weekly_compilations", lambda *args, **kwargs: [mocked_compilation])
+    
+    # Mock LLM generation
+    def mock_generate(prompt, system=None, *, prefer=None, timeout=240, **kwargs):
+        if "awesome-ollama" in prompt:
+            return {"text": "Listicle Script: Chapter 1 is awesome-ollama.", "provider": "mock"}
+        return {"text": "Normal script outline.", "provider": "mock"}
+    monkeypatch.setattr(cli_registry, "generate", mock_generate)
+    
+    runner = AgentRunner(db, step_delay=0)
+    run_id = runner.dispatch("script_writer", topic="Top 5 Local AI & Self-Hosted Tools", target_id="top-5-local-ai-self-hosted")
+    
+    _wait_until(lambda: db.get_agent_run(run_id)["status"] == "done", timeout=3)
+    
+    run_data = db.get_agent_run(run_id)
+    assert run_data["status"] == "done"
+    
+    from creator_enricher import _AGENT_RESULTS
+    result = _AGENT_RESULTS.get(run_id)
+    assert result is not None
+    assert "awesome-ollama" in result
+    assert "Listicle Script:" in result
+
