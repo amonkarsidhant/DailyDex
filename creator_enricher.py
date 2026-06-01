@@ -521,6 +521,10 @@ class AgentRunner:
         self.queues = {t: queue.Queue() for t in self.AGENT_TYPES}
         self.subscribers: List["queue.Queue"] = []
         self._sub_lock = threading.Lock()
+        # Deduplication: track (agent_type, topic_key) -> run_id for in-flight runs.
+        # Prevents duplicate LLM subprocesses when the UI re-fires the same dispatch.
+        self._in_flight: Dict[tuple, str] = {}   # {(agent_type, dedup_key): run_id}
+        self._in_flight_lock = threading.Lock()
         # Step delay keeps the progress visible in the UI; tests set 0.
         if step_delay is None:
             step_delay = float(os.environ.get("AGENT_STEP_DELAY", "0.6"))
@@ -540,9 +544,31 @@ class AgentRunner:
     # ---- public API ----
 
     def dispatch(self, agent_type: str, *, topic=None, target_id=None, payload=None) -> str:
+        """Enqueue an agent run. Returns the run_id.
+
+        If an identical (agent_type, topic/target_id) job is already in-flight,
+        returns the existing run_id without spawning a duplicate LLM subprocess.
+        """
         if agent_type not in self.AGENT_TYPES:
             raise ValueError(f"unknown agent_type: {agent_type}")
-        run_id = f"{agent_type.split('_')[0]}-{uuid.uuid4().hex[:10]}"
+
+        # Dedup key: topic takes priority over target_id; strip/lower for safety.
+        dedup_key = (topic or target_id or "").strip().lower()
+        flight_key = (agent_type, dedup_key)
+
+        with self._in_flight_lock:
+            existing = self._in_flight.get(flight_key)
+            if existing:
+                LOG.info(
+                    "AgentRunner.dispatch: skipping duplicate %s for '%s' (run %s already in-flight)",
+                    agent_type, dedup_key, existing,
+                )
+                return existing
+            # Reserve the slot immediately (before putting on queue) so concurrent
+            # POST requests that race each other are also deduplicated.
+            run_id = f"{agent_type.split('_')[0]}-{uuid.uuid4().hex[:10]}"
+            self._in_flight[flight_key] = run_id
+
         eta = self._eta.get(agent_type)
         if self.intel_db:
             self.intel_db.insert_agent_run(run_id, agent_type, topic=topic,
@@ -621,6 +647,12 @@ class AgentRunner:
                 self._update(run_id, status="error", finished_at=time.time(), error=str(exc)[:300])
                 self._broadcast({"type": "status", "run_id": run_id, "status": "error",
                                  "stage": "error", "progress": 1.0})
+            finally:
+                # Release the dedup slot so the same topic can be re-dispatched after completion.
+                dedup_key = (topic or target_id or "").strip().lower()
+                with self._in_flight_lock:
+                    if self._in_flight.get((agent_type, dedup_key)) == run_id:
+                        del self._in_flight[(agent_type, dedup_key)]
 
     def _stage(self, run_id, stage, progress, eta_sec=None):
         self._update(run_id, stage=stage, progress=progress, eta_sec=eta_sec)

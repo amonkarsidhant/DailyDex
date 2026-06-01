@@ -133,7 +133,7 @@ def run(intel_db=None, top_n: int = None, slugs: List[str] = None, log_fn=None) 
         from data_models import IntelligenceDB
         intel_db = IntelligenceDB()
 
-    avail = cli_registry.available_providers(force=True)  # re-probe fresh each run
+    avail = cli_registry.available_providers()  # uses 30-min cache; avoids re-probing on every run
     _log(f"providers available: {avail or 'NONE'}")
     if not avail:
         _log("no model CLI available — aborting")

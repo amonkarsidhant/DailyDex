@@ -1866,16 +1866,21 @@ def api_agents_dispatch():
     agent_type = body.get("agent_type")
     if agent_type not in AgentRunner.AGENT_TYPES:
         return jsonify({"error": "invalid agent_type"}), 400
+    topic = body.get("topic")
+    target_id = body.get("target_id")
+    # Snapshot in-flight keys before dispatch to detect if we got a dedup hit.
+    dedup_key = (topic or target_id or "").strip().lower()
+    was_in_flight = bool(agent_runner._in_flight.get((agent_type, dedup_key)))
     try:
         run_id = agent_runner.dispatch(
             agent_type,
-            topic=body.get("topic"),
-            target_id=body.get("target_id"),
+            topic=topic,
+            target_id=target_id,
             payload=body.get("payload"),
         )
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
-    return jsonify({"run_id": run_id})
+    return jsonify({"run_id": run_id, "deduplicated": was_in_flight})
 
 
 @app.route("/api/agents")
