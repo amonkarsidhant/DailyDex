@@ -30,7 +30,8 @@ data.json
 data_scored.json
 data/research_packs/*.md
 
-# local cockpit venv (not committed)
+# virtual envs — never commit
+.venv/
 .venv-cockpit/
 
 # secrets — never commit
