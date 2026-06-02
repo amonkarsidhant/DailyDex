@@ -50,6 +50,23 @@ RESEARCH_PACK_DIR = os.environ.get("RESEARCH_PACK_DIR", os.path.join(DATA_DIR, "
 DATA_FILE = os.environ.get("DATA_FILE", os.path.join(DATA_DIR, "data.json"))
 CONFIG_FILE = os.environ.get("CONFIG_FILE", os.path.join(BASE_DIR, "config.json"))
 SCORED_DATA_FILE = os.environ.get("SCORED_DATA_FILE", os.path.join(DATA_DIR, "data_scored.json"))
+
+import shutil
+from pathlib import Path
+
+def _ensure_persistent_config():
+    profile_target = os.environ.get("CREATOR_PROFILE_PATH")
+    if profile_target:
+        target_path = Path(profile_target)
+        if not target_path.exists():
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            source_path = Path(BASE_DIR) / "config" / "creator_profile.json"
+            if source_path.exists():
+                shutil.copy2(source_path, target_path)
+                print(f"Initialized persistent creator profile at {target_path}", file=sys.stderr)
+
+_ensure_persistent_config()
+
 CACHE_TTL_SECONDS = 12 * 3600
 SOURCE_META = [
     ("github", "GitHub"),

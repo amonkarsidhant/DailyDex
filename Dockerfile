@@ -43,6 +43,8 @@ ENV SCORED_DATA_FILE=/app/data/data_scored.json
 ENV CACHE_DIR=/app/data/cache
 ENV DB_PATH=/app/data/intelligence.db
 ENV RESEARCH_PACK_DIR=/app/data/research_packs
+ENV DAILYDEX_SETTINGS_DIR=/app/data/settings
+ENV CREATOR_PROFILE_PATH=/app/data/creator_profile.json
 # Single Gunicorn worker by default: the creator-enrichment background thread
 # is per-process, so multiple workers would mean multiple queues and duplicate
 # Gemini subprocess calls. Override GUNICORN_WORKERS only if you also disable
