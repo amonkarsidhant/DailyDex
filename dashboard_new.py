@@ -1398,6 +1398,20 @@ def build_dashboard_context():
     }
 
 
+# ── Creator Lab (10 features under /api/lab/*) ────────────────────────────────
+try:
+    from creator_lab import bp as _creator_lab_bp
+    app.register_blueprint(_creator_lab_bp)
+except Exception as _e:
+    print(f"[creator_lab] failed to register blueprint: {_e}")
+
+
+@app.route("/lab")
+def creator_lab_page():
+    """Static HTML control panel for /api/lab/* endpoints."""
+    return send_from_directory(os.path.join(BASE_DIR, "static"), "lab.html")
+
+
 @app.route("/api/variant", methods=["GET", "POST"])
 def api_variant():
     """Get or set the current variant"""
@@ -1567,18 +1581,36 @@ def api_settings_provider_info():
     """
     try:
         import llm_summary as _llm
-        provider = _llm.PROVIDER
+        provider = _llm.get_llm_setting("LLM_PROVIDER", "gemini")
+        deployment_mode = _llm.get_llm_setting("DEPLOYMENT_MODE", "cli")
+        
+        # If in remote API mode and a CLI is selected, show active fallback
+        resolved_provider = provider
+        if deployment_mode == "api" and provider not in ("nvidia", "openai", "anthropic", "ollama"):
+            resolved_provider = "nvidia" if _llm.get_llm_setting("NVIDIA_API_KEY") else "anthropic"
+            
         model_info = {
-            "gemini": {"model": _llm.GEMINI_MODEL or "default", "note": "Uses local gemini CLI"},
-            "claude": {"model": _llm.CLAUDE_MODEL, "note": "Uses local claude CLI"},
-            "ollama": {"model": _llm.OLLAMA_MODEL, "note": f"URL: {_llm.OLLAMA_URL}"},
-            "nvidia": {"model": _llm.NVIDIA_MODEL, "note": "NVIDIA NIM API"},
-        }.get(provider, {"model": "unknown", "note": ""})
+            "gemini": {"model": _llm.get_llm_setting("GEMINI_MODEL", "") or "default", "note": "Uses local gemini CLI"},
+            "claude": {"model": _llm.get_llm_setting("CLAUDE_MODEL", "") or "claude-sonnet-4-6", "note": "Uses local claude CLI"},
+            "opencode": {"model": _llm.get_llm_setting("LLM_MODEL", "") or "deepseek-v4-flash-free", "note": "Uses local opencode CLI"},
+            "hermes": {"model": _llm.get_llm_setting("LLM_MODEL", "") or "default", "note": "Uses local hermes CLI"},
+            "kilocode": {"model": _llm.get_llm_setting("LLM_MODEL", "") or "default", "note": "Uses local kilocode CLI"},
+            "agy": {"model": _llm.get_llm_setting("LLM_MODEL", "") or "default", "note": "Uses local agy CLI"},
+            "ollama": {"model": _llm.get_llm_setting("OLLAMA_MODEL", "phi3:mini"), "note": f"URL: {_llm.get_llm_setting('OLLAMA_URL', 'http://localhost:11434')}"},
+            "nvidia": {"model": _llm.get_llm_setting("LLM_MODEL", "") or "minimaxai/minimax-m2.7", "note": "NVIDIA NIM API"},
+            "openai": {"model": _llm.get_llm_setting("LLM_MODEL", "gpt-4o-mini"), "note": "OpenAI/Compatible API"},
+            "anthropic": {"model": _llm.get_llm_setting("LLM_MODEL", "claude-3-5-sonnet-latest"), "note": "Anthropic API"},
+        }.get(resolved_provider, {"model": "unknown", "note": ""})
+        
+        has_key = False
+        if resolved_provider in ("nvidia", "openai", "anthropic"):
+            has_key = bool(_llm.get_llm_setting("LLM_API_KEY") or _llm.get_llm_setting("NVIDIA_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"))
+            
         return jsonify({
-            "provider": provider,
+            "provider": resolved_provider,
             "model": model_info["model"],
-            "note": model_info["note"],
-            "has_key": bool(getattr(_llm, "NVIDIA_API_KEY", "")),
+            "note": model_info["note"] + (" (Cloud API Mode Fallback)" if resolved_provider != provider else ""),
+            "has_key": has_key,
         })
     except Exception as e:
         return jsonify({"provider": "unknown", "error": str(e)})

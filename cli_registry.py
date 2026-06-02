@@ -27,6 +27,20 @@ PROBE_CACHE = os.path.join(DATA_DIR, "cli_providers.json")
 PROBE_TTL_SEC = int(os.environ.get("CLI_PROBE_TTL_SEC", "1800"))  # 30 min
 GEN_TIMEOUT = int(os.environ.get("STUDIO_GEN_TIMEOUT", "240"))
 
+def _get_bin(key: str, default: str) -> str:
+    try:
+        import settings_manager
+        return settings_manager.get(key) or default
+    except Exception:
+        return default
+
+def _get_deployment_mode() -> str:
+    try:
+        import settings_manager
+        return settings_manager.get("deployment_mode") or "cli"
+    except Exception:
+        return "cli"
+
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
@@ -135,14 +149,16 @@ def _get_profile_model(provider_name: str, fallback_model: str) -> str:
 _OPENCODE_MODEL = os.environ.get("STUDIO_OPENCODE_MODEL", "opencode/deepseek-v4-flash-free")
 
 def _opencode_detect() -> bool:
-    if not shutil.which("opencode"):
+    bin_path = _get_bin("opencode_path", "opencode")
+    if not shutil.which(bin_path):
         return False
-    out = _run(["opencode", "models"], timeout=20)
+    out = _run([bin_path, "models"], timeout=20)
     return bool(out and "/" in out)
 
 def _opencode_gen(prompt: str, system: Optional[str], timeout: int) -> Optional[str]:
+    bin_path = _get_bin("opencode_path", "opencode")
     model = _get_profile_model("opencode", _OPENCODE_MODEL)
-    return _run(["opencode", "run", "-m", model, _combine(prompt, system)], timeout)
+    return _run([bin_path, "run", "-m", model, _combine(prompt, system)], timeout)
 
 
 # -- claude code CLI: OAuth session, no key --
@@ -150,22 +166,26 @@ _CLAUDE_BIN = os.environ.get("CLAUDE_CODE_BIN", os.environ.get("CLAUDE_CODE_EXEC
 _CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
 
 def _claude_detect() -> bool:
-    return bool(shutil.which(_CLAUDE_BIN) or shutil.which("claude"))
+    bin_path = _get_bin("claude_path", _CLAUDE_BIN)
+    return bool(shutil.which(bin_path))
 
 def _claude_gen(prompt: str, system: Optional[str], timeout: int) -> Optional[str]:
+    bin_path = _get_bin("claude_path", _CLAUDE_BIN)
     model = _get_profile_model("claude", _CLAUDE_MODEL)
-    return _run([_CLAUDE_BIN, "-p", _combine(prompt, system), "--model", model], timeout)
+    return _run([bin_path, "-p", _combine(prompt, system), "--model", model], timeout)
 
 
 # -- hermes: agent CLI with --skills / --yolo --
 _HERMES_MODEL = os.environ.get("HERMES_MODEL", "")
 
 def _hermes_detect() -> bool:
-    return bool(shutil.which("hermes"))
+    bin_path = _get_bin("hermes_path", "hermes")
+    return bool(shutil.which(bin_path))
 
 def _hermes_gen(prompt: str, system: Optional[str], timeout: int) -> Optional[str]:
+    bin_path = _get_bin("hermes_path", "hermes")
     model = _get_profile_model("hermes", _HERMES_MODEL)
-    args = ["hermes", "-z", _combine(prompt, system), "--yolo"]
+    args = [bin_path, "-z", _combine(prompt, system), "--yolo"]
     if model:
         args += ["-m", model]
     return _run(args, timeout)
@@ -175,17 +195,53 @@ def _hermes_gen(prompt: str, system: Optional[str], timeout: int) -> Optional[st
 _GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "")
 
 def _gemini_detect() -> bool:
-    if not shutil.which("gemini"):
+    bin_path = _get_bin("gemini_path", "gemini")
+    if not shutil.which(bin_path):
         return False
     # gemini fails without an auth method; a fast probe avoids dead routing
-    out = _run(["gemini", "-p", "ping"], timeout=25)
+    out = _run([bin_path, "-p", "ping"], timeout=25)
     return out is not None
 
 def _gemini_gen(prompt: str, system: Optional[str], timeout: int) -> Optional[str]:
+    bin_path = _get_bin("gemini_path", "gemini")
     model = _get_profile_model("gemini", _GEMINI_MODEL)
-    args = ["gemini", "-p", _combine(prompt, system)]
+    args = [bin_path, "-p", _combine(prompt, system)]
     if model:
         args += ["--model", model]
+    return _run(args, timeout)
+
+
+# -- kilocode: kilo CLI --
+def _kilocode_detect() -> bool:
+    bin_path = _get_bin("kilocode_path", "kilo")
+    if not shutil.which(bin_path):
+        if bin_path == "kilo" and shutil.which("kilocode"):
+            return True
+        return False
+    return True
+
+def _kilocode_gen(prompt: str, system: Optional[str], timeout: int) -> Optional[str]:
+    bin_path = _get_bin("kilocode_path", "kilo")
+    if not shutil.which(bin_path) and shutil.which("kilocode"):
+        bin_path = "kilocode"
+    model = _get_profile_model("kilocode", "")
+    args = [bin_path, _combine(prompt, system)]
+    if model:
+        args += ["--model", model]
+    return _run(args, timeout)
+
+
+# -- agy: Google Antigravity CLI --
+def _agy_detect() -> bool:
+    bin_path = _get_bin("agy_path", "agy")
+    if not shutil.which(bin_path):
+        return False
+    out = _run([bin_path, "help"], timeout=10)
+    return out is not None
+
+def _agy_gen(prompt: str, system: Optional[str], timeout: int) -> Optional[str]:
+    bin_path = _get_bin("agy_path", "agy")
+    args = [bin_path, "-p", _combine(prompt, system), "--dangerously-skip-permissions"]
     return _run(args, timeout)
 
 
@@ -269,6 +325,8 @@ _PROVIDERS: List[Provider] = [
     Provider("claude", "Claude Code CLI", "cli", _claude_detect, _claude_gen, _CLAUDE_MODEL, priority=20),
     Provider("nvidia", "NVIDIA NIM", "http", _nvidia_detect, _nvidia_gen, os.environ.get("NVIDIA_MODEL", ""), priority=30),
     Provider("hermes", "Hermes agent", "cli", _hermes_detect, _hermes_gen, _HERMES_MODEL, priority=40),
+    Provider("kilocode", "Kilocode CLI", "cli", _kilocode_detect, _kilocode_gen, "", priority=45),
+    Provider("agy", "Antigravity CLI (agy)", "cli", _agy_detect, _agy_gen, "", priority=48),
     Provider("gemini", "Gemini CLI", "cli", _gemini_detect, _gemini_gen, _GEMINI_MODEL, priority=50),
     Provider("ollama", "Ollama (local)", "cli", _ollama_detect, _ollama_gen, _OLLAMA_MODEL, priority=60),
 ]
@@ -279,10 +337,12 @@ _BY_NAME = {p.name: p for p in _PROVIDERS}
 # --------------------------------------------------------------------------- #
 # Probing (cached)
 # --------------------------------------------------------------------------- #
-def _load_cache() -> Optional[Dict]:
+def _load_cache(mode: str) -> Optional[Dict]:
     try:
         with open(PROBE_CACHE, encoding="utf-8") as f:
             data = json.load(f)
+        if data.get("deployment_mode") != mode:
+            return None
         if time.time() - data.get("probed_at", 0) < PROBE_TTL_SEC:
             return data
     except Exception:
@@ -304,13 +364,16 @@ def probe(force: bool = False) -> Dict:
 
     Returns {"probed_at", "available": [name...], "providers": [{name,label,kind,model,available,priority}]}.
     """
+    mode = _get_deployment_mode()
     if not force:
-        cached = _load_cache()
+        cached = _load_cache(mode)
         if cached:
             return cached
     providers = []
     available = []
     for p in sorted(_PROVIDERS, key=lambda x: x.priority):
+        if mode == "api" and p.kind == "cli":
+            continue
         ok = False
         try:
             ok = bool(p.detect())
@@ -322,7 +385,7 @@ def probe(force: bool = False) -> Dict:
             "name": p.name, "label": p.label, "kind": p.kind,
             "model": p.model, "available": ok, "priority": p.priority,
         })
-    data = {"probed_at": time.time(), "available": available, "providers": providers}
+    data = {"probed_at": time.time(), "available": available, "providers": providers, "deployment_mode": mode}
     _save_cache(data)
     return data
 

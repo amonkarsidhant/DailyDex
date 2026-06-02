@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>DailyDex Creator Lab</title>
+<meta name="viewport" content="width=1200" />
+<style>
+  :root {
+    --bg: #0b0d12; --panel: #151922; --line: #232a37; --text: #e6e9ef;
+    --mute: #8a93a3; --accent: #6cc8ff; --ok: #6dd58c; --warn: #ffc36b; --err: #ff7a7a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         background: var(--bg); color: var(--text); }
+  header { padding: 18px 24px; border-bottom: 1px solid var(--line);
+           display: flex; justify-content: space-between; align-items: center; }
+  header h1 { margin: 0; font-size: 20px; letter-spacing: .3px; }
+  header .sub { color: var(--mute); font-size: 12px; }
+  main { display: grid; grid-template-columns: 240px 1fr; min-height: calc(100vh - 60px); }
+  nav { background: var(--panel); border-right: 1px solid var(--line); padding: 12px 0; }
+  nav a { display: block; padding: 10px 18px; color: var(--text); text-decoration: none;
+          cursor: pointer; border-left: 3px solid transparent; font-size: 13px; }
+  nav a.active { background: rgba(108,200,255,.08); border-left-color: var(--accent); color: var(--accent); }
+  nav a:hover { background: rgba(255,255,255,.04); }
+  section.feature { padding: 22px 28px; display: none; }
+  section.feature.active { display: block; }
+  section h2 { margin: 0 0 4px; font-size: 18px; }
+  section .desc { color: var(--mute); margin-bottom: 16px; font-size: 13px; }
+  textarea, input, select { width: 100%; background: #0e1218; color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; font: inherit; }
+  textarea { min-height: 100px; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
+  label { display: block; margin: 10px 0 4px; color: var(--mute); font-size: 12px; }
+  button { background: var(--accent); color: #06121b; border: 0; padding: 10px 16px;
+    border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: 12px; }
+  button:disabled { opacity: .5; cursor: wait; }
+  pre.out { background: #0e1218; border: 1px solid var(--line); border-radius: 8px;
+    padding: 14px; max-height: 600px; overflow: auto; font: 12px/1.55 ui-monospace, Menlo, monospace;
+    white-space: pre-wrap; word-break: break-word; margin-top: 16px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px;
+    background: #1f2937; color: var(--mute); margin-left: 6px; }
+  .badge.ok { background: #1d3a26; color: var(--ok); }
+  .badge.warn { background: #3a2e1d; color: var(--warn); }
+  .badge.err { background: #3a1d1d; color: var(--err); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: var(--mute); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>DailyDex Creator Lab <span class="badge">MVP</span></h1>
+    <div class="sub">Ten MrBeast-style features. <span id="provider"></span></div>
+  </div>
+  <div class="sub"><a href="/" style="color: var(--accent);">← Cockpit</a></div>
+</header>
+<main>
+  <nav id="nav"></nav>
+  <div id="panels"></div>
+</main>
+<script>
+const FEATURES = [
+  { id:"status", title:"Feature Status", desc:"Which features are wired vs need keys/binaries.",
+    method:"GET", path:"/api/lab/status", schema:null },
+  { id:"title-tournament", title:"Title Tournament", desc:"Rank candidate titles by curiosity/CTR potential.",
+    method:"POST", path:"/api/lab/title-tournament",
+    schema:`{
+  "topic": "How NVIDIA NIM beats OpenAI on local AI",
+  "niche": "AI / developer tools",
+  "titles": [
+    "The Open Source AI That's Quietly Killing OpenAI",
+    "NVIDIA NIM Tutorial - Free LLM for Developers",
+    "I Ran Llama 3.2 90B Locally. Here's What Happened.",
+    "Stop Paying OpenAI: Switch to NVIDIA NIM in 60 Seconds"
+  ]
+}` },
+  { id:"retention-sim", title:"30s Retention Sim", desc:"Will viewers swipe in the first 30 seconds?",
+    method:"POST", path:"/api/lab/retention-sim",
+    schema:`{
+  "audience": "technical builders, AI/developer tools",
+  "script": "Hey everyone, welcome back to the channel. Today we're going to take a look at NVIDIA NIM, which is an interesting new way to run large language models locally. Before we get started, please subscribe..."
+}` },
+  { id:"cpm-safety", title:"CPM / Brand-Safety", desc:"Estimated CPM tier + demonetization risk.",
+    method:"POST", path:"/api/lab/cpm-safety",
+    schema:`{
+  "title": "How to Use AI to Replace Your Boring Job",
+  "script": "Most jobs are repetitive paperwork. Here's how to use Claude and ChatGPT to automate the 80% of your work that's busywork, so you can either go home early or take on real projects."
+}` },
+  { id:"virality-forecast", title:"Virality Forecast", desc:"P10/P50/P90 view forecast for 7 days.",
+    method:"POST", path:"/api/lab/virality-forecast",
+    schema:`{
+  "niche": "AI / developer tools",
+  "topic": "Running Llama 3.2 Vision on a Raspberry Pi 5",
+  "title": "I Ran a Vision LLM on a $80 Computer",
+  "channel_subs": 4500
+}` },
+  { id:"thumb-ctr", title:"Thumbnail CTR", desc:"Rank thumbnails (text-mode; vision-LLM opt-in).",
+    method:"POST", path:"/api/lab/thumb-ctr",
+    schema:`{
+  "niche": "AI / developer tools",
+  "topic": "Local LLMs",
+  "thumbs": [
+    {"id":"a", "caption":"Shocked face + 'CLAUDE IS DEAD?' text + glowing red Llama logo"},
+    {"id":"b", "caption":"Clean white BG, small llama icon, title 'Local LLM Setup'"},
+    {"id":"c", "caption":"Split screen: tiny PC vs huge data center, lightning between them"},
+    {"id":"d", "caption":"Person pointing at screen showing token/sec graph hitting 200"}
+  ]
+}` },
+  { id:"longform-to-shorts", title:"Long → Shorts", desc:"Pick top N hook-worthy ~30s clips from a transcript.",
+    method:"POST", path:"/api/lab/longform-to-shorts",
+    schema:`{
+  "niche": "AI / developer tools",
+  "n": 6,
+  "transcript": "Today I want to show you something insane. I just got Llama 3.2 90B running on a single M4 Mac mini. That's a 90 billion parameter model on a $599 computer. The trick is 4-bit quantization plus a clever offloading scheme. Most people think you need an H100 for this kind of work. They are wrong. I'll show you the exact setup in three steps. First, install Ollama. Second, pull the quantized weights. Third, tune the context window. The full guide is on screen now."
+}` },
+  { id:"competitor-pulse", title:"Competitor Pulse", desc:"Latest uploads from rival channels (needs YT API key).",
+    method:"POST", path:"/api/lab/competitor-pulse",
+    schema:`{ "channel_ids": ["UCXuqSBlHAE6Xw-yeJA0Tunw", "UCsBjURrPoezykLs9EqgamOA"], "max_per_channel": 3 }` },
+  { id:"audience-overlap", title:"Audience Overlap", desc:"Adjacent channels via co-mentioned search results.",
+    method:"POST", path:"/api/lab/audience-overlap",
+    schema:`{ "channel_id": "UCXuqSBlHAE6Xw-yeJA0Tunw" }` },
+  { id:"ab-thumb-swap", title:"A/B Thumb Swap", desc:"Schedule a live thumbnail swap (YT OAuth pending).",
+    method:"POST", path:"/api/lab/ab-thumb-swap",
+    schema:`{
+  "video_id": "dQw4w9WgXcQ",
+  "thumb_a": "https://example.com/thumb_a.jpg",
+  "thumb_b": "https://example.com/thumb_b.jpg",
+  "swap_after_minutes": 360,
+  "ctr_floor": 0.04
+}` },
+  { id:"kanban", title:"Pipeline Kanban", desc:"Stages with SLA breach flags.",
+    method:"GET", path:"/api/lab/kanban", schema:null },
+  { id:"ship-it", title:"🚀 Ship It (one-button)", desc:"Topic → research + 10 titles + 60s script + 4 thumb prompts.",
+    method:"POST", path:"/api/lab/ship-it",
+    schema:`{
+  "niche": "AI / developer tools",
+  "topic": "How NVIDIA NIM lets you run LLMs locally at OpenAI quality"
+}` },
+];
+
+const nav = document.getElementById("nav");
+const panels = document.getElementById("panels");
+let activeId = FEATURES[0].id;
+
+FEATURES.forEach((f, idx) => {
+  const a = document.createElement("a");
+  a.textContent = f.title;
+  a.dataset.id = f.id;
+  if (idx === 0) a.classList.add("active");
+  a.onclick = () => setActive(f.id);
+  nav.appendChild(a);
+
+  const sec = document.createElement("section");
+  sec.className = "feature" + (idx === 0 ? " active" : "");
+  sec.id = "panel-" + f.id;
+  sec.innerHTML = `
+    <h2>${f.title} <span class="badge">${f.method}</span> <span class="badge">${f.path}</span></h2>
+    <div class="desc">${f.desc}</div>
+    ${f.schema !== null ? `
+      <label>Request body (JSON)</label>
+      <textarea data-input>${f.schema || ""}</textarea>
+    ` : ""}
+    <button data-run>Run</button>
+    <pre class="out" data-out>—</pre>
+  `;
+  sec.querySelector("[data-run]").onclick = () => run(f, sec);
+  panels.appendChild(sec);
+});
+
+async function run(f, sec) {
+  const btn = sec.querySelector("[data-run]");
+  const out = sec.querySelector("[data-out]");
+  const inp = sec.querySelector("[data-input]");
+  btn.disabled = true;
+  out.textContent = "Calling " + f.path + " …";
+  try {
+    const opts = { method: f.method, headers: {"Content-Type":"application/json"} };
+    if (f.method === "POST" && inp) opts.body = inp.value;
+    const t0 = performance.now();
+    const r = await fetch(f.path, opts);
+    const elapsed = Math.round(performance.now() - t0);
+    const text = await r.text();
+    let parsed;
+    try { parsed = JSON.parse(text); } catch { parsed = text; }
+    out.textContent =
+      `← ${r.status} ${r.statusText}  (${elapsed}ms)\n\n` +
+      (typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2));
+  } catch (e) {
+    out.textContent = "ERROR: " + (e?.message || e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function setActive(id) {
+  activeId = id;
+  document.querySelectorAll("nav a").forEach(a => {
+    a.classList.toggle("active", a.dataset.id === id);
+  });
+  document.querySelectorAll("section.feature").forEach(s => {
+    s.classList.toggle("active", s.id === "panel-" + id);
+  });
+}
+
+// Probe provider for header badge
+fetch("/api/lab/status").then(r=>r.json()).then(d=>{
+  const provs = (d.llm_providers && d.llm_providers.available) || [];
+  document.getElementById("provider").textContent =
+    "LLM providers available: " + (provs.length ? provs.join(", ") : "none");
+}).catch(()=>{});
+</script>
+</body>
+</html>

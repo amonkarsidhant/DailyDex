@@ -24,6 +24,7 @@ except Exception:  # pragma: no cover
 
 
 PROVIDER = os.environ.get("LLM_PROVIDER", "gemini")
+IS_VERCEL = os.environ.get("VERCEL") == "1"
 GEMINI_BIN = os.environ.get("GEMINI_BIN", "gemini")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "")
 GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "600"))
@@ -80,10 +81,23 @@ SUGGESTED_TITLE_KEYS = ["curiosity", "practical", "contrarian", "tutorial"]
 # Provider helpers
 # ---------------------------------------------------------------------------
 
+def get_llm_setting(key: str, default: str = "") -> str:
+    env_val = os.environ.get(key)
+    if env_val:
+        return env_val
+    try:
+        import settings_manager
+        return settings_manager.get(key.lower())
+    except Exception:
+        return default
+
+
 def _gemini_args(prompt: str) -> List[str]:
-    args = [GEMINI_BIN]
-    if GEMINI_MODEL:
-        args += ["--model", GEMINI_MODEL]
+    gemini_bin = get_llm_setting("GEMINI_PATH", "gemini")
+    gemini_model = get_llm_setting("LLM_MODEL", "")
+    args = [gemini_bin]
+    if gemini_model:
+        args += ["--model", gemini_model]
     # Headless Automation Mode: Use --prompt and --output-format json.
     # --approval-mode yolo allows the agent to use its research tools (search, etc.) autonomously.
     args += [
@@ -99,6 +113,8 @@ def query_gemini_cli(prompt: str, system_prompt: Optional[str] = None) -> Option
     """Run the Gemini CLI in headless mode and return the model's text response.
     """
     full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+    gemini_timeout = int(get_llm_setting("GEMINI_TIMEOUT", "600"))
+    gemini_bin = get_llm_setting("GEMINI_PATH", "gemini")
     try:
         # Pass DEVNULL to stdin to ensure non-interactive behavior
         result = subprocess.run(
@@ -106,13 +122,13 @@ def query_gemini_cli(prompt: str, system_prompt: Optional[str] = None) -> Option
             capture_output=True,
             text=True,
             stdin=subprocess.DEVNULL,
-            timeout=GEMINI_TIMEOUT,
+            timeout=gemini_timeout,
         )
     except FileNotFoundError:
-        print("Gemini CLI not found. Set GEMINI_BIN or install `gemini`.")
+        print(f"Gemini CLI not found at {gemini_bin}. Set GEMINI_BIN or install `gemini`.")
         return None
     except subprocess.TimeoutExpired:
-        print(f"Gemini CLI timed out after {GEMINI_TIMEOUT}s")
+        print(f"Gemini CLI timed out after {gemini_timeout}s")
         return None
     except Exception as exc:  # pragma: no cover
         print(f"Gemini CLI error: {exc}")
@@ -142,16 +158,20 @@ def query_gemini_cli(prompt: str, system_prompt: Optional[str] = None) -> Option
 def query_ollama(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:
     if requests is None:
         return None
+    url = get_llm_setting("OLLAMA_URL", "http://localhost:11434")
+    if not url.endswith("/api/generate"):
+        url = f"{url.rstrip('/')}/api/generate"
+    model = get_llm_setting("OLLAMA_MODEL", "phi3:mini")
     try:
         payload = {
-            "model": OLLAMA_MODEL,
+            "model": model,
             "prompt": prompt,
             "stream": False,
             "options": {"max_tokens": 1200, "temperature": 0.3},
         }
         if system_prompt:
             payload["system"] = system_prompt
-        response = requests.post(OLLAMA_URL, json=payload, timeout=60)
+        response = requests.post(url, json=payload, timeout=60)
         if response.status_code == 200:
             return (response.json().get("response") or "").strip()
     except Exception as exc:
@@ -162,10 +182,13 @@ def query_ollama(prompt: str, system_prompt: Optional[str] = None) -> Optional[s
 def query_claude_code_cli(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:
     """Call Claude via the claude CLI using the existing OAuth session."""
     full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+    claude_bin = get_llm_setting("CLAUDE_PATH", "claude")
+    claude_model = get_llm_setting("LLM_MODEL", "claude-sonnet-4-6")
+    claude_timeout = int(get_llm_setting("CLAUDE_TIMEOUT", "120"))
     args = [
-        _CLAUDE_CODE_BIN,
+        claude_bin,
         "-p", full_prompt,
-        "--model", CLAUDE_MODEL,
+        "--model", claude_model,
     ]
     try:
         result = subprocess.run(
@@ -173,13 +196,13 @@ def query_claude_code_cli(prompt: str, system_prompt: Optional[str] = None) -> O
             capture_output=True,
             text=True,
             stdin=subprocess.DEVNULL,
-            timeout=CLAUDE_TIMEOUT,
+            timeout=claude_timeout,
         )
     except FileNotFoundError:
-        print(f"Claude CLI not found at {_CLAUDE_CODE_BIN!r}. Set CLAUDE_CODE_BIN.")
+        print(f"Claude CLI not found at {claude_bin}. Set CLAUDE_CODE_BIN.")
         return None
     except subprocess.TimeoutExpired:
-        print(f"Claude CLI timed out after {CLAUDE_TIMEOUT}s")
+        print(f"Claude CLI timed out after {claude_timeout}s")
         return None
     except Exception as exc:
         print(f"Claude CLI error: {exc}")
@@ -193,26 +216,118 @@ def query_claude_code_cli(prompt: str, system_prompt: Optional[str] = None) -> O
     return (result.stdout or "").strip() or None
 
 
+def query_opencode_cli(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:
+    """Call opencode CLI in headless mode and return response."""
+    full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+    bin_path = get_llm_setting("OPENCODE_PATH", "opencode")
+    model = get_llm_setting("LLM_MODEL", "opencode/deepseek-v4-flash-free")
+    try:
+        profile_path = os.path.join(BASE_DIR, "config", "creator_profile.json")
+        if os.path.exists(profile_path):
+            with open(profile_path, "r", encoding="utf-8") as f:
+                prof_data = json.load(f)
+                cop_cfg = prof_data.get("copilot") or {}
+                if cop_cfg.get("provider") == "opencode":
+                    model = cop_cfg.get("model") or model
+    except Exception:
+        pass
+    
+    args = [bin_path, "run", "-m", model, full_prompt]
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            timeout=120,
+        )
+    except FileNotFoundError:
+        print(f"opencode CLI not found at {bin_path}. Install it or set it up.")
+        return None
+    except subprocess.TimeoutExpired:
+        print("opencode CLI timed out.")
+        return None
+    except Exception as exc:
+        print(f"opencode CLI error: {exc}")
+        return None
+
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()[:400]
+        print(f"opencode CLI exit {result.returncode}: {stderr}")
+        return None
+
+    stdout = (result.stdout or "").strip()
+    import re as _re
+    stdout = _re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", stdout)
+    stdout = _re.sub(r"<think>.*?</think>", "", stdout, flags=_re.S)
+    if "</think>" in stdout:
+        stdout = stdout.split("</think>")[-1]
+    return stdout.strip() or None
+
+
+def query_kilocode_cli(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:
+    bin_path = get_llm_setting("KILOCODE_PATH", "kilo")
+    full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+    model = get_llm_setting("LLM_MODEL", "")
+    args = [bin_path, full_prompt]
+    if model:
+        args += ["--model", model]
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            timeout=120,
+        )
+        if result.returncode == 0:
+            return (result.stdout or "").strip() or None
+    except Exception as e:
+        print(f"Kilocode CLI error: {e}")
+    return None
+
+
+def query_agy_cli(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:
+    bin_path = get_llm_setting("AGY_PATH", "agy")
+    full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+    args = [bin_path, "-p", full_prompt, "--dangerously-skip-permissions"]
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            timeout=180,
+        )
+        if result.returncode == 0:
+            return (result.stdout or "").strip() or None
+    except Exception as e:
+        print(f"Antigravity CLI error: {e}")
+    return None
+
+
 def query_nvidia(prompt: str, system_prompt: Optional[str] = None,
                  model: Optional[str] = None, max_tokens: int = 1024,
                  api_key: Optional[str] = None) -> Optional[str]:
     """Call an NVIDIA NIM OpenAI-compatible chat endpoint."""
     if requests is None:
         return None
-    key = api_key or NVIDIA_API_KEY
+    key = api_key or get_llm_setting("LLM_API_KEY", "") or os.environ.get("NVIDIA_API_KEY", "")
     if not key:
-        print("NVIDIA NIM: no API key set (NVIDIA_API_KEY)")
+        print("NVIDIA NIM: no API key set")
         return None
+    url = get_llm_setting("LLM_BASE_URL", "") or "https://integrate.api.nvidia.com/v1"
+    resolved_model = model or get_llm_setting("LLM_MODEL", "minimaxai/minimax-m2.7")
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
     try:
         resp = requests.post(
-            f"{NVIDIA_BASE_URL}/chat/completions",
+            f"{url.rstrip('/')}/chat/completions",
             headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
             json={
-                "model": model or NVIDIA_MODEL,
+                "model": resolved_model,
                 "messages": messages,
                 "max_tokens": max_tokens,
                 "temperature": 0.4,
@@ -236,6 +351,80 @@ def query_nvidia(prompt: str, system_prompt: Optional[str] = None,
     return None
 
 
+def query_openai(prompt: str, system_prompt: Optional[str] = None,
+                 model: Optional[str] = None, max_tokens: int = 4096) -> Optional[str]:
+    """Call an OpenAI or custom OpenAI-compatible API endpoint."""
+    if requests is None:
+        return None
+    key = get_llm_setting("LLM_API_KEY", "")
+    url = get_llm_setting("LLM_BASE_URL", "") or "https://api.openai.com/v1"
+    resolved_model = model or get_llm_setting("LLM_MODEL", "gpt-4o-mini")
+    if not key and "openai.com" in url:
+        print("OpenAI API: no API key set")
+        return None
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+    try:
+        resp = requests.post(
+            f"{url.rstrip('/')}/chat/completions",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"} if key else {"Content-Type": "application/json"},
+            json={
+                "model": resolved_model,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": 0.4,
+            },
+            timeout=60,
+        )
+        if resp.status_code != 200:
+            print(f"OpenAI compatible API error {resp.status_code}: {resp.text[:200]}")
+            return None
+        choices = resp.json().get("choices") or []
+        if choices:
+            msg = choices[0].get("message", {}) or {}
+            return (msg.get("content") or "").strip() or None
+    except Exception as exc:
+        print(f"OpenAI compatible API error: {exc}")
+    return None
+
+
+def query_anthropic(prompt: str, system_prompt: Optional[str] = None,
+                    model: Optional[str] = None, timeout: int = 60) -> Optional[str]:
+    key = get_llm_setting("LLM_API_KEY", "") or os.environ.get("ANTHROPIC_API_KEY", "")
+    if not key:
+        print("Anthropic API: no API key set")
+        return None
+    resolved_model = model or get_llm_setting("LLM_MODEL", "claude-3-5-sonnet-latest")
+    try:
+        payload: dict = {
+            "model": resolved_model,
+            "max_tokens": 4096,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if system_prompt:
+            payload["system"] = system_prompt
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=data,
+            headers={
+                "x-api-key": key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            result = json.loads(resp.read())
+            blocks = result.get("content", [])
+            return "\n".join(b.get("text", "") for b in blocks if b.get("type") == "text").strip() or None
+    except Exception as e:
+        print(f"Anthropic API error: {e}")
+        return None
+
+
 def _strip_think(text: str) -> str:
     """Remove <think>...</think> reasoning blocks; if only an unclosed think
     block exists, keep what's after the last tag."""
@@ -255,36 +444,98 @@ _last_used_provider_label: Optional[str] = None
 def query_llm(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:
     global _last_used_provider_label
     res = None
-    if PROVIDER == "ollama":
+
+    provider = get_llm_setting("LLM_PROVIDER", "gemini")
+    deployment_mode = get_llm_setting("DEPLOYMENT_MODE", "cli")
+
+    # SaaS Context Guard or Cloud VM Mode: bypass local binaries
+    if IS_VERCEL or deployment_mode == "api":
+        if provider not in ("nvidia", "openai", "anthropic", "ollama"):
+            # Fallback to remote APIs
+            provider = "nvidia" if (get_llm_setting("LLM_API_KEY") or get_llm_setting("NVIDIA_API_KEY")) else "anthropic"
+
+        if provider == "nvidia":
+            model = get_llm_setting("LLM_MODEL", "minimaxai/minimax-m2.7")
+            res = query_nvidia(prompt, system_prompt, model=model)
+            if res and res.strip():
+                _last_used_provider_label = f"nvidia:{model}"
+                return res
+        elif provider == "openai":
+            model = get_llm_setting("LLM_MODEL", "gpt-4o-mini")
+            res = query_openai(prompt, system_prompt, model=model)
+            if res and res.strip():
+                _last_used_provider_label = f"openai:{model}"
+                return res
+        elif provider == "anthropic":
+            model = get_llm_setting("LLM_MODEL", "claude-3-5-sonnet-latest")
+            res = query_anthropic(prompt, system_prompt, model=model)
+            if res and res.strip():
+                _last_used_provider_label = f"anthropic:{model}"
+                return res
+        elif provider == "ollama":
+            model = get_llm_setting("OLLAMA_MODEL", "phi3:mini")
+            res = query_ollama(prompt, system_prompt)
+            if res and res.strip():
+                _last_used_provider_label = f"ollama:{model}"
+                return res
+        return None
+
+    # CLI / Self-hosted local path
+    if provider == "ollama":
         res = query_ollama(prompt, system_prompt)
         if res and res.strip():
-            _last_used_provider_label = f"ollama:{OLLAMA_MODEL}"
+            _last_used_provider_label = f"ollama:{get_llm_setting('OLLAMA_MODEL', 'phi3:mini')}"
             return res
-    elif PROVIDER == "claude":
+    elif provider == "claude":
         res = query_claude_code_cli(prompt, system_prompt)
         if res and res.strip():
-            _last_used_provider_label = f"claude:{CLAUDE_MODEL}"
+            _last_used_provider_label = f"claude:{get_llm_setting('LLM_MODEL', 'claude-sonnet-4-6')}"
             return res
-    elif PROVIDER == "nvidia":
+    elif provider == "opencode":
+        res = query_opencode_cli(prompt, system_prompt)
+        if res and res.strip():
+            _last_used_provider_label = f"opencode:{get_llm_setting('LLM_MODEL', 'deepseek-v4-flash-free')}"
+            return res
+    elif provider == "nvidia":
         res = query_nvidia(prompt, system_prompt)
         if res and res.strip():
-            _last_used_provider_label = f"nvidia:{NVIDIA_MODEL}"
+            _last_used_provider_label = f"nvidia:{get_llm_setting('LLM_MODEL', 'minimaxai/minimax-m2.7')}"
             return res
-    elif PROVIDER == "gemini":
+    elif provider == "openai":
+        res = query_openai(prompt, system_prompt)
+        if res and res.strip():
+            _last_used_provider_label = f"openai:{get_llm_setting('LLM_MODEL', 'gpt-4o-mini')}"
+            return res
+    elif provider == "anthropic":
+        res = query_anthropic(prompt, system_prompt)
+        if res and res.strip():
+            _last_used_provider_label = f"anthropic:{get_llm_setting('LLM_MODEL', 'claude-3-5-sonnet-latest')}"
+            return res
+    elif provider == "kilocode":
+        res = query_kilocode_cli(prompt, system_prompt)
+        if res and res.strip():
+            _last_used_provider_label = f"kilocode:{get_llm_setting('LLM_MODEL', 'default')}"
+            return res
+    elif provider == "agy":
+        res = query_agy_cli(prompt, system_prompt)
+        if res and res.strip():
+            _last_used_provider_label = f"agy:{get_llm_setting('LLM_MODEL', 'default')}"
+            return res
+    elif provider == "gemini":
         res = query_gemini_cli(prompt, system_prompt)
         if res and res.strip():
-            _last_used_provider_label = f"gemini:{GEMINI_MODEL or 'default'}"
+            _last_used_provider_label = f"gemini:{get_llm_setting('LLM_MODEL', 'default')}"
             return res
     else:
         res = query_gemini_cli(prompt, system_prompt)
         if res and res.strip():
-            _last_used_provider_label = f"gemini:{GEMINI_MODEL or 'default'}"
+            _last_used_provider_label = f"gemini:{get_llm_setting('LLM_MODEL', 'default')}"
             return res
 
     # Fallback to dynamic CLI registry discovery
     try:
         import cli_registry as _cr
-        probe_res = _cr.generate(prompt, system_prompt, timeout=GEMINI_TIMEOUT)
+        probe_res = _cr.generate(prompt, system_prompt, timeout=60)
         if probe_res.get("text"):
             _last_used_provider_label = f"{probe_res.get('provider', 'unknown')}:{probe_res.get('model', '')}"
             return probe_res["text"]
@@ -297,13 +548,21 @@ def query_llm(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]
 def llm_provider_label() -> str:
     if _last_used_provider_label:
         return _last_used_provider_label
-    if PROVIDER == "ollama":
-        return f"ollama:{OLLAMA_MODEL}"
-    if PROVIDER == "claude":
-        return f"claude:{CLAUDE_MODEL}"
-    if PROVIDER == "nvidia":
-        return f"nvidia:{NVIDIA_MODEL}"
-    return f"gemini:{GEMINI_MODEL or 'default'}"
+    provider = get_llm_setting("LLM_PROVIDER", "gemini")
+    model = get_llm_setting("LLM_MODEL", "")
+    if provider == "ollama":
+        return f"ollama:{get_llm_setting('OLLAMA_MODEL', 'phi3:mini')}"
+    if provider == "claude":
+        return f"claude:{model or 'claude-sonnet-4-6'}"
+    if provider == "opencode":
+        return f"opencode:{model or 'deepseek-v4-flash-free'}"
+    if provider == "nvidia":
+        return f"nvidia:{model or 'minimaxai/minimax-m2.7'}"
+    if provider == "openai":
+        return f"openai:{model or 'gpt-4o-mini'}"
+    if provider == "anthropic":
+        return f"anthropic:{model or 'claude-3-5-sonnet-latest'}"
+    return f"{provider}:{model or 'default'}"
 
 
 # ---------------------------------------------------------------------------

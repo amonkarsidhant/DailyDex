@@ -140,6 +140,10 @@ const SettingsView = () => {
   const LLM_PROVIDER_DOCS = {
     gemini:    { free: true,  note: "Requires `gemini` CLI installed. Uses your Google account.", setup: "Install: https://github.com/google-gemini/gemini-cli" },
     claude:    { free: true,  note: "Requires `claude` CLI (Claude Code) installed. Uses your Anthropic account.", setup: "Install: npm install -g @anthropic-ai/claude-code" },
+    opencode:  { free: true,  note: "Requires `opencode` CLI installed.", setup: "Install: https://opencode.dev" },
+    hermes:    { free: true,  note: "Requires `hermes` CLI installed.", setup: "Install: hermes binary" },
+    kilocode:  { free: true,  note: "Requires Kilocode CLI (kilo) installed.", setup: "Install: npm install -g @kilocode/cli" },
+    agy:       { free: true,  note: "Requires Google Antigravity CLI (agy) installed.", setup: "Install: agy install" },
     ollama:    { free: true,  note: "Requires Ollama running locally. 100% private, no API costs.", setup: "Install: https://ollama.ai → pull phi3:mini or llama3" },
     nvidia:    { free: false, note: "NVIDIA NIM API (build.nvidia.com). Requires API key.", setup: "Get key: https://build.nvidia.com" },
     openai:    { free: false, note: "OpenAI API. Requires API key (sk-...).", setup: "Get key: https://platform.openai.com/api-keys" },
@@ -147,6 +151,7 @@ const SettingsView = () => {
   };
 
   const currentProvider = draft["llm_provider"] || values["llm_provider"]?.value || "gemini";
+  const currentMode = draft["deployment_mode"] || values["deployment_mode"]?.value || "cli";
 
   return (
     <div style={{ maxWidth: 780, margin: "0 auto", padding: "24px 20px", display: "flex", flexDirection: "column", gap: 24 }}>
@@ -306,31 +311,86 @@ const SettingsView = () => {
             {/* LLM provider selector (special) */}
             {group === "llm" && (
               <div style={{ padding: "16px 18px", borderBottom: "1px solid var(--line)" }}>
+                {/* Deployment Mode */}
+                <div style={{ fontSize: 12, color: "var(--text-lo)", marginBottom: 12, fontWeight: 600, letterSpacing: "0.05em" }}>DEPLOYMENT MODE</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, marginBottom: 20 }}>
+                  <button
+                    onClick={() => {
+                      handleChange("deployment_mode", "cli");
+                      handleChange("llm_provider", "gemini");
+                    }}
+                    style={{
+                      padding: "14px 16px", borderRadius: 8,
+                      background: currentMode === "cli" ? "rgba(240,183,47,0.08)" : "var(--bg-2)",
+                      border: `1px solid ${currentMode === "cli" ? "rgba(240,183,47,0.5)" : "var(--line)"}`,
+                      cursor: "pointer", textAlign: "left",
+                      transition: "all 120ms",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                      <span style={{ fontSize: 18 }}>💻</span>
+                      <span style={{ color: currentMode === "cli" ? "var(--signal)" : "var(--text-hi)", fontWeight: 700, fontSize: 14 }}>Self-hosted CLI</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-lo)", lineHeight: 1.4 }}>
+                      Onboard local AI CLIs running directly on your machine.
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleChange("deployment_mode", "api");
+                      handleChange("llm_provider", "nvidia");
+                    }}
+                    style={{
+                      padding: "14px 16px", borderRadius: 8,
+                      background: currentMode === "api" ? "rgba(240,183,47,0.08)" : "var(--bg-2)",
+                      border: `1px solid ${currentMode === "api" ? "rgba(240,183,47,0.5)" : "var(--line)"}`,
+                      cursor: "pointer", textAlign: "left",
+                      transition: "all 120ms",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                      <span style={{ fontSize: 18 }}>☁️</span>
+                      <span style={{ color: currentMode === "api" ? "var(--signal)" : "var(--text-hi)", fontWeight: 700, fontSize: 14 }}>Cloud VM / VPC API</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-lo)", lineHeight: 1.4 }}>
+                      Deploy on a cloud VM/container and link remote HTTP APIs.
+                    </div>
+                  </button>
+                </div>
+
                 <div style={{ fontSize: 12, color: "var(--text-lo)", marginBottom: 10, fontWeight: 600, letterSpacing: "0.05em" }}>CHOOSE YOUR AI PROVIDER</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-                  {Object.entries(LLM_PROVIDER_DOCS).map(([p, info]) => {
-                    const isActive = currentProvider === p;
-                    return (
-                      <button key={p}
-                        onClick={() => handleChange("llm_provider", p)}
-                        style={{
-                          padding: "10px 12px", borderRadius: 7,
-                          background: isActive ? "rgba(240,183,47,0.12)" : "var(--bg-2)",
-                          border: `1px solid ${isActive ? "rgba(240,183,47,0.5)" : "var(--line)"}`,
-                          cursor: "pointer", textAlign: "left",
-                          transition: "all 120ms",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                          <span style={{ color: isActive ? "var(--signal)" : "var(--text-hi)", fontWeight: 700, fontSize: 13, fontFamily: "var(--font-mono)", textTransform: "uppercase" }}>{p}</span>
-                          {info.free && (
-                            <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 999, background: "rgba(124,255,178,0.1)", color: "var(--signal-up)", border: "1px solid rgba(124,255,178,0.3)" }}>FREE</span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: 10, color: "var(--text-lo)", lineHeight: 1.3 }}>{info.note}</div>
-                      </button>
-                    );
-                  })}
+                  {Object.entries(LLM_PROVIDER_DOCS)
+                    .filter(([p, info]) => {
+                      if (currentMode === "cli") {
+                        return ["gemini", "claude", "opencode", "hermes", "kilocode", "agy", "ollama"].includes(p);
+                      } else {
+                        return ["anthropic", "nvidia", "openai"].includes(p);
+                      }
+                    })
+                    .map(([p, info]) => {
+                      const isActive = currentProvider === p;
+                      return (
+                        <button key={p}
+                          onClick={() => handleChange("llm_provider", p)}
+                          style={{
+                            padding: "10px 12px", borderRadius: 7,
+                            background: isActive ? "rgba(240,183,47,0.12)" : "var(--bg-2)",
+                            border: `1px solid ${isActive ? "rgba(240,183,47,0.5)" : "var(--line)"}`,
+                            cursor: "pointer", textAlign: "left",
+                            transition: "all 120ms",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                            <span style={{ color: isActive ? "var(--signal)" : "var(--text-hi)", fontWeight: 700, fontSize: 13, fontFamily: "var(--font-mono)", textTransform: "uppercase" }}>{p}</span>
+                            {info.free && (
+                              <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 999, background: "rgba(124,255,178,0.1)", color: "var(--signal-up)", border: "1px solid rgba(124,255,178,0.3)" }}>FREE</span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 10, color: "var(--text-lo)", lineHeight: 1.3 }}>{info.note}</div>
+                        </button>
+                      );
+                    })}
                 </div>
                 {currentProvider && LLM_PROVIDER_DOCS[currentProvider] && (
                   <div style={{ marginTop: 10, padding: "8px 12px", background: "var(--bg-0)", borderRadius: 5, border: "1px solid var(--line)", fontSize: 11, color: "var(--text-lo)" }}>
@@ -349,10 +409,19 @@ const SettingsView = () => {
                 .filter(({ key }) => {
                   // For LLM group, only show relevant fields
                   if (group !== "llm") return true;
-                  if (key === "llm_provider") return false; // rendered above
-                  if (key === "ollama_url" || key === "ollama_model") return currentProvider === "ollama";
-                  if (key === "llm_api_key") return ["nvidia", "openai", "anthropic"].includes(currentProvider);
-                  if (key === "llm_base_url") return ["openai", "nvidia"].includes(currentProvider);
+                  if (key === "llm_provider" || key === "deployment_mode") return false; // rendered above
+                  
+                  // Show CLI path overrides only when in selfhosted mode and relevant provider is active
+                  if (key === "gemini_path") return currentMode === "cli" && currentProvider === "gemini";
+                  if (key === "claude_path") return currentMode === "cli" && currentProvider === "claude";
+                  if (key === "opencode_path") return currentMode === "cli" && currentProvider === "opencode";
+                  if (key === "hermes_path") return currentMode === "cli" && currentProvider === "hermes";
+                  if (key === "kilocode_path") return currentMode === "cli" && currentProvider === "kilocode";
+                  if (key === "agy_path") return currentMode === "cli" && currentProvider === "agy";
+
+                  if (key === "ollama_url" || key === "ollama_model") return currentMode === "cli" && currentProvider === "ollama";
+                  if (key === "llm_api_key") return currentMode === "api" && ["nvidia", "openai", "anthropic"].includes(currentProvider);
+                  if (key === "llm_base_url") return currentMode === "api" && ["openai", "nvidia"].includes(currentProvider);
                   return true;
                 })
                 .map(({ key, meta }) => {

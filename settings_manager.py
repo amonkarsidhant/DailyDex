@@ -58,13 +58,21 @@ SCHEMA: Dict[str, Dict[str, Any]] = {
         "placeholder": "fal-...",
     },
     # LLM
+    "deployment_mode": {
+        "label": "Deployment Mode",
+        "group": "llm",
+        "secret": False,
+        "help": "Choose between Self-hosted (Local CLI) and Cloud VM (Remote API) environments.",
+        "placeholder": "cli",
+        "options": ["cli", "api"],
+    },
     "llm_provider": {
         "label": "LLM Provider",
         "group": "llm",
         "secret": False,
-        "help": "Which LLM powers the creator agents. Options: gemini, claude, ollama, nvidia, openai, anthropic",
+        "help": "Which LLM powers the creator agents. Options: gemini, claude, ollama, nvidia, openai, anthropic, opencode, hermes, kilocode, agy",
         "placeholder": "gemini",
-        "options": ["gemini", "claude", "ollama", "nvidia", "openai", "anthropic"],
+        "options": ["gemini", "claude", "ollama", "nvidia", "openai", "anthropic", "opencode", "hermes", "kilocode", "agy"],
     },
     "llm_model": {
         "label": "LLM Model",
@@ -77,7 +85,7 @@ SCHEMA: Dict[str, Dict[str, Any]] = {
         "label": "LLM API Key",
         "group": "llm",
         "secret": True,
-        "help": "API key for OpenAI, Anthropic, or NVIDIA NIM. Leave blank for Gemini/Claude CLI or Ollama.",
+        "help": "API key for OpenAI, Anthropic, or NVIDIA NIM. Leave blank for local CLIs or Ollama.",
         "placeholder": "sk-...",
     },
     "llm_base_url": {
@@ -100,6 +108,48 @@ SCHEMA: Dict[str, Dict[str, Any]] = {
         "secret": False,
         "help": "Model pulled in Ollama (e.g. phi3:mini, llama3, mistral)",
         "placeholder": "phi3:mini",
+    },
+    "gemini_path": {
+        "label": "Gemini CLI Path",
+        "group": "llm",
+        "secret": False,
+        "help": "Path to your local gemini binary (default: gemini)",
+        "placeholder": "gemini",
+    },
+    "claude_path": {
+        "label": "Claude CLI Path",
+        "group": "llm",
+        "secret": False,
+        "help": "Path to your local claude binary (default: claude)",
+        "placeholder": "claude",
+    },
+    "opencode_path": {
+        "label": "OpenCode CLI Path",
+        "group": "llm",
+        "secret": False,
+        "help": "Path to your local opencode binary (default: opencode)",
+        "placeholder": "opencode",
+    },
+    "hermes_path": {
+        "label": "Hermes CLI Path",
+        "group": "llm",
+        "secret": False,
+        "help": "Path to your local hermes binary (default: hermes)",
+        "placeholder": "hermes",
+    },
+    "kilocode_path": {
+        "label": "Kilocode CLI Path",
+        "group": "llm",
+        "secret": False,
+        "help": "Path to your local kilo binary (default: kilo)",
+        "placeholder": "kilo",
+    },
+    "agy_path": {
+        "label": "Antigravity CLI Path",
+        "group": "llm",
+        "secret": False,
+        "help": "Path to your local agy binary (default: agy)",
+        "placeholder": "agy",
     },
     # Cloudflare
     "cloudflare_account_id": {
@@ -165,6 +215,13 @@ def get_all() -> Dict[str, str]:
         "ollama_model":    "OLLAMA_MODEL",
         "cloudflare_account_id": "CLOUDFLARE_ACCOUNT_ID",
         "cloudflare_api_token":  "CLOUDFLARE_API_TOKEN",
+        "deployment_mode": "DEPLOYMENT_MODE",
+        "kilocode_path": "KILOCODE_PATH",
+        "agy_path": "AGY_PATH",
+        "gemini_path": "GEMINI_PATH",
+        "claude_path": "CLAUDE_PATH",
+        "opencode_path": "OPENCODE_PATH",
+        "hermes_path": "HERMES_PATH",
     }
 
     for key in SCHEMA:
@@ -218,6 +275,13 @@ def get_for_api() -> Dict[str, Any]:
         "ollama_model":    "OLLAMA_MODEL",
         "cloudflare_account_id": "CLOUDFLARE_ACCOUNT_ID",
         "cloudflare_api_token":  "CLOUDFLARE_API_TOKEN",
+        "deployment_mode": "DEPLOYMENT_MODE",
+        "kilocode_path": "KILOCODE_PATH",
+        "agy_path": "AGY_PATH",
+        "gemini_path": "GEMINI_PATH",
+        "claude_path": "CLAUDE_PATH",
+        "opencode_path": "OPENCODE_PATH",
+        "hermes_path": "HERMES_PATH",
     }
 
     result = {"schema": SCHEMA, "values": {}}

@@ -1,6 +1,6 @@
 # DailyDex — Creator Cockpit
 
-![Version](https://img.shields.io/badge/version-v0.11-blue)
+![Version](https://img.shields.io/badge/version-v0.15-blue)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![React](https://img.shields.io/badge/frontend-React%20%2B%20Vite-61DAFB?logo=react)
 ![Flask](https://img.shields.io/badge/backend-Flask%20API-111827?logo=flask&logoColor=white)
@@ -16,11 +16,15 @@ DailyDex is a lightweight, open-source AI content strategist and signal cockpit 
 - **React-based Creator Cockpit**: A premium, high-fidelity React frontend showing content opportunities, topic clusters, and a central workspace.
 - **Recursive LLM Dives**: Multi-stage strategic research that extracts technical shifts, contrarian hooks, narrative beats, and target audience alignment.
 - **Strategic Pipeline**: A Kanban board showing state progression from `Idea` → `Researching` → `Script Ready` → `Recording` → `Published`.
-- **Forge Studio**: A two-panel workspace where creators edit forged assets and coordinate three AI Practicum content agents:
-  - 📺 **YouTube Director**: Generates titles, timestamps, video descriptions, and talking points.
-  - 🎬 **Shorts & Script Writer**: Outlines cold opens and vertical-ready scripts.
-  - 💻 **Demo Architect**: Produces step-by-step terminal guides, annotation points, and storyboards.
-- **Visual Thumbnail Concepts**: Auto-generates CTR-optimized textual layouts and premium visual variants matching your channel's niche.
+- **Forge Studio**: A two-panel workspace where creators edit forged assets and coordinate three AI Practicum content agents.
+- **Notion Sync Pipeline**: One-click outline and storyboard export to Notion databases (`✅ Synced ↗`) to streamline scripting.
+- **9:16 Shorts Slicer & Repurposer**: Automatically segments published horizontal videos into high-retaining vertical shorts with custom start/end timestamps, virality indicators, and hooks.
+- **Title A/B Testing Engine**: Configures and monitors live title comparisons, tracking views, impressions, and CTR metrics with real-time feedback on the leading variant.
+- **Dual Onboarding Profiles**: Supports switching between **Self-hosted CLI mode** (using local binaries of `opencode`, `claude`, `hermes`, `kilocode`, `agy`, `ollama` with custom path overrides) and **Cloud VM API mode** (direct REST calls bypassing all CLI shells for headless cloud setups).
+- **Interactive Onboarding Wizard**: A beautiful 4-step setup flow to configure OAuth identity (Google, GitHub, Microsoft Live), Creator DNA (tone, niche), and API keys.
+- **No-Auth YouTube Analytics Scraper Sync**: Programmatically scrapes live view counts and engagement metrics directly from public URLs, eliminating OAuth complexity.
+- **Terminal Setup Command Verification**: Automatically extracts and tests setup commands (`git clone`, `docker run`, `pip install`, `npm install`) against package registries (GitHub, PyPI, npm, Docker Hub) to audit safety and correctness.
+- **Themed Listicles Engine**: Groups trending opportunities into structured weekly roundups (e.g. Local AI Tools, SaaS Alternatives) and storyboards countdown scripts.
 
 ---
 
@@ -30,19 +34,40 @@ DailyDex is a lightweight, open-source AI content strategist and signal cockpit 
 
 ![DailyDex Walkthrough](docs/screenshots/demo-walkthrough.gif)
 
-### React Creator Cockpit
+### Onboarding Setup Wizard
 
-#### Creator Brief & Content Opportunities
-The primary dashboard highlights the best content opportunities, recommended formats, and raw evidence.
-![Creator Brief](docs/screenshots/creator-brief.png)
+Setting up DailyDex takes less than 60 seconds with our step-by-step local-first wizard:
+
+| Stage 1: Identity | Stage 2: DNA | Stage 3: BYOK (Keys) | Stage 4: Engine Boot |
+|---|---|---|---|
+| ![Stage 1: Identity](docs/screenshots/creator-onboarding-1.png) | ![Stage 2: DNA](docs/screenshots/creator-onboarding-2.png) | ![Stage 3: BYOK](docs/screenshots/creator-onboarding-3.png) | ![Stage 4: Boot Logs](docs/screenshots/creator-onboarding-4.png) |
+
+> [!NOTE]
+> Stage 1 features a simulated browser OAuth pop-up, pre-filling handle and channel details.
+> ![OAuth Popup](docs/screenshots/creator-onboarding-oauth.png)
+
+### Workspace & Strategy Panels
+
+#### Creator Brief & Pulse View
+The primary dashboards highlight content opportunities, recommended formats, and real-time developer telemetry.
+- **Brief**: ![Creator Brief](docs/screenshots/creator-brief.png)
+- **Pulse**: ![Pulse](docs/screenshots/creator-pulse.png)
 
 #### Strategic Content Pipeline
-Track and move ideas. Items marked `script_ready` feature a one-click **Forge in Studio** action.
+Track and move ideas. Items marked `script_ready` feature a one-click **Forge in Studio** action. Supports configuring live A/B tests and slicing 9:16 vertical clips.
 ![Creator Pipeline](docs/screenshots/creator-pipeline.png)
 
-#### Forge Studio & Content Agents
+#### Forge Studio (Creator Central)
 Run recursive deep-dives, draft scripts, and review visual concepts inside a split-pane workstation.
 ![Content Opportunities](docs/screenshots/content-opportunities.png)
+
+#### Copilot Chat (AI Strategist)
+Chat contextually with an LLM strategy agent loaded directly with live feed telemetry.
+![Copilot](docs/screenshots/creator-copilot.png)
+
+#### Settings Panel (Dual Profiles)
+Dynamic selector to toggle between **Self-hosted CLI Mode** (runs Claude/Ollama/Kilocode binaries on your path) and **Cloud VM API Mode** (REST endpoints).
+![Settings](docs/screenshots/creator-settings.png)
 
 ### Premium Generated Thumbnails
 The visual concept generator produces optimized thumbnail mockups corresponding to target topic clusters:
@@ -105,11 +130,16 @@ This registers:
 
 ---
 
-## ⚙️ Creator Configuration & Custom Profiles
-Inject your brand voice and channel format constraints by editing `config/creator_profile.json`:
-- **Identity & Perspective**: Hard constraints on niche, audience level, and signature angles.
-- **Banned Words**: Filter out cliché phrases like "game-changing", "revolutionary", and "delve".
-- **Automation Thresholds**: Configure `auto_research_cluster_score` and `auto_forge_score` to let background agents automatically queue, outline, and script high-value topics.
+## ⚙️ Creator Configuration & Settings (BYOK)
+
+DailyDex operates under a **Bring Your Own Keys (BYOK)** model. Settings are persisted locally in `~/.dailydex/settings.json` and never sent to any cloud:
+
+- **Deployment Profiles**:
+  - 💻 **Self-hosted (Local CLI)**: Run local agent shells directly on your machine. Fully customizable binary execution paths for `gemini`, `claude`, `opencode`, `hermes`, `kilocode` (`kilo`), and `agy` (Google Antigravity).
+  - ☁️ **Cloud VM / VPC (API)**: Deploys onto EC2/Azure VMs or serverless environments. CLI operations are bypassed and routed dynamically to remote HTTP endpoints (Anthropic, OpenAI, NVIDIA NIM).
+- **YouTube Data API Integration**: Real-time channel analytics scraper sync.
+- **fal.ai Key Integration**: Flux image generation for real video thumbnail variant design.
+- **Brand Voice Personalization**: Inject constraints on niche, tone, banned phrases, and automation thresholds in `config/creator_profile.json`.
 
 ---
 
