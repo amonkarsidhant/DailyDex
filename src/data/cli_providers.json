@@ -1,0 +1,23 @@
+{
+  "probed_at": 1780432751.2672079,
+  "available": [],
+  "providers": [
+    {
+      "name": "anthropic",
+      "label": "Anthropic API (claude-haiku)",
+      "kind": "http",
+      "model": "claude-haiku-4-5-20251001",
+      "available": false,
+      "priority": 5
+    },
+    {
+      "name": "nvidia",
+      "label": "NVIDIA NIM",
+      "kind": "http",
+      "model": "",
+      "available": false,
+      "priority": 30
+    }
+  ],
+  "deployment_mode": "api"
+}

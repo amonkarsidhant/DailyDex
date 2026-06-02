@@ -1,0 +1,1602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sarrow DailyDex</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>D</text></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="app-shell">
+        <aside class="sidebar" id="main-sidebar">
+            <button class="sidebar-collapse-btn" onclick="collapseSidebar()" aria-label="Collapse sidebar" title="Collapse sidebar" id="sidebar-collapse-btn">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div class="sidebar-header">
+                <div class="logo">Sarrow DailyDex <span class="variant-badge" id="current-variant">{{ variant_info.name }}</span></div>
+                <div class="sidebar-tools">
+                    <button class="theme-toggle-btn" type="button" onclick="toggleTheme()" aria-label="Toggle theme">🌙</button>
+                    <button class="help-btn" type="button" onclick="showShortcuts()" aria-label="Show keyboard shortcuts">?</button>
+                </div>
+            </div>
+            <div class="variant-switcher">
+                <select id="variant-select" onchange="switchVariant(this.value)">
+                    {% for v in variant_info.available_variants %}
+                    <option value="{{ v }}" {% if v == variant_info.key %}selected{% endif %}>{{ v|title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <nav class="sidebar-nav">
+                {% if creator_mode %}
+                <button class="nav-btn active" data-tab="overview" data-label="Creator Brief" id="nav-overview">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    <span class="nav-label">Creator Brief</span>
+                </button>
+                <button class="nav-btn" data-tab="video-ideas" data-label="Video Ideas" id="nav-video-ideas">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                    <span class="nav-label">Video Ideas</span>
+                </button>
+                <button class="nav-btn" data-tab="shorts" data-label="Shorts" id="nav-shorts">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h8"></path><path d="M6 12h12"></path><path d="M10 18h4"></path></svg>
+                    <span class="nav-label">Shorts</span>
+                </button>
+                <button class="nav-btn" data-tab="clusters" data-label="Clusters" id="nav-clusters">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="2"></circle><circle cx="19" cy="6" r="2"></circle><circle cx="12" cy="18" r="2"></circle><path d="M7 7.5 10.5 16"></path><path d="M17 7.5 13.5 16"></path></svg>
+                    <span class="nav-label">Clusters</span>
+                </button>
+                <button class="nav-btn" data-tab="research-packs" data-label="Research Packs" id="nav-research-packs">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                    <span class="nav-label">Research Packs</span>
+                </button>
+                <button class="nav-btn" data-tab="content-pipeline" data-label="Content Pipeline" id="nav-content-pipeline">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M7 12h10"></path><path d="M10 18h4"></path></svg>
+                    <span class="nav-label">Content Pipeline</span>
+                </button>
+                <button class="nav-btn" data-tab="forge-studio" data-label="Forge Studio" id="nav-forge-studio">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+                    <span class="nav-label">Forge Studio</span>
+                </button>
+                <button class="nav-btn" data-tab="settings" data-label="Settings" id="nav-settings">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    <span class="nav-label">Settings</span>
+                </button>
+                {% else %}
+                <button class="nav-btn active" data-tab="overview" data-label="Overview" id="nav-overview">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    <span class="nav-label">Overview</span>
+                </button>
+                <button class="nav-btn" data-tab="feed" data-label="Feed" id="nav-feed">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"></path><path d="M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1"></circle></svg>
+                    <span class="nav-label">Feed</span>
+                </button>
+                <button class="nav-btn" data-tab="github" data-label="GitHub" id="nav-github">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+                    <span class="nav-label">GitHub</span>
+                </button>
+                <button class="nav-btn" data-tab="models" data-label="Models" id="nav-models">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                    <span class="nav-label">Models</span>
+                </button>
+                <button class="nav-btn" data-tab="research" data-label="Research" id="nav-research">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                    <span class="nav-label">Research</span>
+                </button>
+                <button class="nav-btn" data-tab="videos" data-label="Videos" id="nav-videos">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                    <span class="nav-label">Videos</span>
+                </button>
+                <button class="nav-btn" data-tab="news" data-label="News" id="nav-news">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-4c0-1.1.9-2 2-2h2"></path><path d="M10 6v-2c0-1.1-.9-2-2-2H4"></path></svg>
+                    <span class="nav-label">News</span>
+                </button>
+                <button class="nav-btn" data-tab="local" data-label="Local Lab" id="nav-local">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                    <span class="nav-label">Local Lab</span>
+                </button>
+                <button class="nav-btn" data-tab="saved" data-label="Saved" id="nav-saved">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+                    <span class="nav-label">Saved</span>
+                </button>
+                <button class="nav-btn" data-tab="trends" data-label="Trends" id="nav-trends">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+                    <span class="nav-label">Trends</span>
+                </button>
+                <button class="nav-btn" data-tab="markets" data-label="Markets" id="nav-markets">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                    <span class="nav-label">Markets</span>
+                </button>
+                <button class="nav-btn" data-tab="settings" data-label="Settings" id="nav-settings">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    <span class="nav-label">Settings</span>
+                </button>
+                {% endif %}
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="source-health-mini" id="sidebar-source-health-mini">
+                    {% for source in source_status_cards %}
+                    <div class="health-dot-item">
+                        <span class="health-dot {{ 'healthy' if source.status_key == 'ok' else 'warning' if source.status_key in ['cache', 'stale'] else 'error' }}"></span>
+                        <span class="health-label">{{ source.label }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </aside>
+
+        <div class="main-container">
+            <header class="top-header">
+                <div class="header-left">
+                    <h1 id="page-title">{{ 'Creator Brief' if creator_mode else 'Daily Brief' }}</h1>
+                </div>
+                <div class="header-right">
+                    <div class="search-container">
+                        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        <input type="text" id="global-search" class="search-input" placeholder="{{ 'Search creator ideas...' if creator_mode else 'Search intelligence...' }}" onkeyup="searchCards(this.value)">
+                    </div>
+                    <button class="btn btn-primary" onclick="refreshNow(this)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                        Refresh Now
+                    </button>
+                    <button class="btn" onclick="openDigest('{{ 'creator' if creator_mode else 'default' }}')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                        {{ 'Creator Digest' if creator_mode else 'Sarrow DailyDex Digest' }}
+                    </button>
+                    <button class="live-status" id="live-status" data-live-state="live" type="button" onclick="applyPendingLiveRefresh()" aria-live="polite">
+                        <span class="live-dot"></span>
+                        <span class="live-text">Live</span>
+                    </button>
+                    {% if creator_mode %}
+                    <span class="enrichment-pill" id="enrichment-status-pill" data-state="idle" title="Creator-pack LLM enrichment queue">LLM: idle</span>
+                    {% endif %}
+                    <div class="last-updated-group">
+                        <span class="last-updated-label">Updated</span>
+                        <span class="last-updated">{{ last_updated }}</span>
+                    </div>
+                </div>
+            </header>
+
+            <main class="main-content">
+                <!-- Overview Page -->
+                <div id="overview" class="section active" data-title="{{ 'Creator Brief' if creator_mode else 'Overview' }}">
+                    {% if creator_mode %}
+                    <!-- ── Creator Daily Brief Layout ── -->
+                    <div class="brief-overview-shell">
+
+                        <!-- ETF pulse (populated by JS) -->
+                        <div id="brief-etf-strip-creator" class="etf-strip etf-strip-overview" style="display:none"></div>
+
+                        <!-- Creator KPI strip -->
+                        <div class="brief-kpi-strip">
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">Ideas Today</div>
+                                <div class="brief-kpi-value">{{ creator_opportunities|length }}<small style="color:var(--primary)">● ready</small></div>
+                            </div>
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">In Pipeline</div>
+                                <div class="brief-kpi-value">{{ creator_brief.pipeline_count }}</div>
+                                <div class="brief-kpi-sub">Ideas in progress</div>
+                            </div>
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">Best Score</div>
+                                <div class="brief-kpi-value">{{ creator_brief.best_video_idea.creator_score if creator_brief.best_video_idea else '—' }}</div>
+                                <div class="brief-kpi-sub">Creator potential</div>
+                            </div>
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">Clusters</div>
+                                <div class="brief-kpi-value">{{ creator_brief.content_clusters|length }}</div>
+                                <div class="brief-kpi-sub">Story clusters</div>
+                            </div>
+                        </div>
+
+                        {% set best = creator_brief.best_video_idea %}
+                        {% if best %}
+                        <div class="brief-digest-grid">
+
+                            <!-- Lead idea -->
+                            <div class="brief-lead">
+                                <div class="brief-kicker">
+                                    <span>Lead Idea</span>
+                                    <span class="badge-source source-{{ best.source_type }}">{{ best.best_format }}</span>
+                                    <span class="badge-score hot">{{ best.creator_score }}</span>
+                                    <span class="brief-kicker-tail"></span>
+                                    <span style="font-family:'Fira Code',monospace;font-size:11px;color:var(--text-muted)">{{ last_updated }}</span>
+                                </div>
+                                <h2>{{ best.suggested_titles.curiosity or best.title }}</h2>
+                                <div class="brief-lead-body">{{ best.hook }}</div>
+                                <div class="brief-lead-why">
+                                    <strong style="color:var(--text)">Why viewers care.</strong> {{ best.why_viewers_care }}
+                                    {% if best.creator_reason %}
+                                    <strong style="color:var(--text)"> Why now.</strong> {{ best.creator_reason }}
+                                    {% endif %}
+                                </div>
+                                {% if best.three_key_points %}
+                                <div style="display:flex;flex-wrap:wrap;gap:6px">
+                                    {% for point in best.three_key_points %}<span class="tag">{{ point }}</span>{% endfor %}
+                                </div>
+                                {% endif %}
+                                <div class="brief-lead-actions">
+                                    <button class="btn btn-primary btn-small" onclick='saveCreatorItem({{ best|tojson }}, "idea", this)'>Save as idea</button>
+                                    <button class="btn btn-small" onclick='buildResearchPack({{ best|tojson }}, this)'>Research pack</button>
+                                    <button class="btn btn-small" onclick='saveCreatorItem({{ best|tojson }}, "script_ready", this)'>Draft script</button>
+                                    <a href="{{ best.url }}" target="_blank" class="btn btn-small">Open source</a>
+                                    <span class="brief-action-rec">{{ best.production_effort|title }} effort</span>
+                                </div>
+
+                                <div class="brief-rule"></div>
+                                <div class="brief-kicker">Also Worth Making <span class="brief-kicker-tail"></span></div>
+
+                                <!-- Long-form candidates as followups -->
+                                <div class="brief-followup-list">
+                                    {% for item in creator_brief.long_form_candidates[:4] %}
+                                    <div class="brief-followup-row">
+                                        <span class="brief-rank">#{{ loop.index + 1 }}</span>
+                                        <div style="min-width:0">
+                                            <div class="brief-followup-title">{{ item.suggested_titles.curiosity or item.title }}</div>
+                                            <div class="brief-followup-meta">
+                                                <span class="badge-score {% if item.creator_score >= 80 %}hot{% elif item.creator_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.creator_score }}</span>
+                                                <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
+                                            </div>
+                                            {% if item.why_viewers_care %}
+                                            <div class="brief-followup-summary"><strong>Why viewers care.</strong> {{ item.why_viewers_care }}</div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="brief-followup-actions">
+                                            <button class="btn btn-small" onclick='saveCreatorItem({{ item|tojson }}, "idea", this)'>Save</button>
+                                            <button class="btn btn-small" onclick='buildResearchPack({{ item|tojson }}, this)'>Research</button>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Sticky right rail -->
+                            <div class="brief-rail" id="brief-creator-rail">
+                                <div class="brief-tabs" role="tablist">
+                                    <button class="brief-tab active" onclick="briefTab(this,'brief-creator-shorts')" role="tab">Shorts<span class="brief-tab-count">{{ creator_brief.shorts_ideas|length }}</span></button>
+                                    <button class="brief-tab" onclick="briefTab(this,'brief-creator-wins')" role="tab">Quick Wins<span class="brief-tab-count">{{ creator_brief.quick_wins|length }}</span></button>
+                                    <button class="brief-tab" onclick="briefTab(this,'brief-creator-clusters')" role="tab">Clusters<span class="brief-tab-count">{{ creator_brief.content_clusters|length }}</span></button>
+                                </div>
+
+                                <!-- Shorts tab -->
+                                <div class="brief-rail-body" id="brief-creator-shorts">
+                                    {% for item in creator_brief.shorts_ideas %}
+                                    <div class="brief-weekend-item">
+                                        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+                                            <span class="badge-score interesting">{{ item.creator_score }}</span>
+                                            <span class="badge-source source-{{ item.source_type }}">Short</span>
+                                        </div>
+                                        <div class="brief-weekend-title">{{ item.hook_line }}</div>
+                                        <div class="brief-weekend-why">{{ item.short_script }}</div>
+                                        {% if item.visual_idea %}
+                                        <div class="brief-cmd">Visual: {{ item.visual_idea }}</div>
+                                        {% endif %}
+                                    </div>
+                                    {% else %}
+                                    <p class="text-muted" style="font-size:12px;padding-top:8px">No shorts ideas yet.</p>
+                                    {% endfor %}
+                                </div>
+
+                                <!-- Quick Wins tab -->
+                                <div class="brief-rail-body" id="brief-creator-wins" hidden>
+                                    {% for item in creator_brief.quick_wins %}
+                                    <div class="brief-weekend-item">
+                                        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+                                            <span class="badge-score {% if item.creator_score >= 80 %}hot{% elif item.creator_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.creator_score }}</span>
+                                            <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
+                                            <span style="margin-left:auto;font-size:10px;color:var(--text-muted)">{{ item.production_effort }}</span>
+                                        </div>
+                                        <div class="brief-weekend-title">{{ item.suggested_titles.practical or item.title }}</div>
+                                        <div class="brief-weekend-why">{{ item.why_viewers_care }}</div>
+                                        <div style="display:flex;gap:4px;margin-top:4px">
+                                            <button class="btn btn-small" style="font-size:10px;padding:2px 6px" onclick='saveCreatorItem({{ item|tojson }}, "idea", this)'>Save</button>
+                                            <button class="btn btn-small" style="font-size:10px;padding:2px 6px" onclick='buildResearchPack({{ item|tojson }}, this)'>Research</button>
+                                        </div>
+                                    </div>
+                                    {% else %}
+                                    <p class="text-muted" style="font-size:12px;padding-top:8px">No quick wins yet.</p>
+                                    {% endfor %}
+                                </div>
+
+                                <!-- Clusters tab -->
+                                <div class="brief-rail-body" id="brief-creator-clusters" hidden>
+                                    {% for cluster in creator_brief.content_clusters %}
+                                    <div class="brief-corr-card">
+                                        <div class="brief-corr-topic">
+                                            <span>{{ cluster.topic }}</span>
+                                            <span class="badge-score watch">{{ cluster.creator_score|round|int }}</span>
+                                        </div>
+                                        <div class="brief-weekend-why" style="margin-top:4px">{{ cluster.why_this_is_a_story }}</div>
+                                        <div class="brief-cmd" style="margin-top:4px">{{ cluster.recommended_angle }}</div>
+                                        <div style="font-size:10px;color:var(--text-muted);margin-top:4px">{{ cluster.source_count }} sources · {{ cluster.best_content_format }}</div>
+                                    </div>
+                                    {% else %}
+                                    <p class="text-muted" style="font-size:12px;padding-top:8px">No clusters yet.</p>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div><!-- /brief-digest-grid -->
+
+                        {% else %}
+                        <div class="card" style="padding:2rem;text-align:center;color:var(--text-muted)">
+                            No creator ideas yet — click <strong>Refresh Now</strong> to fetch today's signals.
+                        </div>
+                        {% endif %}
+
+                    </div><!-- /brief-overview-shell -->
+                    {% else %}
+                    <!-- ── Daily Brief Layout (Design D) ── -->
+                    <div class="brief-overview-shell">
+
+                        {% if status_warning %}
+                        <div class="inline-alert inline-alert-warning" id="overview-status-warning">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                            <span>{{ status_warning }}</span>
+                        </div>
+                        {% endif %}
+
+                        <!-- ETF pulse (populated by JS) -->
+                        <div id="brief-etf-strip" class="etf-strip etf-strip-overview" style="display:none"></div>
+
+                        <!-- KPI strip -->
+                        <div class="brief-kpi-strip">
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">Daily Trust</div>
+                                <div class="brief-kpi-value">{{ daily_summary.trust_state }}<small style="color:var(--success)">● {{ daily_summary.freshness_message }}</small></div>
+                            </div>
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">New Today</div>
+                                <div class="brief-kpi-value">{{ daily_summary.new_items_today }}<canvas class="sparkline brief-spark" id="sparkline-new" data-metric="new" width="60" height="18"></canvas></div>
+                                <div class="brief-kpi-sub">Items collected since 00:00</div>
+                            </div>
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">High Signal</div>
+                                <div class="brief-kpi-value">{{ top_items|length }}<canvas class="sparkline brief-spark" id="sparkline-signal" data-metric="signal" width="60" height="18"></canvas></div>
+                                <div class="brief-kpi-sub">Score ≥ 75</div>
+                            </div>
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">Saved</div>
+                                <div class="brief-kpi-value">{{ saved_items|length }}<canvas class="sparkline brief-spark" id="sparkline-saved" data-metric="saved" width="60" height="18"></canvas></div>
+                                <div class="brief-kpi-sub">In your board</div>
+                            </div>
+                        </div>
+
+                        <!-- Digest grid: lead + sticky rail -->
+                        {% if top_items %}
+                        {% set lead = top_items[0] %}
+                        <div class="brief-digest-grid">
+
+                            <!-- Lead story -->
+                            <div class="brief-lead">
+                                <div class="brief-kicker">
+                                    <span>Lead Story</span>
+                                    <span class="badge-source source-{{ lead.source_type }}">{{ lead.source_label }}</span>
+                                    <span class="badge-score {% if lead.signal_score >= 80 %}hot{% elif lead.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ lead.signal_score }}</span>
+                                    <span class="brief-kicker-tail"></span>
+                                    <span style="font-family:'Fira Code',monospace;font-size:11px;color:var(--text-muted)">{{ last_updated }}</span>
+                                </div>
+                                <h2>{{ lead.title }}</h2>
+                                {% if lead.insight %}
+                                <div class="brief-lead-body">{{ lead.insight }}</div>
+                                {% endif %}
+                                <div class="brief-lead-why">
+                                    <strong style="color:var(--text)">Why it matters.</strong> {{ lead.why_it_matters }}
+                                    {% if lead.why_it_matters_to_me %}
+                                    <strong style="color:var(--text)"> For me.</strong> {{ lead.why_it_matters_to_me }}
+                                    {% endif %}
+                                </div>
+                                <div class="brief-lead-actions">
+                                    <button class="btn btn-primary btn-small" onclick='saveItem({{ {"url": lead.url, "title": lead.title, "source": lead.source, "source_type": lead.source_type, "category": lead.categories[0] if lead.categories else "", "signal_score": lead.signal_score}|tojson }}, this)'>{{ 'Saved' if lead.url in saved_urls else 'Save to board' }}</button>
+                                    <a href="{{ lead.url }}" target="_blank" class="btn btn-small">Open source</a>
+                                    <button class="btn btn-small" onclick='trackItem({{ {"topic": lead.categories[0] if lead.categories else "general", "reason": "from daily brief: " + lead.title}|tojson }}, this)'>Track topic</button>
+                                    <span class="brief-action-rec">{{ lead.recommended_action }}</span>
+                                </div>
+
+                                <div class="brief-rule"></div>
+                                <div class="brief-kicker">Also Worth Reading <span class="brief-kicker-tail"></span></div>
+
+                                <!-- Followup items #2–#5 -->
+                                <div class="brief-followup-list">
+                                    {% for item in top_items[1:5] %}
+                                    <div class="brief-followup-row">
+                                        <span class="brief-rank">#{{ loop.index + 1 }}</span>
+                                        <div style="min-width:0">
+                                            <div class="brief-followup-title">{{ item.title }}</div>
+                                            <div class="brief-followup-meta">
+                                                <span class="badge-score {% if item.signal_score >= 80 %}hot{% elif item.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.signal_score }}</span>
+                                                <span class="badge-source source-{{ item.source_type }}">{{ item.source_label }}</span>
+                                            </div>
+                                            {% set summary = item.why_it_matters or item.insight %}
+                                            {% if summary %}
+                                            <div class="brief-followup-summary"><strong>Why it matters.</strong> {{ summary }}</div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="brief-followup-actions">
+                                            <button class="btn btn-small" onclick='saveItem({{ {"url": item.url, "title": item.title, "source": item.source, "source_type": item.source_type, "category": item.categories[0] if item.categories else "", "signal_score": item.signal_score}|tojson }}, this)'>{{ 'Saved' if item.url in saved_urls else 'Save' }}</button>
+                                            <a href="{{ item.url }}" target="_blank" class="btn btn-small">Open</a>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Sticky right rail: tabbed module -->
+                            <div class="brief-rail" id="brief-rail">
+                                <div class="brief-tabs" role="tablist">
+                                    <button class="brief-tab active" onclick="briefTab(this,'brief-new')" role="tab">What's New<span class="brief-tab-count">{{ new_items|length }}</span></button>
+                                    <button class="brief-tab" onclick="briefTab(this,'brief-corr')" role="tab">Correlations<span class="brief-tab-count">{{ correlations|length }}</span></button>
+                                    <button class="brief-tab" onclick="briefTab(this,'brief-weekend')" role="tab">Weekend<span class="brief-tab-count">{{ weekend_items|length }}</span></button>
+                                </div>
+
+                                <!-- What's New tab -->
+                                <div class="brief-rail-body" id="brief-new">
+                                    {% if new_items %}
+                                    <div class="brief-mini-list" style="display:flex;flex-direction:column">
+                                        {% for item in new_items[:8] %}
+                                        <div class="brief-mini-row" onclick="window.open('{{ item.url }}','_blank')">
+                                            <span class="brief-mini-title">{{ item.title }}</span>
+                                            <span class="brief-mini-badges">
+                                                <span class="badge-source source-{{ item.source_type }}">{{ item.source_type }}</span>
+                                                <span class="badge-score {% if item.signal_score >= 80 %}hot{% elif item.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.signal_score }}</span>
+                                            </span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% else %}
+                                    <p class="text-muted" style="font-size:12px;padding-top:8px">No new items today.</p>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Correlations tab -->
+                                <div class="brief-rail-body" id="brief-corr" hidden>
+                                    {% if correlations %}
+                                    {% for c in correlations %}
+                                    <div class="brief-corr-card">
+                                        <div class="brief-corr-topic">
+                                            <span>{{ c.topic }}</span>
+                                            <span class="brief-corr-sources">
+                                                {% for src in c.sources %}<span class="badge-source source-{{ src }}">{{ src }}</span>{% endfor %}
+                                            </span>
+                                        </div>
+                                        {% for item in c.item_list[:2] %}
+                                        <div class="brief-corr-item">
+                                            <a href="{{ item.url }}" target="_blank" style="color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{{ item.title[:55] }}…</a>
+                                            <span class="badge-score {% if item.signal_score >= 80 %}hot{% elif item.signal_score >= 60 %}watch{% else %}interesting{% endif %}" style="margin-left:6px;flex-shrink:0">{{ item.signal_score }}</span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% endfor %}
+                                    {% else %}
+                                    <p class="text-muted" style="font-size:12px;padding-top:8px">No correlations detected yet.</p>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Weekend tab -->
+                                <div class="brief-rail-body" id="brief-weekend" hidden>
+                                    {% if weekend_items %}
+                                    {% for item in weekend_items %}
+                                    <div class="brief-weekend-item">
+                                        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+                                            <span class="badge-score {% if item.signal_score >= 80 %}hot{% elif item.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.signal_score }}</span>
+                                            <span class="badge-source source-{{ item.source_type }}">{{ item.source_label }}</span>
+                                            <span class="badge-pi pi-{{ item.pi_suitability }}" style="margin-left:auto">Pi: {{ item.pi_suitability }}</span>
+                                        </div>
+                                        <div class="brief-weekend-title"><a href="{{ item.url }}" target="_blank" style="color:inherit;text-decoration:none">{{ item.title }}</a></div>
+                                        <div class="brief-weekend-why">{{ item.why_worth_trying }}</div>
+                                        {% if item.install_command %}
+                                        <div class="brief-cmd">{{ item.install_command }}</div>
+                                        {% endif %}
+                                    </div>
+                                    {% endfor %}
+                                    {% else %}
+                                    <p class="text-muted" style="font-size:12px;padding-top:8px">No weekend picks yet.</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div><!-- /brief-digest-grid -->
+                        {% else %}
+                        <div class="card" style="padding:2rem;text-align:center;color:var(--text-muted)">
+                            No data yet — click <strong>Refresh Now</strong> to fetch today's signals.
+                        </div>
+                        {% endif %}
+
+                    </div><!-- /brief-overview-shell -->
+                    <!-- kept for other tabs that reference source health -->
+                    <div style="display:none">
+                        {% for source in source_status_cards %}
+                        <div class="card health-card status-{{ source.status_key }}">
+                            <div class="health-card-header">
+                                <span class="health-label">{{ source.label }}</span>
+                                <span class="health-status-badge">{{ source.status_label }}</span>
+                            </div>
+                            <div class="health-metrics">
+                                <span>Items: {{ source.item_count }}</span>
+                                <span>Age: {{ source.cache_age_display }}</span>
+                                <span>Last: {{ source.last_success_relative }}</span>
+                            </div>
+                            <div class="health-summary">{{ source.summary }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if creator_mode %}
+                <div id="video-ideas" class="section" data-title="Video Ideas">
+                    <div class="section-header">
+                        <h2 class="section-title">Content Opportunity Cards</h2>
+                    </div>
+                    <div class="creator-opportunity-grid">
+                        {% for item in creator_opportunities %}
+                        <div class="card creator-opportunity-card creator-action-card search-target" data-content-hash="{{ item.content_hash }}" data-enrichment="{{ item.enrichment_status or 'unenriched' }}" data-search="{{ (item.title ~ ' ' ~ item.topic ~ ' ' ~ item.hook ~ ' ' ~ item.best_format)|lower }}">
+                            <div class="creator-opportunity-head">
+                                <div>
+                                    <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
+                                    <span class="creator-topic-pill">{{ item.topic }}</span>
+                                    {% set es = item.enrichment_status or 'unenriched' %}
+                                    <span class="enrichment-badge state-{{ es }}" title="{{ item.enrichment_error or es }}">
+                                        {% if es == 'ready' %}LLM ✓{% elif es == 'ready_with_warnings' %}LLM ~{% elif es == 'queued' %}Queued{% elif es == 'failed' %}LLM ✗{% else %}Draft{% endif %}
+                                    </span>
+                                </div>
+                                <div class="creator-score-pair">
+                                    <span class="badge-score {% if item.creator_score >= 80 %}hot{% elif item.creator_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.creator_score }}</span>
+                                    <span class="badge-score {% if item.signal_score >= 80 %}hot{% elif item.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.signal_score }}</span>
+                                </div>
+                            </div>
+                            <h3>{{ item.suggested_titles.practical or item.title }}</h3>
+                            <p class="creator-hook">{{ item.hook }}</p>
+                            <div class="creator-card-grid">
+                                <div>
+                                    <h4>Why viewers care</h4>
+                                    <p>{{ item.why_viewers_care }}</p>
+                                </div>
+                                <div>
+                                    <h4>Recommended action</h4>
+                                    <p>{{ item.recommended_action }}</p>
+                                </div>
+                                <div>
+                                    <h4>Demo idea</h4>
+                                    <p>{{ item.demo_idea }}</p>
+                                </div>
+                                <div>
+                                    <h4>Risks</h4>
+                                    <p>{{ item.risks_or_caveats }}</p>
+                                </div>
+                            </div>
+                            <div class="creator-title-options">
+                                <h4>Title ideas</h4>
+                                <ul>
+                                    <li>{{ item.suggested_titles.curiosity }}</li>
+                                    <li>{{ item.suggested_titles.practical }}</li>
+                                    <li>{{ item.suggested_titles.contrarian }}</li>
+                                    <li>{{ item.suggested_titles.tutorial }}</li>
+                                </ul>
+                            </div>
+                            <div class="creator-evidence-block">
+                                <h4>Source evidence</h4>
+                                <ul>
+                                    {% for evidence in item.source_evidence[:4] %}
+                                    <li><a href="{{ evidence.url }}" target="_blank">{{ evidence.source_label }}: {{ evidence.title }}</a></li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            <div class="creator-script-block">
+                                <h4>Script starter</h4>
+                                <p><strong>Opening:</strong> {{ item.opening_hook }}</p>
+                                <p><strong>Context:</strong> {{ item.intro_context }}</p>
+                                <p><strong>Demo:</strong> {{ item.demo_segment }}</p>
+                                <p><strong>CTA:</strong> {{ item.call_to_action }}</p>
+                            </div>
+                            <div class="creator-inline-tags">
+                                {% for text in item.thumbnail_text %}<span class="tag">{{ text }}</span>{% endfor %}
+                            </div>
+                            <div class="card-actions creator-actions-row">
+                                <button class="btn btn-small" onclick='saveCreatorItem({{ item|tojson }}, "idea", this)'>Save as idea</button>
+                                <button class="btn btn-small" onclick='buildResearchPack({{ item|tojson }}, this)'>Build research pack</button>
+                                <button class="btn btn-small" onclick='saveCreatorItem({{ item|tojson }}, "script_ready", this)'>Draft script</button>
+                                <button class="btn btn-small" onclick='requestEnrichment({{ {"url": item.url, "title": item.title, "description": item.hook, "source_type": item.source_type, "creator_topic": item.topic}|tojson }}, this)'>Re-enrich</button>
+                                <button class="btn btn-small action-ignore" onclick='ignoreItem({{ {"url": item.url, "title": item.title, "source_type": item.source_type}|tojson }}, this)'>Ignore</button>
+                                <button class="btn btn-small" onclick='trackItem({{ {"topic": item.topic, "reason": "creator topic: " + item.title}|tojson }}, this)'>Track topic</button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div id="shorts" class="section" data-title="Shorts">
+                    <div class="section-header">
+                        <h2 class="section-title">Shorts Ideas</h2>
+                    </div>
+                    <div class="creator-mini-grid">
+                        {% for item in creator_brief.shorts_ideas %}
+                        <div class="card creator-mini-card search-target" data-search="{{ (item.title ~ ' ' ~ item.hook_line)|lower }}">
+                            <div class="creator-mini-top">
+                                <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
+                                <span class="badge-score interesting">{{ item.creator_score }}</span>
+                            </div>
+                            <h3>{{ item.hook_line }}</h3>
+                            <div class="creator-script-block compact">
+                                <p><strong>3-beat structure:</strong></p>
+                                <ol>
+                                    {% for beat in item.three_beat_structure %}
+                                    <li>{{ beat }}</li>
+                                    {% endfor %}
+                                </ol>
+                                <p><strong>30-second script:</strong> {{ item.short_script }}</p>
+                                <p><strong>Visual:</strong> {{ item.visual_idea }}</p>
+                                <p><strong>CTA:</strong> {{ item.cta }}</p>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div id="clusters" class="section" data-title="Clusters">
+                    <div class="section-header">
+                        <h2 class="section-title">Content Clusters</h2>
+                    </div>
+                    <div class="creator-cluster-grid">
+                        {% for cluster in creator_clusters %}
+                        <div class="card creator-cluster-card search-target" data-search="{{ (cluster.topic ~ ' ' ~ cluster.recommended_angle)|lower }}">
+                            <div class="creator-cluster-head">
+                                <h3>{{ cluster.topic }}</h3>
+                                <span class="badge-score watch">{{ cluster.creator_score|round|int }}</span>
+                            </div>
+                            <p>{{ cluster.why_this_is_a_story }}</p>
+                            <p><strong>Recommended angle:</strong> {{ cluster.recommended_angle }}</p>
+                            <p><strong>Best format:</strong> {{ cluster.best_content_format }}</p>
+                            <div class="creator-cluster-meta">
+                                {% for source in cluster.sources %}<span class="tag">{{ source }}</span>{% endfor %}
+                            </div>
+                            <ul class="creator-related-list">
+                                {% for evidence in cluster.related_items[:4] %}
+                                <li><a href="{{ evidence.url }}" target="_blank">{{ evidence.title }}</a></li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div id="research-packs" class="section" data-title="Research Packs">
+                    <div class="section-header">
+                        <h2 class="section-title">Research Packs</h2>
+                    </div>
+                    <div class="creator-research-grid">
+                        {% for pack in research_packs %}
+                        <div class="card creator-research-card" data-filename="{{ pack.filename }}">
+                            <div class="research-pack-header">
+                                <h3>{{ pack.title }}</h3>
+                                <div class="research-pack-header-actions">
+                                    <button class="btn btn-small" onclick="toggleResearchPackEdit(this)">Edit</button>
+                                    <button class="btn btn-small btn-primary" onclick="sendPackToPipeline('{{ pack.filename }}', this)">→ Pipeline</button>
+                                </div>
+                            </div>
+                            <p class="research-pack-excerpt">{{ pack.excerpt }}</p>
+                            <div class="creator-research-meta">
+                                <span>{{ pack.updated_at }}</span>
+                                <span>{{ pack.filename }}</span>
+                            </div>
+                            <div class="research-pack-editor" style="display:none">
+                                <textarea class="research-pack-content" rows="20" placeholder="Loading..."></textarea>
+                                <div class="research-pack-editor-actions">
+                                    <button class="btn btn-small btn-primary" onclick="saveResearchPack(this)">Save</button>
+                                    <button class="btn btn-small" onclick="toggleResearchPackEdit(this)">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% if not research_packs %}
+                        <div class="card creator-research-card empty-pack-card">
+                            <h3>No research packs yet</h3>
+                            <p>Use "Build research pack" on any creator opportunity card to generate one.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div id="content-pipeline" class="section" data-title="Content Pipeline">
+                    <div class="section-header">
+                        <h2 class="section-title">Creator Saved Pipeline</h2>
+                    </div>
+                    <div class="kanban-board creator-pipeline-board">
+                        {% for group in creator_saved_groups %}
+                        <div class="kanban-column" data-status="{{ group.key }}">
+                            <div class="kanban-header">
+                                <span class="kanban-title">{{ group.label }}</span>
+                                <span class="kanban-count">{{ group.group_entries|length }}</span>
+                            </div>
+                            <div class="kanban-cards">
+                                {% for item in group.group_entries %}
+                                <div class="card saved-card creator-saved-card" data-id="{{ item.id }}" data-status="{{ item.status }}">
+                                    <div class="saved-header">
+                                        <span class="badge-source">{{ item.format or 'Creator Item' }}</span>
+                                        <span class="status-pill status-{{ item.status }}">{{ item.status }}</span>
+                                    </div>
+                                    <div class="saved-title">{{ item.working_title or item.title }}</div>
+                                    {% if item.hook %}<div class="saved-notes">{{ item.hook }}</div>{% endif %}
+                                    <div class="saved-editor creator-editor">
+                                        <select class="status-select" onchange="updateStatus({{ item.id }}, this.value)">
+                                            <option value="idea" {% if item.status == 'idea' %}selected{% endif %}>idea</option>
+                                            <option value="researching" {% if item.status == 'researching' %}selected{% endif %}>researching</option>
+                                            <option value="script_ready" {% if item.status == 'script_ready' %}selected{% endif %}>script_ready</option>
+                                            <option value="recording" {% if item.status == 'recording' %}selected{% endif %}>recording</option>
+                                            <option value="published" {% if item.status == 'published' %}selected{% endif %}>published</option>
+                                            <option value="archived" {% if item.status == 'archived' %}selected{% endif %}>archived</option>
+                                        </select>
+                                        <input class="saved-input creator-title-input" type="text" placeholder="Working title" value="{{ item.working_title or '' }}">
+                                        <input class="saved-input creator-hook-input" type="text" placeholder="Hook" value="{{ item.hook or '' }}">
+                                        <input class="saved-input creator-format-input" type="text" placeholder="Format" value="{{ item.format or '' }}">
+                                        <textarea class="saved-textarea creator-outline-input" placeholder="Outline">{{ item.outline|join('\n') if item.outline else '' }}</textarea>
+                                        <input class="saved-input creator-thumb-input" type="text" placeholder="Thumbnail text" value="{{ item.thumbnail_text or '' }}">
+                                        <input class="saved-input creator-priority-input" type="text" placeholder="Priority" value="{{ item.priority or '' }}">
+                                        <input class="saved-input creator-published-input" type="text" placeholder="Published URL" value="{{ item.published_url or '' }}">
+                                        <textarea class="saved-textarea creator-notes-input" placeholder="Notes">{{ item.notes }}</textarea>
+                                        
+                                        {% if item.production_assets %}
+                                        <div class="production-forge-area">
+                                            <div class="forge-label">
+                                                🛠️ Production Forge
+                                                <button class="btn btn-tiny btn-primary" style="float: right; font-size: 0.6rem; padding: 2px 4px;" onclick="openItemInStudio({{ item.id }})">Open in Studio</button>
+                                            </div>
+                                            <div class="forge-tabs">
+                                                <button class="forge-tab-btn active" onclick="switchForgeTab(this, 'shorts')">Shorts</button>
+                                                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'podcast')">Podcast</button>
+                                                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'linkedin')">LinkedIn</button>
+                                                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'blog')">Blog</button>
+                                                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'demo')">Demo</button>
+                                            </div>
+                                            <div class="forge-content-area">
+                                                <div class="forge-pane shorts active">{{ item.production_assets.shorts_script }}</div>
+                                                <div class="forge-pane podcast">{{ item.production_assets.podcast_script }}</div>
+                                                <div class="forge-pane linkedin">{{ item.production_assets.linkedin_post }}</div>
+                                                <div class="forge-pane blog">{{ item.production_assets.blog_outline }}</div>
+                                                <div class="forge-pane demo">{{ item.production_assets.demo_guide }}</div>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="saved-actions">
+                                        <button class="btn btn-small" onclick="updateCreatorItem({{ item.id }}, this.closest('.creator-saved-card'))">Save</button>
+                                        <button class="btn btn-small btn-primary" onclick="forgeProductionAssets({{ item.id }}, this)" title="Generate Shorts / Podcast / LinkedIn / Blog / Demo">Forge assets</button>
+                                        <span class="forge-status-pill state-{{ item.production_status or 'none' }}">{{ item.production_status or 'none' }}</span>
+                                        {% if item.status == 'script_ready' %}
+                                        <button class="btn btn-small btn-studio" onclick="openItemInStudio({{ item.id }})">⚒️ Open in Studio</button>
+                                        {% endif %}
+                                        <button class="btn btn-small action-ignore" onclick="deleteItem({{ item.id }}, this)">Remove</button>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Feed Tab -->
+                <div id="feed" class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">High Signal Feed</h2>
+                        <div class="tab-search-bar">
+                            <label for="tab-search-feed" style="display:none">Search feed</label>
+                            <input type="text" id="tab-search-feed" name="search" class="tab-search-input" placeholder="Search feed..." oninput="searchTabCards('feed', this.value)">
+                        </div>
+                        <div class="filter-bar">
+                            <button class="filter-btn" onclick="setScoreFilter('all', this)">All</button>
+                            <button class="filter-btn" onclick="setScoreFilter('80+', this)">80+ Hot</button>
+                            <button class="filter-btn" onclick="setScoreFilter('60-79', this)">60-79</button>
+                            <button class="filter-btn" onclick="setScoreFilter('<60', this)">&lt;60</button>
+                            <button class="filter-btn active" onclick="setCardFilter('all', this)" style="margin-left:auto">Type:</button>
+                            <button class="filter-btn" onclick="setCardFilter('hot', this)">Hot</button>
+                            <button class="filter-btn" onclick="setCardFilter('pi', this)">Pi</button>
+                            <button class="filter-btn" onclick="setCardFilter('agentic', this)">Agentic</button>
+                        </div>
+                    </div>
+                    <div class="card-grid" id="feed-grid">
+                        {% for item in feed_items %}
+                        <div class="card item-card search-target" data-url="{{ item.url }}" data-search="{{ (item.title ~ ' ' ~ item.description ~ ' ' ~ item.categories|join(' '))|lower }}" data-breakdown='{{ item.score_breakdown|tojson if item.score_breakdown else "{}" }}' data-why="{{ item.why|default('calculating') }}" data-score-label="{{ item.score_label|default('Interesting')|lower }}" data-pi="{{ item.pi_suitability|default('partial') }}" data-saved="{{ 'yes' if item.url in saved_urls else 'no' }}">
+                            <div class="card-header">
+                                <span class="badge-score {% if item.signal_score >= 80 %}hot{% elif item.signal_score >= 60 %}watch{% else %}interesting{% endif %}" title="Hover for score breakdown">{{ item.signal_score }}</span>
+                                <span class="badge-source source-{{ item.source_type }}">{{ item.source_type }}</span>
+                                <span class="vote-badge" style="display:none">👍 <span class="vote-count"></span></span>
+                            </div>
+                            <div class="card-title">{{ item.title }}</div>
+                            <div class="card-desc">{{ item.description }}</div>
+                            <div class="card-meta-row">
+                                {% if item.pi_suitability %}
+                                <span class="badge-pi pi-{{ item.pi_suitability }}">Pi: {{ item.pi_suitability }}</span>
+                                {% endif %}
+                                <span>{{ item.action|upper }}</span>
+                            </div>
+                            <div class="card-tags">
+                                {% for cat in item.categories[:3] %}<span class="tag">{{ cat }}</span>{% endfor %}
+                            </div>
+                            <div class="card-footer">
+                                <div class="card-actions">
+                                    <button class="btn btn-small action-ignore" onclick='ignoreItem({{ {"url": item.url, "title": item.title, "source": item.source, "source_type": item.source_type}|tojson }}, this)'>Ignore</button>
+                                    <button class="btn btn-small" onclick='trackItem({{ {"topic": item.categories[0] if item.categories else "general", "reason": "from card: " + item.title}|tojson }}, this)'>Track</button>
+                                    <button class="btn btn-small action-save" onclick='saveItem({{ {"url": item.url, "title": item.title, "source": item.source, "source_type": item.source_type, "category": item.categories[0] if item.categories else "", "signal_score": item.signal_score}|tojson }}, this)'>{{ 'Saved' if item.url in saved_urls else 'Save' }}</button>
+                                    <a href="{{ item.url }}" target="_blank" class="btn btn-small">Open</a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- GitHub Tab -->
+                <div id="github" class="section">
+                    <div class="section-header">
+                        <div class="header-left">
+                            <h2 class="section-title">GitHub Trending</h2>
+                            <span class="text-muted">{{ github|length }} repositories</span>
+                        </div>
+                        <div class="view-controls">
+                            <button class="btn btn-small active" data-view-tab="github" data-view-mode="card" onclick="toggleView('github', 'card', this)">Cards</button>
+                            <button class="btn btn-small" data-view-tab="github" data-view-mode="table" onclick="toggleView('github', 'table', this)">Table</button>
+                        </div>
+                    </div>
+                    
+                    <div id="github-card-view" class="card-grid">
+                        {% for repo in github[:20] %}
+                        <div class="card item-card search-target" data-search="{{ (repo.title ~ ' ' ~ repo.description ~ ' ' ~ repo.categories|join(' '))|lower }}">
+                            <div class="card-header">
+                                <span class="badge-score {% if repo.signal_score >= 80 %}hot{% elif repo.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ repo.signal_score }}</span>
+                                <span class="badge-source source-github">GitHub</span>
+                            </div>
+                            <div class="card-title">{{ repo.title }}</div>
+                            <div class="card-desc">{{ repo.description }}</div>
+                            <div class="card-meta-row">
+                                <span class="badge-pi pi-{{ repo.pi_suitability }}">Pi: {{ repo.pi_suitability }}</span>
+                                <span>{{ repo.stars }} stars</span>
+                                <span>{{ repo.language }}</span>
+                            </div>
+                            <div class="card-tags">
+                                {% for cat in repo.categories[:3] %}<span class="tag">{{ cat }}</span>{% endfor %}
+                            </div>
+                            <div class="card-footer">
+                                <div class="card-actions">
+                                    <button class="btn btn-small action-save" onclick='saveItem({{ {"url": repo.url, "title": repo.title, "source": repo.source, "source_type": "github", "category": repo.categories[0] if repo.categories else "", "signal_score": repo.signal_score}|tojson }}, this)'>{{ 'Saved' if repo.url in saved_urls else 'Save' }}</button>
+                                    <a href="{{ repo.url }}" target="_blank" class="btn btn-small">Open</a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <div id="github-table-view" class="table-container" style="display:none">
+                        <table class="intel-table">
+                            <thead>
+                                <tr>
+                                    <th>Repo</th>
+                                    <th>Score</th>
+                                    <th>Stars</th>
+                                    <th>Lang</th>
+                                    <th>Pi</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for repo in github[:20] %}
+                                <tr>
+                                    <td class="td-title">{{ repo.title }}</td>
+                                    <td><span class="badge-score {% if repo.signal_score >= 80 %}hot{% elif repo.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ repo.signal_score }}</span></td>
+                                    <td>{{ repo.stars }}</td>
+                                    <td>{{ repo.language }}</td>
+                                    <td><span class="badge-pi pi-{{ repo.pi_suitability }}">{{ repo.pi_suitability }}</span></td>
+                                    <td>
+                                        <button class="btn btn-small" onclick='saveItem({{ {"url": repo.url, "title": repo.title, "source": repo.source, "source_type": "github", "category": repo.categories[0] if repo.categories else "", "signal_score": repo.signal_score}|tojson }}, this)'>Save</button>
+                                        <a href="{{ repo.url }}" target="_blank" class="btn btn-small">Open</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Models Tab -->
+                <div id="models" class="section">
+                    <div class="section-header">
+                        <div class="header-left">
+                            <h2 class="section-title">Models</h2>
+                            <span class="text-muted">{{ huggingface|length }} models</span>
+                        </div>
+                        <div class="view-controls">
+                            <button class="btn btn-small active" data-view-tab="models" data-view-mode="card" onclick="toggleView('models', 'card', this)">Cards</button>
+                            <button class="btn btn-small" data-view-tab="models" data-view-mode="table" onclick="toggleView('models', 'table', this)">Table</button>
+                        </div>
+                    </div>
+
+                    <div id="models-card-view" class="card-grid">
+                        {% for model in huggingface[:20] %}
+                        <div class="card item-card search-target" data-search="{{ (model.title ~ ' ' ~ model.description ~ ' ' ~ model.categories|join(' '))|lower }}">
+                            <div class="card-header">
+                                <span class="badge-score {% if model.signal_score >= 80 %}hot{% elif model.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ model.signal_score }}</span>
+                                <span class="badge-source source-huggingface">Model</span>
+                            </div>
+                            <div class="card-title">{{ model.title }}</div>
+                            <div class="card-desc">{{ model.description }}</div>
+                            <div class="card-meta-row">
+                                <span>{{ model.downloads|default(0) }} downloads</span>
+                                {% if model.is_local_compatible %}<span class="badge-pi pi-yes">Local</span>{% endif %}
+                            </div>
+                            <div class="card-tags">
+                                {% if model.is_coding_model %}<span class="tag">Coding</span>{% endif %}
+                                {% if model.is_small %}<span class="tag">Small</span>{% endif %}
+                                {% if model.is_agent_ready %}<span class="tag">Agent</span>{% endif %}
+                            </div>
+                            <div class="card-footer">
+                                <div class="card-actions">
+                                    <button class="btn btn-small action-save" onclick='saveItem({{ {"url": model.url, "title": model.title, "source": model.source, "source_type": "huggingface", "category": model.categories[0] if model.categories else "", "signal_score": model.signal_score}|tojson }}, this)'>{{ 'Saved' if model.url in saved_urls else 'Save' }}</button>
+                                    <a href="{{ model.url }}" target="_blank" class="btn btn-small">Open</a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <div id="models-table-view" class="table-container" style="display:none">
+                        <table class="intel-table">
+                            <thead>
+                                <tr>
+                                    <th>Model</th>
+                                    <th>Score</th>
+                                    <th>Downloads</th>
+                                    <th>Local</th>
+                                    <th>Coding</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for model in huggingface[:20] %}
+                                <tr>
+                                    <td class="td-title">{{ model.title }}</td>
+                                    <td><span class="badge-score {% if model.signal_score >= 80 %}hot{% elif model.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ model.signal_score }}</span></td>
+                                    <td>{{ model.downloads|default(0) }}</td>
+                                    <td>{{ 'Yes' if model.is_local_compatible else 'No' }}</td>
+                                    <td>{{ 'Yes' if model.is_coding_model else 'No' }}</td>
+                                    <td>
+                                        <button class="btn btn-small" onclick='saveItem({{ {"url": model.url, "title": model.title, "source": model.source, "source_type": "huggingface", "category": model.categories[0] if model.categories else "", "signal_score": model.signal_score}|tojson }}, this)'>Save</button>
+                                        <a href="{{ model.url }}" target="_blank" class="btn btn-small">Open</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Research Tab -->
+                <div id="research" class="section">
+                    <div class="section-header">
+                        <div class="header-left">
+                            <h2 class="section-title">Research</h2>
+                            <span class="text-muted">{{ papers|length }} papers</span>
+                        </div>
+                        <div class="view-controls">
+                            <button class="btn btn-small active" data-view-tab="research" data-view-mode="card" onclick="toggleView('research', 'card', this)">Cards</button>
+                            <button class="btn btn-small" data-view-tab="research" data-view-mode="table" onclick="toggleView('research', 'table', this)">Table</button>
+                        </div>
+                    </div>
+
+                    <div id="research-card-view" class="card-grid">
+                        {% for paper in papers[:15] %}
+                        <div class="card item-card search-target" data-search="{{ (paper.title ~ ' ' ~ paper.abstract ~ ' ' ~ paper.categories|join(' '))|lower }}">
+                            <div class="card-header">
+                                <span class="badge-score {% if paper.signal_score >= 80 %}hot{% elif paper.signal_score >= 50 %}watch{% else %}interesting{% endif %}">{{ paper.signal_score }}</span>
+                                <span class="badge-source source-papers">Paper</span>
+                            </div>
+                            <div class="card-title">{{ paper.title }}</div>
+                            <div class="card-desc">{{ paper.description }}</div>
+                            <div class="card-meta-row">
+                                {% if paper.recommendation %}<span class="badge-{{ paper.recommendation }}">{{ paper.recommendation }}</span>{% endif %}
+                                {% if paper.has_code %}<span class="tag">Has Code</span>{% endif %}
+                            </div>
+                            <div class="card-footer">
+                                <div class="card-actions">
+                                    <button class="btn btn-small action-save" onclick='saveItem({{ {"url": paper.url, "title": paper.title, "source": paper.source, "source_type": "papers", "category": paper.categories[0] if paper.categories else "", "signal_score": paper.signal_score}|tojson }}, this)'>{{ 'Saved' if paper.url in saved_urls else 'Save' }}</button>
+                                    <a href="{{ paper.url }}" target="_blank" class="btn btn-small">Open</a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <div id="research-table-view" class="table-container" style="display:none">
+                        <table class="intel-table">
+                            <thead>
+                                <tr>
+                                    <th>Paper</th>
+                                    <th>Score</th>
+                                    <th>Recommendation</th>
+                                    <th>Has Code</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for paper in papers[:15] %}
+                                <tr>
+                                    <td class="td-title">{{ paper.title }}</td>
+                                    <td><span class="badge-score {% if paper.signal_score >= 80 %}hot{% elif paper.signal_score >= 50 %}watch{% else %}interesting{% endif %}">{{ paper.signal_score }}</span></td>
+                                    <td>{{ paper.recommendation|default('read') }}</td>
+                                    <td>{{ 'Yes' if paper.has_code else 'No' }}</td>
+                                    <td>
+                                        <button class="btn btn-small" onclick='saveItem({{ {"url": paper.url, "title": paper.title, "source": paper.source, "source_type": "papers", "category": paper.categories[0] if paper.categories else "", "signal_score": paper.signal_score}|tojson }}, this)'>Save</button>
+                                        <a href="{{ paper.url }}" target="_blank" class="btn btn-small">Open</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Videos Tab -->
+                <div id="videos" class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">Videos</h2>
+                    </div>
+                    <div class="card-grid">
+                        {% for video in youtube[:15] %}
+                        <div class="card item-card search-target" data-search="{{ (video.title ~ ' ' ~ video.description)|lower }}">
+                            <div class="card-header">
+                                <span class="badge-score {% if video.signal_score >= 80 %}hot{% elif video.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ video.signal_score }}</span>
+                                <span class="badge-source source-youtube">Video</span>
+                            </div>
+                            <div class="card-title">{{ video.title }}</div>
+                            <div class="card-desc">{{ video.description|default('')|slice(0, 100) }}{% if video.description and video.description|length > 100 %}...{% endif %}</div>
+                            <div class="card-meta-row">
+                                <span>{{ video.views }} views</span>
+                                <span>{{ video.watch_priority|default('medium') }}</span>
+                            </div>
+                            <div class="card-footer">
+                                <div class="card-actions">
+                                    <a href="{{ video.url }}" target="_blank" class="btn btn-small">Watch</a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- News Tab -->
+                <div id="news" class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">News</h2>
+                    </div>
+                    <div class="card-grid">
+                        {% for item in blogs[:20] %}
+                        <div class="card item-card search-target" data-search="{{ (item.title ~ ' ' ~ item.description ~ ' ' ~ item.categories|join(' '))|lower }}">
+                            <div class="card-header">
+                                <span class="badge-score {% if item.signal_score >= 70 %}hot{% elif item.signal_score >= 40 %}watch{% else %}interesting{% endif %}">{{ item.signal_score }}</span>
+                                <span class="badge-source source-blogs">News</span>
+                            </div>
+                            <div class="card-title">{{ item.title }}</div>
+                            <div class="card-desc">{{ item.description|default('')|slice(0, 120) }}{% if item.description and item.description|length > 120 %}...{% endif %}</div>
+                            <div class="card-meta-row">
+                                <span>{{ item.source }}</span>
+                                <span>{{ item.published }}</span>
+                            </div>
+                            <div class="card-tags">
+                                {% for cat in item.categories[:3] %}<span class="tag">{{ cat }}</span>{% endfor %}
+                            </div>
+                            <div class="card-footer">
+                                <div class="card-actions">
+                                    <a href="{{ item.url }}" target="_blank" class="btn btn-small">Read</a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Local Lab Tab -->
+                <div id="local" class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">Local Lab</h2>
+                    </div>
+                    <div class="card-grid">
+                        {% for repo in local_items %}
+                        <div class="card item-card search-target" data-search="{{ (repo.title ~ ' ' ~ repo.description ~ ' ' ~ repo.language)|lower }}">
+                            <div class="card-header">
+                                <span class="badge-score {% if repo.signal_score >= 80 %}hot{% elif repo.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ repo.signal_score }}</span>
+                                <span class="badge-source source-github">GitHub</span>
+                            </div>
+                            <div class="card-title">{{ repo.title }}</div>
+                            <div class="card-desc">{{ repo.description }}</div>
+                            <div class="card-meta-row">
+                                <span class="badge-pi pi-{{ repo.pi_suitability }}">Pi: {{ repo.pi_suitability }}</span>
+                                <span>{{ repo.stars }} stars</span>
+                                <span>{{ repo.language }}</span>
+                            </div>
+                            <div class="command-box">git clone {{ repo.url }}</div>
+                            <div class="card-footer">
+                                <div class="card-actions">
+                                    <button class="btn btn-small action-save" onclick='saveItem({{ {"url": repo.url, "title": repo.title, "source": repo.source, "source_type": "github", "category": repo.categories[0] if repo.categories else "", "signal_score": repo.signal_score}|tojson }}, this)'>{{ 'Saved' if repo.url in saved_urls else 'Save' }}</button>
+                                    <a href="{{ repo.url }}" target="_blank" class="btn btn-small">Open</a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Saved Tab -->
+                <div id="saved" class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">Saved Intelligence</h2>
+                        <div class="saved-bulk-actions" style="display:none">
+                            <label><input type="checkbox" onchange="toggleAllSaved(this.checked)"> Select All</label>
+                            <button class="btn btn-small" onclick="bulkUpdateStatus('to_read')">Mark To Read</button>
+                            <button class="btn btn-small" onclick="bulkUpdateStatus('to_test')">Mark To Test</button>
+                            <button class="btn btn-small" onclick="bulkUpdateStatus('useful')">Mark Useful</button>
+                            <button class="btn btn-small btn-danger" onclick="bulkDelete()">Delete</button>
+                        </div>
+                        <div class="saved-actions-bar">
+                            <button class="btn btn-small" onclick="exportSaved('json')">Export JSON</button>
+                            <button class="btn btn-small" onclick="exportSaved('markdown')">Export Markdown</button>
+                        </div>
+                        <div class="saved-filters">
+                            <button class="filter-btn active" onclick="filterSaved('all', this)">All</button>
+                            <button class="filter-btn" onclick="filterSaved('to_read', this)">To Read</button>
+                            <button class="filter-btn" onclick="filterSaved('to_test', this)">To Test</button>
+                            <button class="filter-btn" onclick="filterSaved('testing', this)">Testing</button>
+                            <button class="filter-btn" onclick="filterSaved('useful', this)">Useful</button>
+                        </div>
+                    </div>
+                    
+                    <div class="kanban-board">
+{% for group in saved_groups %}
+                        <div class="kanban-column" data-status="{{ group.key }}">
+                            <div class="kanban-header">
+                                <span class="kanban-title">{{ group.label }}</span>
+                                {% set cnt = namespace(value=0) %}
+                                {% for item in group.group_entries %}
+                                    {% set cnt.value = cnt.value + 1 %}
+                                {% endfor %}
+                                <span class="kanban-count">{{ cnt.value }}</span>
+                            </div>
+                            <div class="kanban-cards">
+                                {% for item in group.group_entries %}
+                                <div class="card saved-card search-target" data-id="{{ item.id }}" data-status="{{ item.status }}" data-search="{{ (item.title ~ ' ' ~ item.notes ~ ' ' ~ item.tags|join(' '))|lower }}">
+                                    <div class="saved-header">
+                                        <input type="checkbox" onchange="toggleSavedBulkBar()">
+                                        <span class="badge-source">{{ item.source_type or item.source or 'link' }}</span>
+                                        <span class="status-pill status-{{ item.status }}">{{ item.status }}</span>
+                                    </div>
+                                    <div class="saved-title">{{ item.title }}</div>
+                                    {% if item.notes %}<div class="saved-notes">{{ item.notes }}</div>{% endif %}
+                                    <div class="saved-meta">Saved: {{ item.created_display }}</div>
+                                    {% if item.url %}<a href="{{ item.url }}" target="_blank" class="saved-url">{{ item.url|truncate(50) }}</a>{% endif %}
+                                    <div class="saved-editor">
+                                        <select class="status-select" onchange="updateStatus({{ item.id }}, this.value)">
+                                            <option value="to_read" {% if item.status == 'to_read' %}selected{% endif %}>to_read</option>
+                                            <option value="to_test" {% if item.status == 'to_test' %}selected{% endif %}>to_test</option>
+                                            <option value="testing" {% if item.status == 'testing' %}selected{% endif %}>testing</option>
+                                            <option value="useful" {% if item.status == 'useful' %}selected{% endif %}>useful</option>
+                                            <option value="discarded" {% if item.status == 'discarded' %}selected{% endif %}>discarded</option>
+                                        </select>
+                                        <textarea class="saved-textarea" placeholder="Notes">{{ item.notes }}</textarea>
+                                        <input class="saved-input" type="text" placeholder="tag1, tag2" value="{{ item.tags|join(', ') }}">
+                                    </div>
+                                    <div class="saved-actions">
+                                        <button class="btn btn-small" onclick="updateNotes({{ item.id }}, this.closest('.saved-card').querySelector('.saved-textarea').value, this.closest('.saved-card').querySelector('.saved-input').value)">Save</button>
+                                        <button class="btn btn-small action-ignore" onclick="deleteItem({{ item.id }}, this)">Remove</button>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Trends Tab -->
+                <div id="trends" class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">Trends</h2>
+                    </div>
+                    <div class="trends-grid">
+                        <div class="card">
+                            <h3>Rising Topics</h3>
+                            <div class="trend-list">
+                                {% for kw in trending_keywords[:5] %}
+                                <div class="trend-item rising">+ {{ kw.keyword }} <span class="trend-count">{{ kw.count }}</span></div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="card">
+                            <h3>Cooling Topics</h3>
+                            <div class="trend-list">
+                                <div class="trend-item cooling">- CV Models</div>
+                                <div class="trend-item cooling">- Traditional ML</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if topic_heatmap %}
+                    <div class="overview-section full-width">
+                        <h2 class="section-title">Topic Heatmap</h2>
+                        <div class="heatmap-grid">
+                            <table class="heatmap-table">
+                                <thead>
+                                    <tr>
+                                        <th>Topic</th>
+                                        <th>GitHub</th>
+                                        <th>HuggingFace</th>
+                                        <th>YouTube</th>
+                                        <th>Blogs</th>
+                                        <th>Papers</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in topic_heatmap %}
+                                    <tr>
+                                        <td class="heatmap-topic">{{ row.topic }}</td>
+                                        <td class="heatmap-cell" style="background: rgba(59,130,246,{{ row.counts.github / 10 }})">{{ row.counts.github }}</td>
+                                        <td class="heatmap-cell" style="background: rgba(245,158,11,{{ row.counts.huggingface / 10 }})">{{ row.counts.huggingface }}</td>
+                                        <td class="heatmap-cell" style="background: rgba(239,68,68,{{ row.counts.youtube / 10 }})">{{ row.counts.youtube }}</td>
+                                        <td class="heatmap-cell" style="background: rgba(16,185,129,{{ row.counts.blogs / 10 }})">{{ row.counts.blogs }}</td>
+                                        <td class="heatmap-cell" style="background: rgba(139,92,246,{{ row.counts.papers / 10 }})">{{ row.counts.papers }}</td>
+                                        <td class="heatmap-total">{{ row.total }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="trends-charts-grid">
+                        <div class="card chart-card">
+                            <h3>Source Signal Radar</h3>
+                            <canvas id="radar-chart"></canvas>
+                        </div>
+                        <div class="card chart-card">
+                            <h3>Source Volume</h3>
+                            <canvas id="heatmap-chart"></canvas>
+                        </div>
+                        <div class="card chart-card">
+                            <h3>Category Breakdown</h3>
+                            <canvas id="treemap-chart"></canvas>
+                        </div>
+                        <div class="card chart-card">
+                            <h3>Saved Workflow Map</h3>
+                            <canvas id="bubble-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Tab -->
+                <!-- Forge Studio Tab -->
+                <div id="forge-studio" class="section" data-title="Forge Studio">
+                    <div class="section-header">
+                        <h2 class="section-title">🛠️ Forge Studio</h2>
+                        <div class="section-tools">
+                            <button class="btn btn-small" onclick="refreshForgeStudio()">Refresh</button>
+                        </div>
+                    </div>
+
+                    <!-- Studio mode tabs -->
+                    <div class="forge-mode-tabs">
+                        <button class="forge-mode-btn active" onclick="switchForgeMode('pipeline', this)">📋 Pipeline</button>
+                        <button class="forge-mode-btn" onclick="switchForgeMode('agents', this)">🤖 AI Agents</button>
+                    </div>
+
+                    <!-- Pipeline mode -->
+                    <div class="forge-studio-container" id="forge-mode-pipeline">
+                        <div class="forge-sidebar">
+                            <h3 class="forge-sidebar-title">Script Ready</h3>
+                            <div class="forge-item-list" id="forge-item-list">
+                                <div class="empty-state">No forged items ready.</div>
+                            </div>
+                        </div>
+
+                        <div class="forge-main" id="forge-main-empty">
+                            <div class="forge-empty-state">
+                                <div class="forge-empty-icon">⚒️</div>
+                                <h3>Select an item to enter the Studio</h3>
+                                <p>Items promoted to 'Script Ready' appear here.</p>
+                            </div>
+                        </div>
+
+                        <div class="forge-main" id="forge-main-content" style="display: none;">
+                            <div class="forge-workspace-header">
+                                <div class="forge-active-title" id="forge-active-title">Strategic Synthesis</div>
+                                <div class="forge-active-meta" id="forge-active-meta">Recursive Dive • May 2026</div>
+                            </div>
+
+                            <div class="forge-workspace-layout">
+                                <div class="forge-asset-selector">
+                                    <button class="forge-asset-btn active" onclick="switchStudioAsset('shorts')">📹 YouTube Shorts</button>
+                                    <button class="forge-asset-btn" onclick="switchStudioAsset('podcast')">🎙️ Podcast Script</button>
+                                    <button class="forge-asset-btn" onclick="switchStudioAsset('linkedin')">🔗 LinkedIn Post</button>
+                                    <button class="forge-asset-btn" onclick="switchStudioAsset('blog')">✍️ Technical Blog</button>
+                                    <button class="forge-asset-btn" onclick="switchStudioAsset('demo')">💻 Demo Guide</button>
+                                </div>
+
+                                <div class="forge-editor-container">
+                                    <div class="forge-editor-toolbar">
+                                        <span id="forge-asset-label">Shorts Script</span>
+                                        <button class="btn btn-small btn-primary" onclick="copyStudioAsset()">Copy to Clipboard</button>
+                                    </div>
+                                    <div class="forge-editor-content" id="forge-editor-content" contenteditable="true">
+                                    </div>
+                                </div>
+
+                                <div class="forge-context-sidebar">
+                                    <div class="forge-context-box">
+                                        <h4>Strategic Leads</h4>
+                                        <div class="forge-context-text" id="forge-context-leads">Loading...</div>
+                                    </div>
+                                    <div class="forge-context-box">
+                                        <h4>Munger Inversion</h4>
+                                        <div class="forge-context-text" id="forge-context-inversion">Loading...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Agents mode -->
+                    <div class="forge-agents-panel" id="forge-mode-agents" style="display:none">
+
+                        <!-- Agent 1: YouTube -->
+                        <div class="agent-card" id="agent-youtube">
+                            <div class="agent-card-header">
+                                <span class="agent-icon">📺</span>
+                                <div>
+                                    <div class="agent-name">YouTube — The Practicum</div>
+                                    <div class="agent-desc">SEO titles · Full description · Outline · Thumbnail concept</div>
+                                </div>
+                            </div>
+                            <div class="agent-form">
+                                <div class="agent-field">
+                                    <label>Topic / trend</label>
+                                    <input type="text" class="agent-input" id="yt-topic" placeholder="e.g. Claude MCP tool use in production">
+                                </div>
+                                <div class="agent-field-row">
+                                    <div class="agent-field">
+                                        <label>Target audience</label>
+                                        <select class="agent-select" id="yt-audience">
+                                            <option value="Beginners">Beginners</option>
+                                            <option value="Engineers" selected>Engineers</option>
+                                            <option value="Engineering Managers">Engineering Managers</option>
+                                            <option value="All">All</option>
+                                        </select>
+                                    </div>
+                                    <div class="agent-field">
+                                        <label>Video length</label>
+                                        <select class="agent-select" id="yt-length">
+                                            <option value="Short (5 min)">Short 5min</option>
+                                            <option value="Medium (10 min)" selected>Medium 10min</option>
+                                            <option value="Long (20min+)">Long 20min+</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary agent-run-btn" onclick="runPracticumAgent('youtube', {topic: document.getElementById('yt-topic').value, audience: document.getElementById('yt-audience').value, video_length: document.getElementById('yt-length').value}, this)">▶ Generate</button>
+                            </div>
+                            <div class="agent-output" id="agent-output-youtube" style="display:none">
+                                <div class="agent-output-toolbar">
+                                    <span class="agent-output-label">YouTube — The Practicum</span>
+                                    <button class="btn btn-small" onclick="copyAgentOutput('youtube')">Copy</button>
+                                    <button class="btn btn-small" onclick="saveAgentOutputToPipeline('youtube', this)">→ Pipeline</button>
+                                </div>
+                                <div class="agent-output-content" id="agent-output-content-youtube" contenteditable="true"></div>
+                            </div>
+                        </div>
+
+                        <!-- Agent 2: Shorts / Podcast / Demo Script -->
+                        <div class="agent-card" id="agent-shorts">
+                            <div class="agent-card-header">
+                                <span class="agent-icon">🎬</span>
+                                <div>
+                                    <div class="agent-name">Shorts — The Practicum</div>
+                                    <div class="agent-desc">60-sec script · Podcast episode · Demo narration</div>
+                                </div>
+                            </div>
+                            <div class="agent-form">
+                                <div class="agent-field">
+                                    <label>Topic</label>
+                                    <input type="text" class="agent-input" id="sh-topic" placeholder="e.g. Running LLMs on Raspberry Pi 5">
+                                </div>
+                                <div class="agent-field-row">
+                                    <div class="agent-field">
+                                        <label>Format</label>
+                                        <select class="agent-select" id="sh-format">
+                                            <option value="YouTube Short">YouTube Short</option>
+                                            <option value="Podcast Episode">Podcast Episode</option>
+                                            <option value="Demo Script">Demo Script</option>
+                                        </select>
+                                    </div>
+                                    <div class="agent-field">
+                                        <label>Tone</label>
+                                        <select class="agent-select" id="sh-tone">
+                                            <option value="Technical">Technical</option>
+                                            <option value="Accessible">Accessible</option>
+                                            <option value="Conversational">Conversational</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary agent-run-btn" onclick="runPracticumAgent('shorts', {topic: document.getElementById('sh-topic').value, format: document.getElementById('sh-format').value, tone: document.getElementById('sh-tone').value}, this)">▶ Generate</button>
+                            </div>
+                            <div class="agent-output" id="agent-output-shorts" style="display:none">
+                                <div class="agent-output-toolbar">
+                                    <span class="agent-output-label">Shorts — The Practicum</span>
+                                    <button class="btn btn-small" onclick="copyAgentOutput('shorts')">Copy</button>
+                                    <button class="btn btn-small" onclick="saveAgentOutputToPipeline('shorts', this)">→ Pipeline</button>
+                                </div>
+                                <div class="agent-output-content" id="agent-output-content-shorts" contenteditable="true"></div>
+                            </div>
+                        </div>
+
+                        <!-- Agent 3: Demo Producer -->
+                        <div class="agent-card" id="agent-demo">
+                            <div class="agent-card-header">
+                                <span class="agent-icon">💻</span>
+                                <div>
+                                    <div class="agent-name">Demo — The Practicum</div>
+                                    <div class="agent-desc">Step-by-step guide · GIF storyboard · Screenshot callouts</div>
+                                </div>
+                            </div>
+                            <div class="agent-form">
+                                <div class="agent-field">
+                                    <label>Tool or concept to demo</label>
+                                    <input type="text" class="agent-input" id="dm-tool" placeholder="e.g. Claude Code hooks system">
+                                </div>
+                                <div class="agent-field-row">
+                                    <div class="agent-field">
+                                        <label>Demo type</label>
+                                        <select class="agent-select" id="dm-type">
+                                            <option value="Live Coding">Live Coding</option>
+                                            <option value="Tool Walkthrough">Tool Walkthrough</option>
+                                            <option value="Concept Explainer">Concept Explainer</option>
+                                        </select>
+                                    </div>
+                                    <div class="agent-field">
+                                        <label>Output asset</label>
+                                        <select class="agent-select" id="dm-output">
+                                            <option value="GIF storyboard">GIF storyboard</option>
+                                            <option value="Screenshot guide">Screenshot guide</option>
+                                            <option value="Slide outline">Slide outline</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary agent-run-btn" onclick="runPracticumAgent('demo', {tool: document.getElementById('dm-tool').value, demo_type: document.getElementById('dm-type').value, output_asset: document.getElementById('dm-output').value}, this)">▶ Generate</button>
+                            </div>
+                            <div class="agent-output" id="agent-output-demo" style="display:none">
+                                <div class="agent-output-toolbar">
+                                    <span class="agent-output-label">Demo — The Practicum</span>
+                                    <button class="btn btn-small" onclick="copyAgentOutput('demo')">Copy</button>
+                                    <button class="btn btn-small" onclick="saveAgentOutputToPipeline('demo', this)">→ Pipeline</button>
+                                </div>
+                                <div class="agent-output-content" id="agent-output-content-demo" contenteditable="true"></div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div id="settings" class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">Settings</h2>
+                    </div>
+                    <div class="settings-grid">
+                        <div class="card settings-card">
+                            <h3>Theme</h3>
+                            <div class="setting-row">
+                                <label>Current Theme</label>
+                                <button class="btn btn-small" onclick="toggleTheme()">Toggle Theme</button>
+                            </div>
+                        </div>
+                        <div class="card settings-card">
+                            <h3>Focus Areas</h3>
+                            <div class="setting-row">
+                                <span>Agentic AI, Coding agents, Local LLMs, Ollama, Raspberry Pi AI</span>
+                            </div>
+                        </div>
+                        <div class="card settings-card">
+                            <h3>Data Refresh</h3>
+                            <div class="setting-row">
+                                <button class="btn btn-primary" onclick="refreshNow(this)">Refresh Now</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Markets Section -->
+                <div id="markets" class="section" data-title="AI Markets">
+                    <div id="markets-content">
+                        <div class="markets-skeleton">
+                            <div class="markets-skeleton-strip"></div>
+                            <div class="markets-skeleton-grid">
+                                {% for _ in range(10) %}<div class="markets-skeleton-card"></div>{% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <script id="dashboard-state" type="application/json">{{ dashboard_state|tojson }}</script>
+            </main>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+    </div>
+    <div id="digest-modal" class="digest-modal" onclick="closeDigest(event)">
+        <div class="digest-panel">
+            <div class="digest-panel-head">
+                <div class="digest-title">Today's Digest</div>
+                <div class="digest-actions">
+                    <button class="btn btn-small" onclick="copyDigest()">Copy</button>
+                    <button class="btn btn-small" onclick="closeDigest()">Close</button>
+                </div>
+            </div>
+            <pre id="digest-content" class="digest-content"></pre>
+        </div>
+    </div>
+
+    <!-- Empty State Templates -->
+    <template id="empty-state-template">
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+            </div>
+            <div class="empty-state-title">No items found</div>
+            <div class="empty-state-message">Try adjusting your filters or search terms.</div>
+            <button class="btn btn-primary empty-state-action">Clear Filters</button>
+        </div>
+    </template>
+
+    <!-- Skeleton Templates -->
+    <template id="skeleton-card-template">
+        <div class="card item-card skeleton-card">
+            <div class="skeleton-header">
+                <div class="skeleton-badge"></div>
+                <div class="skeleton-badge"></div>
+            </div>
+            <div class="skeleton-title"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line short"></div>
+            <div class="skeleton-footer">
+                <div class="skeleton-button"></div>
+                <div class="skeleton-button"></div>
+            </div>
+        </div>
+    </template>
+
+    <template id="skeleton-summary-template">
+        <div class="card summary-card skeleton-card">
+            <div class="skeleton-label"></div>
+            <div class="skeleton-value"></div>
+            <div class="skeleton-line short"></div>
+        </div>
+    </template>
+
+    <template id="skeleton-row-template">
+        <tr class="skeleton-row">
+            <td><div class="skeleton-line"></div></td>
+            <td><div class="skeleton-badge"></div></td>
+            <td><div class="skeleton-line short"></div></td>
+            <td><div class="skeleton-line short"></div></td>
+            <td><div class="skeleton-line short"></div></td>
+            <td><div class="skeleton-button"></div></td>
+        </tr>
+    </template>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

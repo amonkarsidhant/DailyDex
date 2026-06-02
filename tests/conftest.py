@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 
-REPO_DIR = Path(__file__).resolve().parent
+REPO_DIR = Path(__file__).resolve().parent.parent
 
 
 def _sample_raw_data(now_iso: str):

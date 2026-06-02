@@ -12,7 +12,7 @@ import pytest
 
 pytestmark = pytest.mark.skip(reason="Superseded by the dedicated pytest v0.5 test suite.")
 
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "src"))
 
 from data_models import IntelligenceDB
 

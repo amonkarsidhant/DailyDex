@@ -16,11 +16,11 @@ defined in vercel.json hitting /api/cron/enrich and /api/cron/fetch instead.
 import os
 import sys
 
-# Make sure the project root is on sys.path so all imports resolve correctly.
+# Make sure the src directory is on sys.path so all imports resolve correctly.
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
-
+SRC_DIR = os.path.join(PROJECT_ROOT, "src")
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
 # On Vercel, disable the background enrichment thread — it runs via cron instead.
 os.environ.setdefault("CREATOR_ENRICHER_PRIMARY", "0")
 os.environ.setdefault("VERCEL", "1")

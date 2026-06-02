@@ -32,7 +32,7 @@ def test_cache_save_load_and_stale_detection(tmp_path, monkeypatch):
 
 
 def test_fetch_news_main_writes_data_file(tmp_path):
-    repo_dir = Path(__file__).resolve().parent
+    repo_dir = Path(__file__).resolve().parent.parent
     stub_dir = tmp_path / "stubs"
     stub_dir.mkdir()
     (stub_dir / "requests.py").write_text(
@@ -146,7 +146,7 @@ class YoutubeDL:
     )
 
     result = subprocess.run(
-        [sys.executable, str(repo_dir / "fetch_news.py")],
+        [sys.executable, str(repo_dir / "src" / "fetch_news.py")],
         cwd=str(repo_dir),
         capture_output=True,
         text=True,

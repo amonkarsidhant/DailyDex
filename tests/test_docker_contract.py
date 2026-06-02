@@ -1,28 +1,12 @@
 from pathlib import Path
 
 
-REPO_DIR = Path(__file__).resolve().parent
+REPO_DIR = Path(__file__).resolve().parent.parent
 
 
 def test_dockerfile_packages_runtime_files():
     dockerfile = (REPO_DIR / "Dockerfile").read_text(encoding="utf-8")
-    assert "dashboard_new.py" in dockerfile
-    assert "fetch_news.py" in dockerfile
-    assert "scoring_engine.py" in dockerfile
-    assert "data_models.py" in dockerfile
-    assert "digest_generator.py" in dockerfile
-    assert "config.json" in dockerfile
-    assert "cli_registry.py" in dockerfile
-    assert "settings_manager.py" in dockerfile
-    assert "creator_lab.py" in dockerfile
-    assert "thumbnail_generator.py" in dockerfile
-    assert "db_compat.py" in dockerfile
-    assert "analytics_sync.py" in dockerfile
-    assert "command_validator.py" in dockerfile
-    assert "telegram_bot.py" in dockerfile
-    assert "studio.py" in dockerfile
-    assert "studio_job.py" in dockerfile
-    assert "refresh_job.py" in dockerfile
+    assert "COPY src ./src" in dockerfile
     assert "COPY config ./config" in dockerfile
     assert "COPY requirements.txt ./" in dockerfile
     assert "pip install --no-cache-dir -r requirements.txt" in dockerfile

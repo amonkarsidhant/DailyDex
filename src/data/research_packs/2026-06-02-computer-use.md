@@ -1,0 +1,27 @@
+# Research Pack: Computer Use
+**Generated:** 2026-06-02 22:39
+
+## Research Leads
+Mock research leads
+
+## Strategic Brief
+**Title:** Mock Title
+**The Shift:** Mock Shift
+**Superpower:** Mock Superpower
+**Munger Inversion:** Mock Inversion
+
+**Hooks:**
+- Contrarian: Mock hook contrarian
+- Speed-to-Value: Mock hook speed
+
+**Narrative Beats:**
+- Beat 1
+- Beat 2
+- Beat 3
+- Beat 4
+- Beat 5
+
+**Thumbnail Concepts:**
+- Concept 1
+- Concept 2
+- Concept 3

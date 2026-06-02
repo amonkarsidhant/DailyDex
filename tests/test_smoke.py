@@ -10,7 +10,8 @@ import pytest
 pytestmark = pytest.mark.skip(reason="Legacy manual smoke checks are covered by the pytest suite.")
 
 # Determine the directory where the script is located
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(SCRIPT_DIR, "src"))
 DATA_DIR = os.path.join(SCRIPT_DIR, "data")
 CACHE_DIR = os.path.join(DATA_DIR, "cache")
 
