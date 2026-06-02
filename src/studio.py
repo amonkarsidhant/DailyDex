@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 
 import cli_registry
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CREATOR_PROFILE_PATH = os.environ.get(
     "CREATOR_PROFILE_PATH", os.path.join(BASE_DIR, "config", "creator_profile.json")
 )

@@ -26,7 +26,7 @@ import studio
 from cli_registry import GEN_TIMEOUT
 from creator_intelligence import build_topic_clusters
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
 SCORED_DATA_FILE = os.environ.get("SCORED_DATA_FILE", os.path.join(DATA_DIR, "data_scored.json"))
 TOP_N = int(os.environ.get("STUDIO_TOP_N", "2"))

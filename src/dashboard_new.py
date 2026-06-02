@@ -27,7 +27,7 @@ from creator_intelligence import (
     slugify_topic as _ci_slug,
 )
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Add current directory and v0.1 directory to path for imports
 sys.path.insert(0, BASE_DIR)
 sys.path.insert(0, os.path.join(BASE_DIR, "v0.1"))

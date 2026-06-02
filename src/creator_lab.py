@@ -494,7 +494,7 @@ def kanban():
 
     Reads from data/pipeline.json if present, else returns empty stages.
     """
-    base = os.path.dirname(os.path.abspath(__file__))
+    base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     pf = os.path.join(os.environ.get("DATA_DIR", os.path.join(base, "data")),
                       "pipeline.json")
     items: List[Dict[str, Any]] = []

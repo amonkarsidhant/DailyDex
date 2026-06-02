@@ -9,7 +9,7 @@ from scoring_engine import SignalScorer
 from data_models import IntelligenceJSON, IntelligenceDB
 import creator_intelligence
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
 DATA_FILE = os.environ.get("DATA_FILE", os.path.join(DATA_DIR, "data.json"))
 CONFIG_TOPICS_FILE = os.environ.get("CONFIG_PATH", os.path.join(BASE_DIR, "config", "topics.json"))

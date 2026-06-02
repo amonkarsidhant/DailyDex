@@ -44,7 +44,7 @@ NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", "")
 NVIDIA_BASE_URL = os.environ.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
 NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", "minimaxai/minimax-m2.7")
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CREATOR_PROFILE_PATH = os.environ.get(
     "CREATOR_PROFILE_PATH",
     os.path.join(BASE_DIR, "config", "creator_profile.json"),
@@ -953,7 +953,7 @@ def generate_production_assets(research_data: str, profile: Optional[Dict[str, A
 
 
 if __name__ == "__main__":
-    base_dir = os.path.dirname(os.path.abspath(__file__))
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     data_dir = os.environ.get("DATA_DIR", os.path.join(base_dir, "data"))
     data_path = os.environ.get("DATA_FILE", os.path.join(data_dir, "data.json"))
     if os.path.exists(data_path):

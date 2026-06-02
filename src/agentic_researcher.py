@@ -30,7 +30,7 @@ from data_models import IntelligenceDB
 
 RESEARCH_PACK_DIR = os.environ.get(
     "RESEARCH_PACK_DIR",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "research_packs"),
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "research_packs"),
 )
 os.makedirs(RESEARCH_PACK_DIR, exist_ok=True)
 

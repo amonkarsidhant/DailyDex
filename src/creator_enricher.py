@@ -684,7 +684,7 @@ class AgentRunner:
         # Check for compilation target
         compilation = None
         try:
-            scored_data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "data_scored.json")
+            scored_data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "data_scored.json")
             if not os.path.exists(scored_data_path):
                 scored_data_path = os.path.join("data", "data_scored.json")
             if os.path.exists(scored_data_path):
@@ -833,7 +833,7 @@ class AgentRunner:
         # Check for compilation target
         compilation = None
         try:
-            scored_data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "data_scored.json")
+            scored_data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "data_scored.json")
             if not os.path.exists(scored_data_path):
                 scored_data_path = os.path.join("data", "data_scored.json")
             if os.path.exists(scored_data_path):
@@ -940,7 +940,7 @@ class AgentRunner:
         import json
         compilation = None
         try:
-            scored_data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "data_scored.json")
+            scored_data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "data_scored.json")
             if not os.path.exists(scored_data_path):
                 scored_data_path = os.path.join("data", "data_scored.json")
             if os.path.exists(scored_data_path):

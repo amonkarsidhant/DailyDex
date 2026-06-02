@@ -27,7 +27,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
 DATA_SCORED_FILE = os.path.join(DATA_DIR, "data_scored.json")
 DATA_FILE = os.environ.get("DATA_FILE", os.path.join(DATA_DIR, "data.json"))

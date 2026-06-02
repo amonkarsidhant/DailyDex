@@ -21,7 +21,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
 PROBE_CACHE = os.path.join(DATA_DIR, "cli_providers.json")
 PROBE_TTL_SEC = int(os.environ.get("CLI_PROBE_TTL_SEC", "1800"))  # 30 min
@@ -127,7 +127,7 @@ def _get_profile_model(provider_name: str, fallback_model: str) -> str:
         try:
             profile_path = os.environ.get(
                 "CREATOR_PROFILE_PATH",
-                os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "creator_profile.json")
+                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "creator_profile.json")
             )
             if os.path.exists(profile_path):
                 with open(profile_path, "r", encoding="utf-8") as f:

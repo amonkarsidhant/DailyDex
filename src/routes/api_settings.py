@@ -14,7 +14,7 @@ except ImportError:
 def _load_creator_profile_safe():
     profile_path = os.environ.get(
         "CREATOR_PROFILE_PATH",
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "creator_profile.json")
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "config", "creator_profile.json")
     )
     if os.path.exists(profile_path):
         try:
@@ -142,7 +142,7 @@ def api_onboarding_submit():
     try:
         profile_path = os.environ.get(
             "CREATOR_PROFILE_PATH",
-            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "creator_profile.json")
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "config", "creator_profile.json")
         )
         with open(profile_path, "w", encoding="utf-8") as f:
             json.dump(profile, f, indent=2)
@@ -159,7 +159,7 @@ def api_onboarding_reset():
     try:
         profile_path = os.environ.get(
             "CREATOR_PROFILE_PATH",
-            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "creator_profile.json")
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "config", "creator_profile.json")
         )
         with open(profile_path, "w", encoding="utf-8") as f:
             json.dump(profile, f, indent=2)
