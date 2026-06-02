@@ -12,6 +12,17 @@ def test_dockerfile_packages_runtime_files():
     assert "data_models.py" in dockerfile
     assert "digest_generator.py" in dockerfile
     assert "config.json" in dockerfile
+    assert "cli_registry.py" in dockerfile
+    assert "settings_manager.py" in dockerfile
+    assert "creator_lab.py" in dockerfile
+    assert "thumbnail_generator.py" in dockerfile
+    assert "db_compat.py" in dockerfile
+    assert "analytics_sync.py" in dockerfile
+    assert "command_validator.py" in dockerfile
+    assert "telegram_bot.py" in dockerfile
+    assert "studio.py" in dockerfile
+    assert "studio_job.py" in dockerfile
+    assert "refresh_job.py" in dockerfile
     assert "COPY config ./config" in dockerfile
     assert "COPY requirements.txt ./" in dockerfile
     assert "pip install --no-cache-dir -r requirements.txt" in dockerfile

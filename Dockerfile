@@ -22,7 +22,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # dashboard_new.py / agentic_researcher.py.
 COPY fetch_news.py dashboard_new.py scoring_engine.py data_models.py \
      digest_generator.py creator_intelligence.py creator_enricher.py \
-     llm_summary.py agentic_researcher.py config.json ./
+     llm_summary.py agentic_researcher.py config.json \
+     cli_registry.py settings_manager.py creator_lab.py \
+     thumbnail_generator.py db_compat.py analytics_sync.py \
+     command_validator.py telegram_bot.py studio.py studio_job.py \
+     refresh_job.py ./
 COPY v0.1 ./v0.1
 COPY config ./config
 COPY templates ./templates
