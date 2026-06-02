@@ -1708,6 +1708,31 @@ def health():
     return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()})
 
 
+@app.route("/api/benchmarks")
+def api_benchmarks():
+    """Get the latest LLM benchmarks scraped from Artificial Analysis."""
+    if intel_db is None:
+        return jsonify({"benchmarks": []})
+    benchmarks = intel_db.get_ai_benchmarks()
+    return jsonify({"benchmarks": benchmarks})
+
+@app.route("/api/aa/datasets")
+def api_aa_datasets():
+    """List all extracted datasets from Artificial Analysis."""
+    if intel_db is None:
+        return jsonify({"datasets": []})
+    return jsonify({"datasets": intel_db.get_aa_datasets()})
+
+@app.route("/api/aa/dataset/<path:name>")
+def api_aa_dataset(name):
+    """Get the JSON payload for a specific Artificial Analysis dataset."""
+    if intel_db is None:
+        return jsonify({"error": "DB not initialized"}), 500
+    dataset = intel_db.get_aa_dataset(name)
+    if not dataset:
+        return jsonify({"error": "Dataset not found"}), 404
+    return jsonify(dataset)
+
 @app.route("/api/data")
 def api_data():
     """API endpoint for raw data"""

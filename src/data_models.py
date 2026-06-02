@@ -396,6 +396,27 @@ class IntelligenceDB:
                 ON ab_tests(item_id)
         """)
 
+        # AI Benchmarks table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ai_benchmarks (
+                model_name TEXT PRIMARY KEY,
+                intelligence_index REAL,
+                speed_tokens_sec REAL,
+                price_per_1m REAL,
+                timestamp TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Artificial Analysis Datasets (generic JSON-LD)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS aa_datasets (
+                dataset_name TEXT PRIMARY KEY,
+                source_url TEXT,
+                data_payload TEXT,
+                last_updated TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         conn.commit()
         conn.close()
 
@@ -812,6 +833,81 @@ class IntelligenceDB:
         conn.close()
         
         return [dict(row) for row in rows]
+
+    # ---- AI Benchmarks ----
+
+    def upsert_ai_benchmark(self, model_name: str, intelligence: float = None, speed: float = None, price: float = None) -> None:
+        if not model_name:
+            return
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Check if exists
+        cursor.execute("SELECT intelligence_index, speed_tokens_sec, price_per_1m FROM ai_benchmarks WHERE model_name = ?", (model_name,))
+        row = cursor.fetchone()
+        
+        if row:
+            curr_intel = row[0] if intelligence is None else intelligence
+            curr_speed = row[1] if speed is None else speed
+            curr_price = row[2] if price is None else price
+            cursor.execute("""
+                UPDATE ai_benchmarks 
+                SET intelligence_index=?, speed_tokens_sec=?, price_per_1m=?, timestamp=?
+                WHERE model_name=?
+            """, (curr_intel, curr_speed, curr_price, datetime.now().isoformat(), model_name))
+        else:
+            cursor.execute("""
+                INSERT INTO ai_benchmarks (model_name, intelligence_index, speed_tokens_sec, price_per_1m, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+            """, (model_name, intelligence, speed, price, datetime.now().isoformat()))
+            
+        conn.commit()
+        conn.close()
+
+    def get_ai_benchmarks(self) -> List[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM ai_benchmarks ORDER BY intelligence_index DESC NULLS LAST")
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+
+    def upsert_aa_dataset(self, name: str, url: str, data_payload: dict):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO aa_datasets (dataset_name, source_url, data_payload, last_updated)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(dataset_name) DO UPDATE SET
+                source_url = excluded.source_url,
+                data_payload = excluded.data_payload,
+                last_updated = excluded.last_updated
+        """, (name, url, json.dumps(data_payload), datetime.now().isoformat()))
+        conn.commit()
+        conn.close()
+
+    def get_aa_datasets(self) -> List[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT dataset_name, source_url, last_updated FROM aa_datasets ORDER BY dataset_name")
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+
+    def get_aa_dataset(self, name: str) -> Optional[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM aa_datasets WHERE dataset_name = ?", (name,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            res = dict(row)
+            res['data_payload'] = json.loads(res['data_payload'])
+            return res
+        return None
     
     # ===== Ignored Items =====
     def ignore_item(self, url: str, title: str = "", source_type: str = "", reason: str = "user_ignored") -> int:

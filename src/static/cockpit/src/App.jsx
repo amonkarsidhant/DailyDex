@@ -69,6 +69,7 @@ const App = () => {
     research: ResearchView,
     pipeline: PipelineView,
     studio:   StudioView,
+    benchmarks: BenchmarksView,
     profile:  ProfileView,
     copilot:  CopilotChatView,
     settings: SettingsView,

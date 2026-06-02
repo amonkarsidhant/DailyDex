@@ -48,6 +48,7 @@ const Nav = ({ view, setView }) => {
     { key: "research",  icon: <I.Research size={15}/>, label: "Research", sub: "evidence packs" },
     { key: "pipeline",  icon: <I.Pipeline size={15}/>, label: "Pipeline", sub: "+ calendar"        },
     { key: "studio",    icon: <I.Studio size={15}/>,   label: "Creator Central", sub: "autonomous content" },
+    { key: "benchmarks",icon: <I.Spark size={15}/>,    label: "AI Benchmarks", sub: "speed vs cost" },
     { key: "profile",   icon: <I.User size={15}/>,     label: "Profile",   sub: "tone & voice"        },
     { key: "copilot",   icon: <I.Spark size={15}/>,    label: "Copilot Chat",    sub: "AI strategist" },
   ];
