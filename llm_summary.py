@@ -443,94 +443,41 @@ _last_used_provider_label: Optional[str] = None
 
 def query_llm(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:
     global _last_used_provider_label
-    res = None
-
+    
     provider = get_llm_setting("LLM_PROVIDER", "gemini")
     deployment_mode = get_llm_setting("DEPLOYMENT_MODE", "cli")
 
-    # SaaS Context Guard or Cloud VM Mode: bypass local binaries
     if IS_VERCEL or deployment_mode == "api":
         if provider not in ("nvidia", "openai", "anthropic", "ollama"):
-            # Fallback to remote APIs
             provider = "nvidia" if (get_llm_setting("LLM_API_KEY") or get_llm_setting("NVIDIA_API_KEY")) else "anthropic"
 
-        if provider == "nvidia":
-            model = get_llm_setting("LLM_MODEL", "minimaxai/minimax-m2.7")
-            res = query_nvidia(prompt, system_prompt, model=model)
-            if res and res.strip():
-                _last_used_provider_label = f"nvidia:{model}"
-                return res
-        elif provider == "openai":
-            model = get_llm_setting("LLM_MODEL", "gpt-4o-mini")
-            res = query_openai(prompt, system_prompt, model=model)
-            if res and res.strip():
-                _last_used_provider_label = f"openai:{model}"
-                return res
-        elif provider == "anthropic":
-            model = get_llm_setting("LLM_MODEL", "claude-3-5-sonnet-latest")
-            res = query_anthropic(prompt, system_prompt, model=model)
-            if res and res.strip():
-                _last_used_provider_label = f"anthropic:{model}"
-                return res
-        elif provider == "ollama":
-            model = get_llm_setting("OLLAMA_MODEL", "phi3:mini")
-            res = query_ollama(prompt, system_prompt)
-            if res and res.strip():
-                _last_used_provider_label = f"ollama:{model}"
-                return res
-        return None
-
-    # CLI / Self-hosted local path
-    if provider == "ollama":
-        res = query_ollama(prompt, system_prompt)
+    strategies = {
+        "nvidia": (query_nvidia, "LLM_MODEL", "minimaxai/minimax-m2.7"),
+        "openai": (query_openai, "LLM_MODEL", "gpt-4o-mini"),
+        "anthropic": (query_anthropic, "LLM_MODEL", "claude-3-5-sonnet-latest"),
+        "ollama": (query_ollama, "OLLAMA_MODEL", "phi3:mini"),
+        "claude": (query_claude_code_cli, "LLM_MODEL", "claude-sonnet-4-6"),
+        "opencode": (query_opencode_cli, "LLM_MODEL", "deepseek-v4-flash-free"),
+        "kilocode": (query_kilocode_cli, "LLM_MODEL", "default"),
+        "agy": (query_agy_cli, "LLM_MODEL", "default"),
+        "gemini": (query_gemini_cli, "LLM_MODEL", "default"),
+    }
+    
+    handler_info = strategies.get(provider, strategies["gemini"])
+    func, model_key, default_model = handler_info
+    
+    try:
+        model = get_llm_setting(model_key, default_model)
+        if func in (query_nvidia, query_openai, query_anthropic):
+            res = func(prompt, system_prompt, model=model)
+        else:
+            res = func(prompt, system_prompt)
+            
         if res and res.strip():
-            _last_used_provider_label = f"ollama:{get_llm_setting('OLLAMA_MODEL', 'phi3:mini')}"
+            _last_used_provider_label = f"{provider}:{model}"
             return res
-    elif provider == "claude":
-        res = query_claude_code_cli(prompt, system_prompt)
-        if res and res.strip():
-            _last_used_provider_label = f"claude:{get_llm_setting('LLM_MODEL', 'claude-sonnet-4-6')}"
-            return res
-    elif provider == "opencode":
-        res = query_opencode_cli(prompt, system_prompt)
-        if res and res.strip():
-            _last_used_provider_label = f"opencode:{get_llm_setting('LLM_MODEL', 'deepseek-v4-flash-free')}"
-            return res
-    elif provider == "nvidia":
-        res = query_nvidia(prompt, system_prompt)
-        if res and res.strip():
-            _last_used_provider_label = f"nvidia:{get_llm_setting('LLM_MODEL', 'minimaxai/minimax-m2.7')}"
-            return res
-    elif provider == "openai":
-        res = query_openai(prompt, system_prompt)
-        if res and res.strip():
-            _last_used_provider_label = f"openai:{get_llm_setting('LLM_MODEL', 'gpt-4o-mini')}"
-            return res
-    elif provider == "anthropic":
-        res = query_anthropic(prompt, system_prompt)
-        if res and res.strip():
-            _last_used_provider_label = f"anthropic:{get_llm_setting('LLM_MODEL', 'claude-3-5-sonnet-latest')}"
-            return res
-    elif provider == "kilocode":
-        res = query_kilocode_cli(prompt, system_prompt)
-        if res and res.strip():
-            _last_used_provider_label = f"kilocode:{get_llm_setting('LLM_MODEL', 'default')}"
-            return res
-    elif provider == "agy":
-        res = query_agy_cli(prompt, system_prompt)
-        if res and res.strip():
-            _last_used_provider_label = f"agy:{get_llm_setting('LLM_MODEL', 'default')}"
-            return res
-    elif provider == "gemini":
-        res = query_gemini_cli(prompt, system_prompt)
-        if res and res.strip():
-            _last_used_provider_label = f"gemini:{get_llm_setting('LLM_MODEL', 'default')}"
-            return res
-    else:
-        res = query_gemini_cli(prompt, system_prompt)
-        if res and res.strip():
-            _last_used_provider_label = f"gemini:{get_llm_setting('LLM_MODEL', 'default')}"
-            return res
+    except Exception as e:
+        print(f"Provider {provider} failed: {e}")
 
     # Fallback to dynamic CLI registry discovery
     try:
@@ -539,9 +486,9 @@ def query_llm(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]
         if probe_res.get("text"):
             _last_used_provider_label = f"{probe_res.get('provider', 'unknown')}:{probe_res.get('model', '')}"
             return probe_res["text"]
-    except Exception as e:
-        print(f"Fallback to cli_registry failed: {e}")
-
+    except Exception:
+        pass
+        
     return None
 
 
