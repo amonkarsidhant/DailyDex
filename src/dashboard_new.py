@@ -33,7 +33,9 @@ sys.path.insert(0, BASE_DIR)
 sys.path.insert(0, os.path.join(BASE_DIR, "v0.1"))
 
 import jinja2
-app = Flask(__name__)
+app = Flask(__name__, 
+            static_folder=os.path.join(BASE_DIR, "src", "static"),
+            template_folder=os.path.join(BASE_DIR, "src", "templates"))
 from routes.api_settings import settings_bp
 app.register_blueprint(settings_bp)
 app.url_map.merge_slashes = False
