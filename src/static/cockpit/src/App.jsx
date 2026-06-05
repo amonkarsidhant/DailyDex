@@ -119,6 +119,47 @@ const App = () => {
   );
 };
 
+// Error boundary — a single render throw must never blank the whole app.
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error, info) {
+    console.error("Cockpit render error:", error, info);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{
+          position: "fixed", inset: 0, display: "grid", placeItems: "center",
+          background: "var(--bg-0, #0B0E14)", color: "var(--text, #C9D1D9)", padding: 24
+        }}>
+          <div style={{ maxWidth: 460, textAlign: "center" }}>
+            <h2 style={{ color: "var(--text-hi, #fff)", marginBottom: 8 }}>Something broke rendering this view</h2>
+            <p style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 20, color: "var(--text-mid, #8b949e)" }}>
+              The cockpit hit an unexpected error. Your data is safe — reload to recover.
+            </p>
+            <pre style={{
+              fontFamily: "var(--font-mono, monospace)", fontSize: 11, textAlign: "left",
+              background: "#07090C", border: "1px solid var(--line-hi, #222)", borderRadius: 6,
+              padding: 12, overflow: "auto", maxHeight: 160, marginBottom: 20
+            }}>{String(this.state.error && this.state.error.message || this.state.error)}</pre>
+            <button onClick={() => location.reload()} style={{
+              padding: "10px 24px", background: "var(--signal, #E8B339)", border: "none",
+              borderRadius: 6, color: "#1A1100", fontWeight: 700, cursor: "pointer"
+            }}>Reload Cockpit</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Mount
 const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(<App/>);
+root.render(<ErrorBoundary><App/></ErrorBoundary>);

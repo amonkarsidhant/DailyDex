@@ -2748,10 +2748,32 @@ def api_digest():
 
     try:
         from digest_generator import DailyDigestGenerator
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 
         generator = DailyDigestGenerator()
         data = load_data()
-        digest = generator.generate_digest(data)
+
+        # Digest generation can call an LLM synchronously; cap it so the
+        # request never hangs the client forever.
+        digest_timeout = int(os.environ.get("DIGEST_TIMEOUT_SECONDS", "30"))
+        pool = ThreadPoolExecutor(max_workers=1)
+        future = pool.submit(generator.generate_digest, data)
+        try:
+            digest = future.result(timeout=digest_timeout)
+        except FutureTimeout:
+            # Don't block on the still-running worker (shutdown(wait=False)),
+            # otherwise the timeout would be defeated by the context-manager exit.
+            pool.shutdown(wait=False, cancel_futures=True)
+            return jsonify({
+                "error": "Digest generation timed out.",
+                "message": (
+                    f"Digest took longer than {digest_timeout}s to generate "
+                    "(LLM may be slow or unreachable). Try again, or use the "
+                    "creator digest."
+                ),
+            }), 504
+        pool.shutdown(wait=False)
+
         digest_path = os.path.join(DIGEST_DIR, f"{datetime.now().strftime('%Y-%m-%d')}.md")
         return jsonify({
             "digest": digest,

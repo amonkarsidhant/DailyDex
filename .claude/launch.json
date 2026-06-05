@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dailydex",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["src/dashboard_new.py"],
+      "port": 8888
+    }
+  ]
+}
