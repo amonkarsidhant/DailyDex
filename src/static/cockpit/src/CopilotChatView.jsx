@@ -1,4 +1,4 @@
-const { useState, useEffect, useRef } = React;
+// React hooks come from AppShell's shared destructure (single source to avoid duplicate const in shared script scope).
 
 const CopilotChatView = () => {
   const [messages, setMessages] = useState([

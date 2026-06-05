@@ -1,0 +1,14 @@
+{
+  "name": "dailydex-cockpit-build",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Build tooling to precompile the cockpit JSX so the browser doesn't run Babel at load time.",
+  "scripts": {
+    "build:cockpit": "babel src/static/cockpit --extensions \".jsx\" --out-dir src/static/cockpit --out-file-extension \".js\" --presets @babel/preset-react"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.24.0",
+    "@babel/core": "^7.24.0",
+    "@babel/preset-react": "^7.24.0"
+  }
+}

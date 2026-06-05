@@ -18,29 +18,28 @@
   <!-- React + Babel (CDN) — production builds: smaller, faster, no dev-only overhead -->
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/marked@12.0.1/marked.min.js" crossorigin="anonymous"></script>
 
   <!-- Live backend bridge (plain JS, defines window.DDX) -->
   <script src="{{ url_for('static', filename='cockpit/cockpit-live.js') }}"></script>
 
-  <!-- Tweaks shell + components -->
-  <script type="text/babel" src="{{ url_for('static', filename='cockpit/tweaks-panel.jsx') }}"></script>
-  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/icons.jsx') }}"></script>
-  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/shared.jsx') }}"></script>
-  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/AppShell.jsx') }}"></script>
-  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/PulseView.jsx') }}"></script>
-  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/BriefView.jsx') }}"></script>
-  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/ClustersView.jsx') }}"></script>
-  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/ThumbsView.jsx') }}"></script>
-  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/ResearchView.jsx') }}"></script>
-  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/PipelineView.jsx') }}"></script>
-  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/StudioView.jsx') }}"></script>
-  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/BenchmarksView.jsx') }}"></script>
-  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/CopilotChatView.jsx') }}"></script>
-  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/SettingsView.jsx') }}"></script>
-  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/ProfileView.jsx') }}"></script>
-  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/OnboardingView.jsx') }}"></script>
-  <script type="text/babel" src="{{ url_for('static', filename='cockpit/src/App.jsx') }}"></script>
+  <!-- Tweaks shell + components (precompiled JSX -> JS; see `npm run build:cockpit`) -->
+  <script src="{{ url_for('static', filename='cockpit/tweaks-panel.js') }}"></script>
+  <script src="{{ url_for('static', filename='cockpit/src/icons.js') }}"></script>
+  <script src="{{ url_for('static', filename='cockpit/src/shared.js') }}"></script>
+  <script src="{{ url_for('static', filename='cockpit/src/AppShell.js') }}"></script>
+  <script src="{{ url_for('static', filename='cockpit/src/PulseView.js') }}"></script>
+  <script src="{{ url_for('static', filename='cockpit/src/BriefView.js') }}"></script>
+  <script src="{{ url_for('static', filename='cockpit/src/ClustersView.js') }}"></script>
+  <script src="{{ url_for('static', filename='cockpit/src/ThumbsView.js') }}"></script>
+  <script src="{{ url_for('static', filename='cockpit/src/ResearchView.js') }}"></script>
+  <script src="{{ url_for('static', filename='cockpit/src/PipelineView.js') }}"></script>
+  <script src="{{ url_for('static', filename='cockpit/src/StudioView.js') }}"></script>
+  <script src="{{ url_for('static', filename='cockpit/src/BenchmarksView.js') }}"></script>
+  <script src="{{ url_for('static', filename='cockpit/src/CopilotChatView.js') }}"></script>
+  <script src="{{ url_for('static', filename='cockpit/src/SettingsView.js') }}"></script>
+  <script src="{{ url_for('static', filename='cockpit/src/ProfileView.js') }}"></script>
+  <script src="{{ url_for('static', filename='cockpit/src/OnboardingView.js') }}"></script>
+  <script src="{{ url_for('static', filename='cockpit/src/App.js') }}"></script>
 </body>
 </html>

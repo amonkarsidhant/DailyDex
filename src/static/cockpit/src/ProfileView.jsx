@@ -1,7 +1,7 @@
 // ProfileView.jsx — Creator Profile & Brand Voice Configuration Panel
 // Allows creators to configure tone, audience, perspective, banned words, format boundaries, and schedule.
 
-const { useState, useEffect } = React;
+// React hooks come from AppShell's shared destructure (single source to avoid duplicate const in shared script scope).
 
 const ProfileView = () => {
   const [profile, setProfile] = useState(null);

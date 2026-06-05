@@ -49,3 +49,6 @@ scratch/
 **/.fuse_hidden*
 
 
+
+# node build tooling (cockpit JSX precompile)
+node_modules/

@@ -1,9 +1,9 @@
 // AppShell — nav, topbar, agent rail, copilot dock
-const { useState, useEffect, useMemo, useRef } = React;
+const { useState, useEffect, useMemo, useRef, useCallback } = React;
 
 // ─── Left nav ───────────────────────────────────────────────────────────────
 const NavItem = ({ icon, label, sub, active, hot, onClick }) => (
-  <button onClick={onClick} style={{
+  <button onClick={onClick} className={`nav-item${active ? " nav-item--active" : ""}`} style={{
     display: "grid", gridTemplateColumns: "20px 1fr auto",
     alignItems: "center", columnGap: 10,
     width: "100%", textAlign: "left",
@@ -16,8 +16,7 @@ const NavItem = ({ icon, label, sub, active, hot, onClick }) => (
     fontFamily: "var(--font-sans)",
     fontSize: 13,
     transition: "background 120ms, color 120ms, border-color 120ms",
-  }} onMouseEnter={e => { if (!active) e.currentTarget.style.background = "var(--bg-2)"; }}
-     onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}>
+  }}>
     <span style={{ color: active ? "var(--signal)" : "var(--text-mid)", display: "flex" }}>{icon}</span>
     <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
       <span style={{ fontWeight: active ? 600 : 500 }}>{label}</span>
@@ -262,6 +261,19 @@ const EditorialBoard = () => {
   const [approving, setApproving] = useState(false);
   const [msg, setMsg] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const briefingRef = useRef(null);
+
+  // Use a ref to manage innerHTML lifecycle and prevent detached DOM leaks
+  useEffect(() => {
+    if (briefingRef.current && briefing?.briefing) {
+      briefingRef.current.innerHTML = window.marked
+        ? window.marked.parse(briefing.briefing)
+        : briefing.briefing;
+    }
+    return () => {
+      if (briefingRef.current) briefingRef.current.innerHTML = '';
+    };
+  }, [briefing?.briefing]);
 
   const handleRegen = async () => {
     setLoading(true);
@@ -333,9 +345,7 @@ const EditorialBoard = () => {
       }}>
         <div 
           className="briefing-markdown"
-          dangerouslySetInnerHTML={{
-            __html: window.marked ? window.marked.parse(briefing.briefing) : briefing.briefing
-          }} 
+          ref={briefingRef}
         />
       </div>
 
@@ -404,7 +414,7 @@ const AgentRail = () => {
   const [enrichStatus, setEnrichStatus] = useState(null);
   const lastActiveRef = useRef(false);
 
-  const pull = async () => {
+  const pull = useCallback(async () => {
     if (!window.DDX) return;
     try {
       const snap = await window.DDX.agents();
@@ -424,7 +434,7 @@ const AgentRail = () => {
         lastActiveRef.current = isCurrentlyActive;
       }
     } catch (e) {}
-  };
+  }, []);
 
   useEffect(() => {
     pull();
@@ -458,7 +468,7 @@ const AgentRail = () => {
       </div>
 
       {picking && (
-        <div style={{ padding: "8px 14px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <div key="agent-picker" style={{ padding: "8px 14px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 6 }}>
           {AGENT_OPTIONS.map(([type, label]) => (
             <button key={type} className="btn ghost" style={{ textTransform: "none", letterSpacing: 0 }}
               onClick={() => dispatch(type)}>{label}</button>
