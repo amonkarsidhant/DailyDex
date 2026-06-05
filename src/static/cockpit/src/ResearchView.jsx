@@ -1,5 +1,5 @@
 // ResearchView — research pack viewer with live agent synthesis
-const { useState, useEffect, useMemo } = React;
+// React hooks come from AppShell's shared destructure (single source to avoid duplicate const in shared script scope).
 
 const ResearchView = ({ onJump }) => {
   const { clusters, research_packs } = window.DD_DATA;

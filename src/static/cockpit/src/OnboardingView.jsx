@@ -1,5 +1,5 @@
 // OnboardingView.jsx — Beautiful, interactive creator setup wizard
-const { useState, useEffect, useRef } = React;
+// React hooks come from AppShell's shared destructure (single source to avoid duplicate const in shared script scope).
 
 const OnboardingView = ({ onComplete }) => {
   const [stage, setStage] = useState(1); // 1: Identity, 2: DNA, 3: BYOK, 4: Boot

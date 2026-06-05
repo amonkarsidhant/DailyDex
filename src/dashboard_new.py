@@ -2666,9 +2666,14 @@ def api_dashboard_meta():
     })
 
 
-@app.route("/api/refresh", methods=["POST"])
-def api_refresh():
-    """Run a manual refresh without wiping existing data on failure."""
+# Background refresh job state. Fetching all sources can take ~60s; running it
+# inline blocks the request thread (and any client waiting on it). Run it in a
+# background thread and let the UI poll /api/refresh/status instead.
+_refresh_lock = threading.Lock()
+_refresh_state = {"running": False, "result": None}
+
+
+def _run_refresh_job():
     previous_data = load_data()
     try:
         from fetch_news import fetch_all
@@ -2681,26 +2686,67 @@ def api_refresh():
             status = "failed"
         elif any(card["status_key"] in ["cache", "stale"] for card in source_cards):
             status = "partial"
-
-        return jsonify({
+        result = {
             "status": status,
             "last_updated": format_timestamp(scored_data.get("last_updated")),
             "source_health": source_cards,
             "summary": daily_summary,
             "message": daily_summary["freshness_message"],
-        })
+        }
     except Exception as exc:
         source_cards, daily_summary = build_source_health_response()
-        ensure_parent_dir(DATA_FILE)
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(previous_data, f, indent=2)
-        return jsonify({
+        try:
+            ensure_parent_dir(DATA_FILE)
+            with open(DATA_FILE, "w", encoding="utf-8") as f:
+                json.dump(previous_data, f, indent=2)
+        except Exception:
+            pass
+        result = {
             "status": "failed",
             "last_updated": format_timestamp(previous_data.get("last_updated")),
             "source_health": source_cards,
             "summary": daily_summary,
             "message": f"Refresh failed. Existing data preserved. {exc}",
+        }
+    with _refresh_lock:
+        _refresh_state["result"] = result
+        _refresh_state["running"] = False
+
+
+@app.route("/api/refresh", methods=["POST"])
+def api_refresh():
+    """Start a manual refresh in the background; poll /api/refresh/status."""
+    with _refresh_lock:
+        if _refresh_state["running"]:
+            return jsonify({"status": "running", "started": False})
+        _refresh_state["running"] = True
+        _refresh_state["result"] = None
+    t = threading.Thread(target=_run_refresh_job, daemon=True)
+    t.start()
+    return jsonify({"status": "running", "started": True})
+
+
+@app.route("/api/refresh/status", methods=["GET"])
+def api_refresh_status():
+    """Report background refresh progress; returns the result once finished."""
+    with _refresh_lock:
+        running = _refresh_state["running"]
+        result = _refresh_state["result"]
+    if running:
+        return jsonify({"running": True})
+    if result is None:
+        # No refresh has run this session — return current health snapshot.
+        source_cards, daily_summary = build_source_health_response()
+        return jsonify({
+            "running": False,
+            "status": "idle",
+            "source_health": source_cards,
+            "summary": daily_summary,
+            "message": daily_summary.get("freshness_message", ""),
         })
+    payload = dict(result)
+    payload["running"] = False
+    return jsonify(payload)
 
 
 def _parse_model_json(raw):

@@ -26,9 +26,20 @@
       listeners.forEach((fn) => { try { fn(data); } catch (e) {} });
       return data;
     },
-    // Trigger a backend fetch+rescore, then reload the UI data.
+    // Trigger a backend fetch+rescore in the background, poll until done,
+    // then reload the UI data. Non-blocking on the server side.
     async refresh() {
       await jpost("/api/refresh", {});
+      const deadline = Date.now() + 180000; // 3 min safety cap
+      // Poll status until the job finishes (or we time out).
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        await new Promise((r) => setTimeout(r, 2000));
+        let st;
+        try { st = await jget("/api/refresh/status"); } catch (_) { break; }
+        if (!st.running) break;
+        if (Date.now() > deadline) break;
+      }
       return DDX.reload();
     },
     onReload(fn) { listeners.add(fn); return () => listeners.delete(fn); },

@@ -1,5 +1,5 @@
 // BenchmarksView.jsx
-const { useState, useEffect } = React;
+// React hooks come from AppShell's shared destructure (single source to avoid duplicate const in shared script scope).
 
 const BenchmarksView = () => {
   const [benchmarks, setBenchmarks] = useState([]);
