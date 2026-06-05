@@ -1,0 +1,864 @@
+{
+  "scriptCompleted": true,
+  "files": [
+    {
+      "path": ".claude/skills/creator-blog/SKILL.md",
+      "language": "markdown",
+      "sizeLines": 23,
+      "fileCategory": "docs"
+    },
+    {
+      "path": ".claude/skills/creator-podcast/SKILL.md",
+      "language": "markdown",
+      "sizeLines": 22,
+      "fileCategory": "docs"
+    },
+    {
+      "path": ".claude/skills/creator-shorts/SKILL.md",
+      "language": "markdown",
+      "sizeLines": 23,
+      "fileCategory": "docs"
+    },
+    {
+      "path": ".claude/skills/creator-video/SKILL.md",
+      "language": "markdown",
+      "sizeLines": 22,
+      "fileCategory": "docs"
+    },
+    {
+      "path": ".coverage",
+      "language": "unknown",
+      "sizeLines": 77,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".DS_Store",
+      "language": "unknown",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/bug_report.md",
+      "language": "markdown",
+      "sizeLines": 36,
+      "fileCategory": "docs"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/feature_request.md",
+      "language": "markdown",
+      "sizeLines": 23,
+      "fileCategory": "docs"
+    },
+    {
+      "path": ".github/pull_request_template.md",
+      "language": "markdown",
+      "sizeLines": 16,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "api/cron/enrich.py",
+      "language": "python",
+      "sizeLines": 39,
+      "fileCategory": "code"
+    },
+    {
+      "path": "api/cron/fetch.py",
+      "language": "python",
+      "sizeLines": 33,
+      "fileCategory": "code"
+    },
+    {
+      "path": "api/index.py",
+      "language": "python",
+      "sizeLines": 32,
+      "fileCategory": "code"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "language": "markdown",
+      "sizeLines": 87,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "config.json",
+      "language": "json",
+      "sizeLines": 247,
+      "fileCategory": "config"
+    },
+    {
+      "path": "config/creator_profile.json",
+      "language": "json",
+      "sizeLines": 152,
+      "fileCategory": "config"
+    },
+    {
+      "path": "config/runtime.json",
+      "language": "json",
+      "sizeLines": 45,
+      "fileCategory": "config"
+    },
+    {
+      "path": "config/sources.json",
+      "language": "json",
+      "sizeLines": 62,
+      "fileCategory": "config"
+    },
+    {
+      "path": "config/topics.json",
+      "language": "json",
+      "sizeLines": 60,
+      "fileCategory": "config"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "language": "markdown",
+      "sizeLines": 66,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "data/.DS_Store",
+      "language": "unknown",
+      "sizeLines": 2,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/aa_raw.html",
+      "language": "html",
+      "sizeLines": 0,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "data/cache/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/digests/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/research_packs/out.json",
+      "language": "json",
+      "sizeLines": 49,
+      "fileCategory": "config"
+    },
+    {
+      "path": "deploy.sh",
+      "language": "shell",
+      "sizeLines": 217,
+      "fileCategory": "script"
+    },
+    {
+      "path": "Dockerfile",
+      "language": "dockerfile",
+      "sizeLines": 53,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "docs/.DS_Store",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "docs/diagrams/dashboard-flow.mmd",
+      "language": "mmd",
+      "sizeLines": 67,
+      "fileCategory": "code"
+    },
+    {
+      "path": "docs/release_validation_v0.7.md",
+      "language": "markdown",
+      "sizeLines": 75,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/release_validation_v0.9.md",
+      "language": "markdown",
+      "sizeLines": 85,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/screenshots/README.md",
+      "language": "markdown",
+      "sizeLines": 50,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/ui_review_checklist.md",
+      "language": "markdown",
+      "sizeLines": 96,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "inspect_aa.py",
+      "language": "python",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": "inspect_jsonld.py",
+      "language": "python",
+      "sizeLines": 25,
+      "fileCategory": "code"
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "sizeLines": 206,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "requirements.txt",
+      "language": "txt",
+      "sizeLines": 13,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "runtime.txt",
+      "language": "txt",
+      "sizeLines": 1,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "scripts/ai-coding-agents-2026.md",
+      "language": "markdown",
+      "sizeLines": 127,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "scripts/macos/com.dailydex.app.plist.template",
+      "language": "template",
+      "sizeLines": 39,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/macos/com.dailydex.refresh.plist.template",
+      "language": "template",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/macos/com.dailydex.studio.plist.template",
+      "language": "template",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/macos/install.sh",
+      "language": "shell",
+      "sizeLines": 69,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/macos/uninstall.sh",
+      "language": "shell",
+      "sizeLines": 14,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/release_check.sh",
+      "language": "shell",
+      "sizeLines": 30,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/youtube_ai_coding_agents_war.md",
+      "language": "markdown",
+      "sizeLines": 96,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "SECURITY.md",
+      "language": "markdown",
+      "sizeLines": 24,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "src/agentic_researcher.py",
+      "language": "python",
+      "sizeLines": 208,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/analytics_sync.py",
+      "language": "python",
+      "sizeLines": 245,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/cli_registry.py",
+      "language": "python",
+      "sizeLines": 453,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/command_validator.py",
+      "language": "python",
+      "sizeLines": 263,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/creator_enricher.py",
+      "language": "python",
+      "sizeLines": 1090,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/creator_intelligence.py",
+      "language": "python",
+      "sizeLines": 1072,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/creator_lab.py",
+      "language": "python",
+      "sizeLines": 627,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/dashboard_new.py",
+      "language": "python",
+      "sizeLines": 3352,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/data_models.py",
+      "language": "python",
+      "sizeLines": 1730,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/data/aa_scraper.py",
+      "language": "python",
+      "sizeLines": 62,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/data/fetch_benchmarks.py",
+      "language": "python",
+      "sizeLines": 68,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/db_compat.py",
+      "language": "python",
+      "sizeLines": 250,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/digest_generator.py",
+      "language": "python",
+      "sizeLines": 229,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/fetch_news.py",
+      "language": "python",
+      "sizeLines": 532,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/llm_summary.py",
+      "language": "python",
+      "sizeLines": 962,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/refresh_job.py",
+      "language": "python",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/routes/__init__.py",
+      "language": "python",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/routes/api_settings.py",
+      "language": "python",
+      "sizeLines": 169,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/scoring_engine.py",
+      "language": "python",
+      "sizeLines": 663,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/settings_manager.py",
+      "language": "python",
+      "sizeLines": 377,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/cockpit-live.js",
+      "language": "javascript",
+      "sizeLines": 134,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/cockpit.css",
+      "language": "css",
+      "sizeLines": 301,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "src/static/cockpit/src/App.jsx",
+      "language": "javascript",
+      "sizeLines": 124,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/src/AppShell.jsx",
+      "language": "javascript",
+      "sizeLines": 672,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/src/BenchmarksView.jsx",
+      "language": "javascript",
+      "sizeLines": 83,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/src/BriefView.jsx",
+      "language": "javascript",
+      "sizeLines": 733,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/src/ClustersView.jsx",
+      "language": "javascript",
+      "sizeLines": 694,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/src/CopilotChatView.jsx",
+      "language": "javascript",
+      "sizeLines": 190,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/src/icons.jsx",
+      "language": "javascript",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/src/OnboardingView.jsx",
+      "language": "javascript",
+      "sizeLines": 618,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/src/PipelineView.jsx",
+      "language": "javascript",
+      "sizeLines": 686,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/src/ProfileView.jsx",
+      "language": "javascript",
+      "sizeLines": 496,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/src/PulseView.jsx",
+      "language": "javascript",
+      "sizeLines": 572,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/src/ResearchView.jsx",
+      "language": "javascript",
+      "sizeLines": 393,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/src/SettingsView.jsx",
+      "language": "javascript",
+      "sizeLines": 614,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/src/shared.jsx",
+      "language": "javascript",
+      "sizeLines": 245,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/src/StudioView.jsx",
+      "language": "javascript",
+      "sizeLines": 779,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/src/ThumbsView.jsx",
+      "language": "javascript",
+      "sizeLines": 238,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/cockpit/tweaks-panel.jsx",
+      "language": "javascript",
+      "sizeLines": 534,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/static/lab.html",
+      "language": "html",
+      "sizeLines": 213,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "src/studio_job.py",
+      "language": "python",
+      "sizeLines": 245,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/studio.py",
+      "language": "python",
+      "sizeLines": 153,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/telegram_bot.py",
+      "language": "python",
+      "sizeLines": 261,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/templates/cockpit.html",
+      "language": "html",
+      "sizeLines": 46,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "src/templates/dashboard.html",
+      "language": "html",
+      "sizeLines": 1602,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "src/thumbnail_generator.py",
+      "language": "python",
+      "sizeLines": 316,
+      "fileCategory": "code"
+    },
+    {
+      "path": "supabase_schema.sql",
+      "language": "sql",
+      "sizeLines": 272,
+      "fileCategory": "data"
+    },
+    {
+      "path": "tests/conftest.py",
+      "language": "python",
+      "sizeLines": 265,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_aa_scraper.py",
+      "language": "python",
+      "sizeLines": 49,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_analytics_sync.py",
+      "language": "python",
+      "sizeLines": 132,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_command_validator.py",
+      "language": "python",
+      "sizeLines": 90,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_creator_cockpit.py",
+      "language": "python",
+      "sizeLines": 281,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_creator_enrichment.py",
+      "language": "python",
+      "sizeLines": 309,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_creator_lab.py",
+      "language": "python",
+      "sizeLines": 174,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_creator_mode.py",
+      "language": "python",
+      "sizeLines": 165,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_dashboard_html.py",
+      "language": "python",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_db_compat.py",
+      "language": "python",
+      "sizeLines": 128,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_deployment_modes.py",
+      "language": "python",
+      "sizeLines": 105,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_docker_contract.py",
+      "language": "python",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_fetch_news.py",
+      "language": "python",
+      "sizeLines": 222,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_functionality.py",
+      "language": "python",
+      "sizeLines": 258,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_production.py",
+      "language": "python",
+      "sizeLines": 150,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_refresh_job.py",
+      "language": "python",
+      "sizeLines": 52,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_routes.py",
+      "language": "python",
+      "sizeLines": 484,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_smoke.py",
+      "language": "python",
+      "sizeLines": 301,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_storage.py",
+      "language": "python",
+      "sizeLines": 60,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_studio_jobs.py",
+      "language": "python",
+      "sizeLines": 101,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_telegram_bot.py",
+      "language": "python",
+      "sizeLines": 163,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_thumbnail_generator.py",
+      "language": "python",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_ux.py",
+      "language": "python",
+      "sizeLines": 243,
+      "fileCategory": "code"
+    },
+    {
+      "path": "v0.1/dashboard.py",
+      "language": "python",
+      "sizeLines": 496,
+      "fileCategory": "code"
+    },
+    {
+      "path": "v0.1/data/markets.json",
+      "language": "json",
+      "sizeLines": 166,
+      "fileCategory": "config"
+    },
+    {
+      "path": "v0.1/fetch_markets.py",
+      "language": "python",
+      "sizeLines": 160,
+      "fileCategory": "code"
+    },
+    {
+      "path": "v0.1/send_email.py",
+      "language": "python",
+      "sizeLines": 188,
+      "fileCategory": "code"
+    },
+    {
+      "path": "v0.1/smart_summary.py",
+      "language": "python",
+      "sizeLines": 129,
+      "fileCategory": "code"
+    },
+    {
+      "path": "v0.1/static/app.css",
+      "language": "css",
+      "sizeLines": 3538,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "v0.1/static/app.js",
+      "language": "javascript",
+      "sizeLines": 2375,
+      "fileCategory": "code"
+    },
+    {
+      "path": "v0.1/templates/dashboard.html",
+      "language": "html",
+      "sizeLines": 1602,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "vercel.json",
+      "language": "json",
+      "sizeLines": 41,
+      "fileCategory": "config"
+    },
+    {
+      "path": "VERSION",
+      "language": "unknown",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "video-engine/demo_props.json",
+      "language": "json",
+      "sizeLines": 5,
+      "fileCategory": "config"
+    },
+    {
+      "path": "video-engine/eslint.config.mjs",
+      "language": "javascript",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "video-engine/package.json",
+      "language": "json",
+      "sizeLines": 33,
+      "fileCategory": "config"
+    },
+    {
+      "path": "video-engine/README.md",
+      "language": "markdown",
+      "sizeLines": 54,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "video-engine/remotion.config.ts",
+      "language": "typescript",
+      "sizeLines": 13,
+      "fileCategory": "code"
+    },
+    {
+      "path": "video-engine/src/Composition.tsx",
+      "language": "typescript",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "video-engine/src/index.css",
+      "language": "css",
+      "sizeLines": 1,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "video-engine/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 4,
+      "fileCategory": "code"
+    },
+    {
+      "path": "video-engine/src/Root.tsx",
+      "language": "typescript",
+      "sizeLines": 32,
+      "fileCategory": "code"
+    },
+    {
+      "path": "video-engine/src/ShortsTemplate.tsx",
+      "language": "typescript",
+      "sizeLines": 113,
+      "fileCategory": "code"
+    },
+    {
+      "path": "video-engine/tsconfig.json",
+      "language": "json",
+      "sizeLines": 15,
+      "fileCategory": "config"
+    }
+  ],
+  "totalFiles": 138,
+  "filteredByIgnore": 0,
+  "estimatedComplexity": "moderate",
+  "stats": {
+    "filesScanned": 138,
+    "byCategory": {
+      "docs": 20,
+      "code": 93,
+      "config": 11,
+      "markup": 8,
+      "script": 4,
+      "infra": 1,
+      "data": 1
+    },
+    "byLanguage": {
+      "markdown": 18,
+      "unknown": 8,
+      "python": 56,
+      "json": 11,
+      "html": 5,
+      "shell": 4,
+      "dockerfile": 1,
+      "mmd": 1,
+      "txt": 2,
+      "template": 3,
+      "javascript": 20,
+      "css": 3,
+      "sql": 1,
+      "typescript": 5
+    }
+  }
+}

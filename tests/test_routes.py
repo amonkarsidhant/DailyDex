@@ -480,5 +480,45 @@ def test_advanced_creator_integrations(client, app_env):
     assert active_test_after["variant_b_views"] > 0
 
 
+def test_codebase_graph_routes(client, app_env):
+    # 1. Accessing without token redirects to tokenized URL
+    graph_resp = client.get("/code-graph")
+    assert graph_resp.status_code == 302
+    assert "/code-graph/?token=daily-dex-code-graph" in graph_resp.headers["Location"]
+
+    # 2. Accessing with token serves index.html
+    graph_token_resp = client.get("/code-graph/?token=daily-dex-code-graph")
+    assert graph_token_resp.status_code == 200
+    assert b"<!doctype html>" in graph_token_resp.data
+
+    # 3. JSON files access control
+    assert client.get("/knowledge-graph.json").status_code == 401
+    assert client.get("/knowledge-graph.json?token=invalid").status_code == 401
+    
+    # 4. JSON file access with valid token
+    # Note: knowledge-graph.json may not exist yet, which should return 404
+    kg_resp = client.get("/knowledge-graph.json?token=daily-dex-code-graph")
+    assert kg_resp.status_code in {200, 404}
+
+    # 5. File content endpoint authentication & parameter check
+    assert client.get("/file-content.json").status_code == 401
+    assert client.get("/file-content.json?token=daily-dex-code-graph").status_code == 400
+
+    # 6. Valid file content retrieval
+    content_resp = client.get("/file-content.json?token=daily-dex-code-graph&path=src/dashboard_new.py")
+    assert content_resp.status_code == 200
+    payload = content_resp.get_json()
+    assert payload["path"] == "src/dashboard_new.py"
+    assert payload["language"] == "python"
+    assert "route_code_graph" in payload["content"]
+    assert payload["sizeBytes"] > 0
+    assert payload["lineCount"] > 0
+
+    # 7. Path traversal prevention check
+    bad_path_resp = client.get("/file-content.json?token=daily-dex-code-graph&path=../../etc/passwd")
+    assert bad_path_resp.status_code == 403
+
+
+
 
 

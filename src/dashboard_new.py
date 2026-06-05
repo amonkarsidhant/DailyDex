@@ -3345,6 +3345,103 @@ def api_integrations_ab_test_active():
     return jsonify({"success": True, "test": test})
 
 
+# ── Codebase Graph (Understand Anything) Routes ──
+@app.route("/code-graph")
+@app.route("/code-graph/")
+def route_code_graph():
+    from flask import redirect
+    token = request.args.get("token")
+    if not token:
+        return redirect("/code-graph/?token=daily-dex-code-graph")
+    dist_dir = "/Users/sidhantamonkar/.understand-anything/repo/understand-anything-plugin/packages/dashboard/dist"
+    return send_from_directory(dist_dir, "index.html")
+
+
+@app.route("/assets/<path:path>")
+def route_code_graph_assets(path):
+    dist_dir = "/Users/sidhantamonkar/.understand-anything/repo/understand-anything-plugin/packages/dashboard/dist/assets"
+    return send_from_directory(dist_dir, path)
+
+
+@app.route("/favicon.svg")
+def route_code_graph_favicon():
+    dist_dir = "/Users/sidhantamonkar/.understand-anything/repo/understand-anything-plugin/packages/dashboard/dist"
+    import os
+    if os.path.exists(os.path.join(dist_dir, "favicon.svg")):
+        return send_from_directory(dist_dir, "favicon.svg")
+    return "", 404
+
+
+@app.route("/meta.json")
+@app.route("/config.json")
+@app.route("/knowledge-graph.json")
+@app.route("/diff-overlay.json")
+@app.route("/domain-graph.json")
+def route_code_graph_json():
+    # Only allow validated token
+    token = request.args.get("token")
+    if token != "daily-dex-code-graph":
+        return jsonify({"error": "Unauthorized"}), 401
+
+    filename = request.path.lstrip("/")
+    ua_dir = "/Users/sidhantamonkar/Documents/Projects/DailyDex/.understand-anything"
+    import os
+    file_path = os.path.join(ua_dir, filename)
+    if not os.path.exists(file_path):
+        return jsonify({}), 404
+    return send_from_directory(ua_dir, filename)
+
+
+@app.route("/file-content.json")
+def route_code_graph_file_content():
+    token = request.args.get("token")
+    if token != "daily-dex-code-graph":
+        return jsonify({"error": "Unauthorized"}), 401
+
+    file_path = request.args.get("path")
+    if not file_path:
+        return jsonify({"error": "Path parameter required"}), 400
+
+    project_root = "/Users/sidhantamonkar/Documents/Projects/DailyDex"
+    import os
+    abs_path = os.path.abspath(os.path.join(project_root, file_path))
+    if not abs_path.startswith(project_root):
+        return jsonify({"error": "Access denied"}), 403
+
+    if not os.path.exists(abs_path) or os.path.isdir(abs_path):
+        return jsonify({"error": "File not found"}), 404
+
+    try:
+        with open(abs_path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+    except Exception as e:
+        return jsonify({"error": f"Failed to read file: {str(e)}"}), 500
+
+    ext = os.path.splitext(file_path)[1].lstrip(".").lower()
+    lang_map = {
+        "py": "python",
+        "js": "javascript",
+        "jsx": "jsx",
+        "ts": "typescript",
+        "tsx": "tsx",
+        "html": "html",
+        "css": "css",
+        "json": "json",
+        "sh": "bash",
+        "md": "markdown",
+        "sql": "sql"
+    }
+    language = lang_map.get(ext, "text")
+
+    return jsonify({
+        "path": file_path,
+        "language": language,
+        "content": content,
+        "sizeBytes": os.path.getsize(abs_path),
+        "lineCount": len(content.splitlines())
+    })
+
+
 if __name__ == "__main__":
     host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", "8888"))
