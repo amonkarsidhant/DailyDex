@@ -2703,6 +2703,38 @@ def api_refresh():
         })
 
 
+def _parse_model_json(raw):
+    """Best-effort extraction of a JSON object from an LLM response.
+
+    Handles clean JSON, markdown-fenced JSON, and JSON followed by trailing
+    prose/extra objects (which plain json.loads rejects with "Extra data").
+    Returns a dict, or None if nothing parseable is found.
+    """
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        pass
+    # Strip ```json ... ``` fences.
+    s = raw.strip()
+    if s.startswith("```"):
+        s = s.split("```", 2)
+        s = s[1] if len(s) > 1 else raw
+        if s.lstrip().lower().startswith("json"):
+            s = s.lstrip()[4:]
+    # Decode the first JSON object, ignoring any trailing data.
+    start = s.find("{")
+    if start != -1:
+        try:
+            obj, _ = json.JSONDecoder().raw_decode(s[start:])
+            if isinstance(obj, dict):
+                return obj
+        except Exception:
+            pass
+    return None
+
+
 @app.route("/api/llm-summarize", methods=["POST"])
 def api_llm_summarize():
     """Summarize an item using Ollama"""
@@ -2727,14 +2759,27 @@ Content: {text[:500]}
     
     try:
         import requests as req
-        resp = req.post(f"{ollama_url}/api/generate", json={"model": model, "prompt": prompt, "format": "json"}, timeout=30)
+        # stream=False so Ollama returns a single JSON object, not newline-
+        # delimited chunks (which break resp.json() with "Extra data").
+        resp = req.post(
+            f"{ollama_url}/api/generate",
+            json={"model": model, "prompt": prompt, "format": "json", "stream": False},
+            timeout=30,
+        )
         if resp.status_code == 200:
             result = resp.json()
-            return jsonify({"success": True, "summary": json.loads(result.get("response", "{}"))})
+            raw = (result.get("response") or "{}").strip()
+            summary = _parse_model_json(raw)
+            if summary is None:
+                return jsonify({
+                    "success": False,
+                    "error": "Model did not return valid JSON.",
+                    "raw": raw[:500],
+                })
+            return jsonify({"success": True, "summary": summary})
+        return jsonify({"success": False, "error": f"Ollama returned HTTP {resp.status_code}"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
-    
-    return jsonify({"success": False, "error": "Ollama not available"})
 
 
 @app.route("/api/digest")
@@ -2983,13 +3028,48 @@ def api_forge_status(item_id):
     })
 
 
+_EDITORIAL_FALLBACK = (
+    "# Daily Production Briefing\n\n"
+    "## Strategic Focus: Local AI & Coding Agents\n"
+    "Today's momentum is heavily clustered around **Local AI** and **Coding Agents**. "
+    "Here is your structured production plan:\n\n"
+    "### 📽️ YouTube Long-form\n"
+    "- **Topic**: Local AI Sharding on Commodity Hardware\n"
+    "- **Angle**: Why you don't need a $2,000 GPU to run deep models. Show a demo sharding a model across two cheap mini-PCs.\n"
+    "- **Hook**: \"Two mini PCs. One model. Sharded locally with zero cloud dependencies. Let's bench it.\"\n\n"
+    "### 📱 YouTube Short\n"
+    "- **Topic**: Coding Agents vs. Coding Tools\n"
+    "- **Angle**: 45-second high-tempo comparison of dynamic agents vs static autocomplete.\n\n"
+    "### ✍️ Substack Newsletter\n"
+    "- **Topic**: The Rise of Autocomplete in Terminal\n"
+    "- **Angle**: Benchmarking open-source coding models against proprietary tools.\n"
+)
+
+
 @app.route("/api/editorial/briefing", methods=["GET", "POST"])
 def api_editorial_briefing():
     force = (request.method == "POST")
+    # Briefing generation may call an LLM (Gemini CLI default timeout is 600s);
+    # never let the UI request hang that long — cap it and fall back to a
+    # static briefing if the model is slow/unreachable.
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
+    briefing_timeout = int(os.environ.get("BRIEFING_TIMEOUT_SECONDS", "30"))
+    pool = ThreadPoolExecutor(max_workers=1)
+    future = pool.submit(generate_editorial_briefing, force)
     try:
-        data = generate_editorial_briefing(force=force)
+        data = future.result(timeout=briefing_timeout)
+        pool.shutdown(wait=False)
         return jsonify(data)
+    except FutureTimeout:
+        pool.shutdown(wait=False, cancel_futures=True)
+        return jsonify({
+            "briefing": _EDITORIAL_FALLBACK,
+            "generated_at": time.time(),
+            "status": "fallback",
+            "note": f"AI briefing timed out after {briefing_timeout}s; showing a static plan.",
+        })
     except Exception as e:
+        pool.shutdown(wait=False)
         return jsonify({"error": str(e)}), 500
 
 
