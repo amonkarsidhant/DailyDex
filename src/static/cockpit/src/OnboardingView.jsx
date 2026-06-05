@@ -51,7 +51,15 @@ const OnboardingView = ({ onComplete }) => {
   // Run mock terminal boot once Stage 4 starts
   useEffect(() => {
     if (stage !== 4) return;
-    
+
+    // Persist onboarding immediately at boot start so a later render/crash
+    // can never deadlock the user out of the cockpit (reload will recover).
+    fetch("/api/onboarding/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identity, profile, keys })
+    }).catch(() => {});
+
     const logs = [
       { text: "Initializing local database connections...", type: "info" },
       { text: "SQLite DB verified (integrity check: OK)", type: "success" },
@@ -73,12 +81,14 @@ const OnboardingView = ({ onComplete }) => {
 
     let currentLogIndex = 0;
     const interval = setInterval(() => {
-      if (currentLogIndex < logs.length) {
-        setBootLogs(prev => [...prev, logs[currentLogIndex]]);
+      const entry = logs[currentLogIndex];
+      if (currentLogIndex < logs.length && entry) {
+        setBootLogs(prev => [...prev, entry]);
         setBootProgress(Math.min(100, Math.round(((currentLogIndex + 1) / logs.length) * 100)));
         currentLogIndex++;
       } else {
         clearInterval(interval);
+        setBootProgress(100);
         setBootComplete(true);
       }
     }, 450);
@@ -491,13 +501,13 @@ const OnboardingView = ({ onComplete }) => {
                 padding: 16, height: 200, overflowY: "auto", display: "flex", flexDirection: "column",
                 gap: 6, fontFamily: "var(--font-mono)", fontSize: 11, marginBottom: 30
               }}>
-                {bootLogs.map((log, i) => (
+                {bootLogs.filter(Boolean).map((log, i) => (
                   <div key={i} style={{ display: "flex", gap: 10, lineHeight: 1.4 }}>
                     <span style={{
                       color: log.type === "success" ? "var(--src-github)" : log.type === "warn" ? "var(--signal)" : "var(--signal-cool)",
                       fontWeight: 600
                     }}>
-                      [{log.type.toUpperCase()}]
+                      [{(log.type || "info").toUpperCase()}]
                     </span>
                     <span style={{ color: "var(--text)" }}>{log.text}</span>
                   </div>
