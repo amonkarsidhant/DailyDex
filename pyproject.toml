@@ -1,0 +1,29 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes (unused imports, undefined names)
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "C4",   # flake8-comprehensions
+]
+ignore = [
+    "E501",   # line too long (formatter handles this)
+    "B008",   # function call in default argument (Flask pattern)
+    "SIM102", # collapsible if (sometimes less readable)
+    "B904",   # raise from in except (too many call sites to fix now)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+"v0.1/*" = []
+
+[tool.ruff.format]
+quote-style = "double"

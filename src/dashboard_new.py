@@ -28,24 +28,14 @@ from creator_intelligence import (
 )
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# Add current directory and v0.1 directory to path for imports
 sys.path.insert(0, BASE_DIR)
-sys.path.insert(0, os.path.join(BASE_DIR, "v0.1"))
 
-import jinja2
 app = Flask(__name__, 
             static_folder=os.path.join(BASE_DIR, "src", "static"),
             template_folder=os.path.join(BASE_DIR, "src", "templates"))
 from routes.api_settings import settings_bp
 app.register_blueprint(settings_bp)
 app.url_map.merge_slashes = False
-
-# Add v0.1/templates to Jinja search path so the classic dashboard template is found
-my_loader = jinja2.ChoiceLoader([
-    app.jinja_loader,
-    jinja2.FileSystemLoader(os.path.join(BASE_DIR, "v0.1", "templates")),
-])
-app.jinja_loader = my_loader
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
 DB_PATH = os.environ.get("DB_PATH", os.path.join(DATA_DIR, "intelligence.db"))
 CACHE_DIR = os.environ.get("CACHE_DIR", os.path.join(DATA_DIR, "cache"))
@@ -137,7 +127,7 @@ except Exception as e:
 def _top_items_for_enrichment(scored_data, limit: int = 20):
     """Pick the highest-signal items across sources for background enrichment."""
     pool = []
-    for source_type in ("github", "huggingface", "youtube", "blogs", "papers", "hackernews"):
+    for source_type in ("github", "huggingface", "youtube", "blogs", "papers", "hackernews", "reddit"):
         for item in scored_data.get(source_type, []) or []:
             score = max(
                 int(item.get("signal_score") or 0),
@@ -155,7 +145,7 @@ def load_data():
     try:
         with open(DATA_FILE, encoding="utf-8") as f:
             return json.load(f)
-    except:
+    except (FileNotFoundError, json.JSONDecodeError):
         return {"github": [], "huggingface": [], "youtube": [], "blogs": [], "papers": [], "hackernews": []}
 
 
@@ -164,7 +154,7 @@ def load_config():
     try:
         with open(CONFIG_FILE, encoding="utf-8") as f:
             return json.load(f)
-    except:
+    except (FileNotFoundError, json.JSONDecodeError):
         return {}
 
 
@@ -274,6 +264,17 @@ def load_scored_data(force: bool = False):
     except Exception as e:
         print(f"Error generating scored data: {e}")
         return raw_data
+
+
+# Factory blueprint needs the DB and a scored-data loader; registered here
+# (after both exist) following the settings_bp extraction pattern.
+app.config["INTEL_DB"] = intel_db
+app.config["SCORED_DATA_LOADER"] = load_scored_data
+try:
+    from routes.api_factory import factory_bp
+    app.register_blueprint(factory_bp)
+except Exception as e:
+    print(f"Warning: Could not register factory blueprint: {e}")
 
 
 _enrichment_last_version = {"value": None}
@@ -689,6 +690,7 @@ COCKPIT_SOURCES = {
     "blogs":       {"key": "blogs",       "label": "Blogs / News", "color": "#62A8FF", "abbr": "BL"},
     "papers":      {"key": "papers",      "label": "arXiv",        "color": "#B084F2", "abbr": "AX"},
     "hackernews":  {"key": "hackernews",  "label": "HackerNews",   "color": "#FF6600", "abbr": "HN"},
+    "reddit":      {"key": "reddit",      "label": "Reddit",       "color": "#FF4500", "abbr": "RD"},
 }
 
 COCKPIT_PERSONAS = {
@@ -1588,14 +1590,14 @@ def classic_dashboard():
 
 @app.route("/static/app.css")
 def serve_classic_css():
-    """Serve legacy stylesheet from v0.1 archive."""
-    return send_from_directory(os.path.join(BASE_DIR, "v0.1", "static"), "app.css")
+    """Serve legacy stylesheet (inlined from v0.1 archive)."""
+    return send_from_directory(os.path.join(BASE_DIR, "src", "static", "classic"), "app.css")
 
 
 @app.route("/static/app.js")
 def serve_classic_js():
-    """Serve legacy client script from v0.1 archive."""
-    return send_from_directory(os.path.join(BASE_DIR, "v0.1", "static"), "app.js")
+    """Serve legacy client script (inlined from v0.1 archive)."""
+    return send_from_directory(os.path.join(BASE_DIR, "src", "static", "classic"), "app.js")
 
 
 @app.route("/api/cockpit-data")
@@ -1999,7 +2001,7 @@ def _copilot_live_context(max_clusters=8, max_items=3):
 
     # Per-source freshness + 24h counts.
     sources = {}
-    for key in ("github", "huggingface", "youtube", "blogs", "papers", "hackernews"):
+    for key in ("github", "huggingface", "youtube", "blogs", "papers", "hackernews", "reddit"):
         items = scored.get(key, []) or []
         sources[key] = len(items)
     ctx["items_by_source"] = sources

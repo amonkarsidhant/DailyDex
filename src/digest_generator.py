@@ -32,7 +32,7 @@ class DailyDigestGenerator:
             with open(self.config_path) as f:
                 config = json.load(f)
             return SignalScorer(config)
-        except:
+        except Exception:
             return SignalScorer()
     
     def generate_digest(self, data: Dict, date: str = None) -> str:

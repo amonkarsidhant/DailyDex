@@ -1,54 +1,82 @@
+# ─── Python ─────────────────────────────────────
 __pycache__/
-.pytest_cache/
 *.py[cod]
+.pytest_cache/
 *.log
+
+# ─── Data files (runtime, never commit) ─────────
 *.db
 *.bak
 *.backup
 *.orig
 *.working
 *.fixed
-
-.opencode/
-design-system/
-
-AGENTS.md
-ADVANCED_UI_UX_IMPLEMENTATION.md
-DESIGN_SYSTEM_IMPLEMENTATION.md
-OVERFLOW_FIXES.md
-static/app.css.backup
-
-dashboard_new_backup.py
-config.json.backup
-
 data/*.json
 data/*.db
 data/cache/*.json
 data/digests/*.md
-
+data/research_packs/*.md
 data.json
 data_scored.json
-data/research_packs/*.md
 
-# virtual envs — never commit
+# ─── Config backups ──────────────────────────────
+config.json.backup
+dashboard_new_backup.py
+static/app.css.backup
+
+# ─── Virtual envs ────────────────────────────────
 .venv/
 .venv-cockpit/
 
-# secrets — never commit
+# ─── Secrets ────────────────────────────────────
 .env
 .env.local
 .env.*.local
-.vercel
 .env.bak.*
+.vercel
 
-# local scratch folder
+# ─── Local-only dirs ────────────────────────────
+.opencode/
+design-system/
 scratch/
-
-# agent & fuse lock files
+weekend/
+snapshots/
+.understand-anything/
 .antigravitycli/
+
+# ─── macOS noise ─────────────────────────────────
+.DS_Store
+**/.DS_Store
+._*
+**/._*
+
+# ─── Agent lock files ───────────────────────────
 **/.fuse_hidden*
 
-
-
-# node build tooling (cockpit JSX precompile)
+# ─── Node build tooling ──────────────────────────
 node_modules/
+
+# ─── Video build outputs ────────────────────────
+video-engine/*.mp4
+src/data/videos/*.mp4
+src/test.mp4
+
+# ─── Root content scripts (belong in scratch/) ──
+/blog-*.md
+/CodingAI_Video_Script.md
+/local_ai_inflection_script.md
+/youtube-script-*.md
+/creator_pack_*.json
+/pack.json
+/npm-audit.json
+/HANDOVER_CLAUDE.md
+/ignored.db
+
+# ─── Legacy v0.1 archive ─────────────────────────
+/v0.1/
+
+# ─── Docs that should not be in root ─────────────
+AGENTS.md
+ADVANCED_UI_UX_IMPLEMENTATION.md
+DESIGN_SYSTEM_IMPLEMENTATION.md
+OVERFLOW_FIXES.md

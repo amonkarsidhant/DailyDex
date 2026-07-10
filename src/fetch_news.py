@@ -504,7 +504,7 @@ def merge_weekly_data(history, new_data):
                             for existing in combined[key]
                         ):
                             combined[key].append(item)
-                except:
+                except Exception:
                     pass
 
     return combined

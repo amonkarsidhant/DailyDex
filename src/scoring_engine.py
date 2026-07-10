@@ -91,7 +91,7 @@ class SignalScorer:
                 try:
                     date = datetime.strptime(date_str.replace("Z", "+00:00")[:19], fmt)
                     break
-                except:
+                except (ValueError, TypeError):
                     continue
             
             if not date:
@@ -112,7 +112,7 @@ class SignalScorer:
                 return 30
             else:
                 return 10
-        except:
+        except Exception:
             return 50
     
     def calculate_popularity_score(self, stars: str) -> float:
@@ -133,7 +133,7 @@ class SignalScorer:
                 return 20
             else:
                 return 10
-        except:
+        except (ValueError, TypeError):
             return 30
     
     def calculate_keyword_match_score(self, text: str) -> float:
@@ -581,6 +581,9 @@ class SignalScorer:
         if "hackernews" in data:
             scored_data["hackernews"] = [self.score_news(item) for item in data["hackernews"]]
 
+        if "reddit" in data:
+            scored_data["reddit"] = [self.score_news(item) for item in data["reddit"]]
+
         return enrich_scored_data_with_creator_fields(scored_data)
     
     def generate_executive_brief(self, scored_data: Dict) -> Dict:
@@ -589,7 +592,7 @@ class SignalScorer:
         
         # Collect all scored items
         for category, items in scored_data.items():
-            if category in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews"]:
+            if category in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews", "reddit"]:
                 for item in items:
                     all_items.append({**item, "source_type": category})
         
