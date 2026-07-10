@@ -272,6 +272,7 @@ app.config["INTEL_DB"] = intel_db
 app.config["SCORED_DATA_LOADER"] = load_scored_data
 app.config["RESEARCH_PACK_DIR"] = RESEARCH_PACK_DIR
 app.config["DASH"] = sys.modules[__name__]
+app.config["AGENT_RUNNER"] = agent_runner
 try:
     from routes.api_factory import factory_bp
     app.register_blueprint(factory_bp)
@@ -1607,87 +1608,9 @@ def api_clusters():
 
 
 # ── Phase 2: agents ──────────────────────────────────────────────────────
-
-@app.route("/api/agents/dispatch", methods=["POST"])
-def api_agents_dispatch():
-    if agent_runner is None:
-        return jsonify({"error": "agent runner unavailable"}), 503
-    body = request.get_json(silent=True) or {}
-    agent_type = body.get("agent_type")
-    if agent_type not in AgentRunner.AGENT_TYPES:
-        return jsonify({"error": "invalid agent_type"}), 400
-    topic = body.get("topic")
-    target_id = body.get("target_id")
-    # Snapshot in-flight keys before dispatch to detect if we got a dedup hit.
-    dedup_key = (topic or target_id or "").strip().lower()
-    was_in_flight = bool(agent_runner._in_flight.get((agent_type, dedup_key)))
-    try:
-        run_id = agent_runner.dispatch(
-            agent_type,
-            topic=topic,
-            target_id=target_id,
-            payload=body.get("payload"),
-        )
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    return jsonify({"run_id": run_id, "deduplicated": was_in_flight})
-
-
-@app.route("/api/agents")
-def api_agents():
-    if agent_runner is None:
-        return jsonify({"active": [], "recent_done": []})
-    return jsonify(agent_runner.snapshot())
-
-
-@app.route("/api/agents/<run_id>/logs")
-def api_agent_logs(run_id):
-    if intel_db is None:
-        return jsonify({"logs": []})
-    return jsonify({"run_id": run_id, "logs": intel_db.get_agent_logs(run_id)})
-
-
-@app.route("/api/agents/<run_id>/result")
-def api_agent_result(run_id):
-    """Return the full generated text for a completed agent run."""
-    try:
-        from creator_enricher import _AGENT_RESULTS
-        text = _AGENT_RESULTS.get(run_id)
-        if text:
-            return jsonify({"run_id": run_id, "text": text})
-    except Exception:
-        pass
-    # Fallback: try result_summary from DB
-    if intel_db:
-        try:
-            for row in (intel_db.list_agent_runs(limit=200) or []):
-                if row.get("id") == run_id:
-                    return jsonify({"run_id": run_id, "text": row.get("result_summary") or ""})
-        except Exception:
-            pass
-    return jsonify({"run_id": run_id, "text": ""})
-
-
-@app.route("/api/agents/stream")
-def api_agents_stream():
-    if agent_runner is None:
-        return jsonify({"error": "agent runner unavailable"}), 503
-
-    def gen():
-        q = agent_runner.subscribe()
-        try:
-            yield "retry: 5000\n\n"
-            while True:
-                try:
-                    ev = q.get(timeout=15)
-                    yield f"data: {json.dumps(ev)}\n\n"
-                except queue.Empty:
-                    yield ": keepalive\n\n"
-        finally:
-            agent_runner.unsubscribe(q)
-
-    return Response(stream_with_context(gen()), mimetype="text/event-stream",
-                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+# Extracted to routes/api_agents.py
+from routes.api_agents import agents_bp
+app.register_blueprint(agents_bp)
 
 
 # ── Phase 3: schedule ────────────────────────────────────────────────────
