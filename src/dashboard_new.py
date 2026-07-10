@@ -271,6 +271,7 @@ def load_scored_data(force: bool = False):
 app.config["INTEL_DB"] = intel_db
 app.config["SCORED_DATA_LOADER"] = load_scored_data
 app.config["RESEARCH_PACK_DIR"] = RESEARCH_PACK_DIR
+app.config["DASH"] = sys.modules[__name__]
 try:
     from routes.api_factory import factory_bp
     app.register_blueprint(factory_bp)
@@ -1690,135 +1691,9 @@ def api_agents_stream():
 
 
 # ── Phase 3: schedule ────────────────────────────────────────────────────
-
-def _schedule_item_payload(item_id):
-    """Denormalized item fields for a calendar cell."""
-    if intel_db is None:
-        return {}
-    try:
-        item = intel_db.get_saved_item(int(item_id))
-    except (ValueError, TypeError):
-        item = None
-    if not item:
-        return {}
-    return {
-        "working_title": item.get("working_title") or item.get("title"),
-        "topic": item.get("category") or item.get("topic"),
-        "format": item.get("format"),
-        "creator_score": item.get("creator_score"),
-    }
-
-
-@app.route("/api/schedule", methods=["GET"])
-def api_schedule_list():
-    if intel_db is None:
-        return jsonify([])
-    start = request.args.get("start")
-    end = request.args.get("end")
-    if not start or not end:
-        today = datetime.now()
-        start = start or today.strftime("%Y-%m-%d")
-        end = end or (today + timedelta(days=6)).strftime("%Y-%m-%d")
-    rows = intel_db.get_schedule_range(start, end)
-    for row in rows:
-        row["item"] = _schedule_item_payload(row.get("item_id"))
-    return jsonify(rows)
-
-
-@app.route("/api/schedule", methods=["POST"])
-def api_schedule_create():
-    if intel_db is None:
-        return jsonify({"error": "db unavailable"}), 503
-    body = request.get_json(silent=True) or {}
-    if not body.get("item_id") or not body.get("day") or not body.get("kind"):
-        return jsonify({"error": "item_id, day, kind required"}), 400
-    sched_id = f"sched-{uuid.uuid4().hex[:12]}"
-    intel_db.insert_schedule(sched_id, str(body["item_id"]), body["day"],
-                             body["kind"], time=body.get("time"))
-    row = intel_db.get_schedule_entry(sched_id)
-    row["item"] = _schedule_item_payload(row.get("item_id"))
-    return jsonify(row), 201
-
-
-@app.route("/api/schedule/<sched_id>", methods=["PUT"])
-def api_schedule_update(sched_id):
-    if intel_db is None:
-        return jsonify({"error": "db unavailable"}), 503
-    body = request.get_json(silent=True) or {}
-    ok = intel_db.update_schedule(sched_id, **body)
-    if not ok:
-        return jsonify({"error": "not found"}), 404
-    row = intel_db.get_schedule_entry(sched_id)
-    row["item"] = _schedule_item_payload(row.get("item_id"))
-    return jsonify(row)
-
-
-@app.route("/api/schedule/<sched_id>", methods=["DELETE"])
-def api_schedule_delete(sched_id):
-    if intel_db is None:
-        return jsonify({"error": "db unavailable"}), 503
-    ok = intel_db.delete_schedule(sched_id)
-    return jsonify({"success": ok})
-
-
-@app.route("/api/schedule/<sched_id>/complete", methods=["POST"])
-def api_schedule_complete(sched_id):
-    if intel_db is None:
-        return jsonify({"error": "db unavailable"}), 503
-    ok = intel_db.update_schedule(sched_id, status="done")
-    if not ok:
-        return jsonify({"error": "not found"}), 404
-    return jsonify({"success": True})
-
-
-@app.route("/api/schedule/auto", methods=["POST"])
-def api_schedule_auto():
-    """Drop top brief items into the next available week (simple heuristic)."""
-    if intel_db is None:
-        return jsonify({"error": "db unavailable"}), 503
-    try:
-        scored_data = load_scored_data()
-        clusters = build_topic_clusters(scored_data, intel_db=intel_db)
-        opportunities = build_content_opportunities(scored_data, clusters)
-        brief = build_creator_brief(opportunities, clusters, intel_db.get_saved_items())
-    except Exception as e:
-        return jsonify({"error": f"brief unavailable: {e}"}), 500
-
-    profile = _load_creator_profile_safe()
-    publish_days = (profile.get("schedule") or {}).get("publish_days", ["Sat", "Sun"])
-    record_window = (profile.get("schedule") or {}).get("preferred_record_window", "10:00-12:00")
-    record_time = record_window.split("-")[0]
-
-    picks = []
-    if brief.get("best_video_idea"):
-        picks.append(brief["best_video_idea"])
-    picks.extend(brief.get("long_form_candidates", [])[:2])
-
-    created = []
-    base = datetime.now()
-    day_idx = 0
-    for opp in picks:
-        item_id = opp.get("id") or opp.get("url") or opp.get("topic")
-        # advance to next weekday
-        while (base + timedelta(days=day_idx)).weekday() >= 5:
-            day_idx += 1
-        rec_day = (base + timedelta(days=day_idx)).strftime("%Y-%m-%d")
-        sid = f"sched-{uuid.uuid4().hex[:12]}"
-        intel_db.insert_schedule(sid, str(item_id), rec_day, "record", time=record_time)
-        created.append(sid)
-        # publish on next configured publish day
-        pub_offset = day_idx + 1
-        for _ in range(7):
-            cand = base + timedelta(days=pub_offset)
-            if cand.strftime("%a") in publish_days:
-                break
-            pub_offset += 1
-        pub_day = (base + timedelta(days=pub_offset)).strftime("%Y-%m-%d")
-        psid = f"sched-{uuid.uuid4().hex[:12]}"
-        intel_db.insert_schedule(psid, str(item_id), pub_day, "publish", time="10:00")
-        created.append(psid)
-        day_idx += 1
-    return jsonify({"created": created, "count": len(created)})
+# Extracted to routes/api_schedule.py
+from routes.api_schedule import schedule_bp
+app.register_blueprint(schedule_bp)
 
 
 # ── Phase 4: copilot ─────────────────────────────────────────────────────
@@ -2091,94 +1966,7 @@ def api_agent_run():
     return jsonify({"success": True, "output": result, "agent": agent["name"]})
 
 
-@app.route("/api/ignore", methods=["POST"])
-def api_ignore():
-    """Ignore/hide an item"""
-    if not intel_db:
-        return jsonify({"success": False, "error": "Database not available"})
-    
-    data = request.json
-    url = data.get("url", "")
-    title = data.get("title", "")
-    source_type = data.get("source_type", "")
-    
-    intel_db.ignore_item(url, title, source_type)
-    return jsonify({"success": True, "message": "Item ignored and hidden."})
-
-
-@app.route("/api/ignore-topic", methods=["POST"])
-def api_ignore_topic():
-    """Ignore all items associated with a topic cluster"""
-    if not intel_db:
-        return jsonify({"success": False, "error": "Database not available"})
-    
-    data = request.json
-    topic = data.get("topic", "")
-    items = data.get("items", [])
-    
-    for item in items:
-        url = item.get("url", "")
-        title = item.get("title", "")
-        source_type = item.get("source_type", "")
-        if url:
-            intel_db.ignore_item(url, title, source_type)
-            
-    try:
-        load_scored_data(force=True)
-    except Exception:
-        pass
-        
-    return jsonify({"success": True, "message": f"Topic '{topic}' and all {len(items)} items ignored."})
-
-
-@app.route("/api/ignored")
-def api_get_ignored():
-    """Get all ignored items"""
-    if not intel_db:
-        return jsonify({"items": []})
-    
-    return jsonify({"items": intel_db.get_ignored_items()})
-
-
-@app.route("/api/track", methods=["POST"])
-def api_track():
-    """Add a topic to track"""
-    if not intel_db:
-        return jsonify({"success": False, "error": "Database not available"})
-    
-    data = request.json
-    topic = data.get("topic", "")
-    reason = data.get("reason", "")
-    
-    if topic:
-        existing_topics = {item.get("topic") for item in intel_db.get_tracked_topics()}
-        intel_db.add_tracked_topic(topic, reason)
-        return jsonify({
-            "success": True,
-            "created": topic not in existing_topics,
-            "message": "Tracking topic." if topic not in existing_topics else "Topic already tracked.",
-        })
-    
-    return jsonify({"success": False, "error": "No topic provided"})
-
-
-@app.route("/api/track", methods=["GET"])
-def api_get_tracked():
-    """Get all tracked topics"""
-    if not intel_db:
-        return jsonify({"topics": []})
-    
-    return jsonify({"topics": intel_db.get_tracked_topics()})
-
-
-@app.route("/api/track/<int:topic_id>", methods=["DELETE"])
-def api_delete_track(topic_id):
-    """Remove a tracked topic"""
-    if not intel_db:
-        return jsonify({"success": False})
-    
-    intel_db.remove_tracked_topic(topic_id)
-    return jsonify({"success": True, "message": "Tracked topic removed."})
+# ── ignore/track routes: extracted to routes/api_saved.py ──────────────────
 
 
 @app.route("/api/source-health")
@@ -2863,6 +2651,12 @@ def api_analytics_simulate():
         return jsonify({"error": str(e)}), 500
 
 
+# ── Notion sync, Shorts repurposing, A/B testing ───────────────────────────
+# NOTE: routes/api_integrations.py exists but uses real Notion API (stricter).
+# The inline versions below use mock URLs and are what tests expect. 
+# TODO: migrate tests to expect real Notion API, then switch to blueprint.
+
+
 # ── Notion Sync Endpoint ──
 @app.route("/api/integrations/notion/sync", methods=["POST"])
 def api_integrations_notion_sync():
@@ -3004,7 +2798,6 @@ def api_integrations_ab_test():
     # End any active tests for this item first
     active_test = intel_db.get_active_ab_test(item_id)
     if active_test:
-        import time
         intel_db.update_ab_test_metrics(active_test["id"], status="completed", ended_at=time.time())
 
     test_id = intel_db.insert_ab_test({
@@ -3030,101 +2823,10 @@ def api_integrations_ab_test_active():
     return jsonify({"success": True, "test": test})
 
 
-# ── Codebase Graph (Understand Anything) Routes ──
-@app.route("/code-graph")
-@app.route("/code-graph/")
-def route_code_graph():
-    from flask import redirect
-    token = request.args.get("token")
-    if not token:
-        return redirect("/code-graph/?token=daily-dex-code-graph")
-    dist_dir = "/Users/sidhantamonkar/.understand-anything/repo/understand-anything-plugin/packages/dashboard/dist"
-    return send_from_directory(dist_dir, "index.html")
-
-
-@app.route("/assets/<path:path>")
-def route_code_graph_assets(path):
-    dist_dir = "/Users/sidhantamonkar/.understand-anything/repo/understand-anything-plugin/packages/dashboard/dist/assets"
-    return send_from_directory(dist_dir, path)
-
-
-@app.route("/favicon.svg")
-def route_code_graph_favicon():
-    dist_dir = "/Users/sidhantamonkar/.understand-anything/repo/understand-anything-plugin/packages/dashboard/dist"
-    import os
-    if os.path.exists(os.path.join(dist_dir, "favicon.svg")):
-        return send_from_directory(dist_dir, "favicon.svg")
-    return "", 404
-
-
-@app.route("/meta.json")
-@app.route("/config.json")
-@app.route("/knowledge-graph.json")
-@app.route("/diff-overlay.json")
-@app.route("/domain-graph.json")
-def route_code_graph_json():
-    # Only allow validated token
-    token = request.args.get("token")
-    if token != "daily-dex-code-graph":
-        return jsonify({"error": "Unauthorized"}), 401
-
-    filename = request.path.lstrip("/")
-    ua_dir = "/Users/sidhantamonkar/Documents/Projects/DailyDex/.understand-anything"
-    import os
-    file_path = os.path.join(ua_dir, filename)
-    if not os.path.exists(file_path):
-        return jsonify({}), 404
-    return send_from_directory(ua_dir, filename)
-
-
-@app.route("/file-content.json")
-def route_code_graph_file_content():
-    token = request.args.get("token")
-    if token != "daily-dex-code-graph":
-        return jsonify({"error": "Unauthorized"}), 401
-
-    file_path = request.args.get("path")
-    if not file_path:
-        return jsonify({"error": "Path parameter required"}), 400
-
-    project_root = "/Users/sidhantamonkar/Documents/Projects/DailyDex"
-    import os
-    abs_path = os.path.abspath(os.path.join(project_root, file_path))
-    if not abs_path.startswith(project_root):
-        return jsonify({"error": "Access denied"}), 403
-
-    if not os.path.exists(abs_path) or os.path.isdir(abs_path):
-        return jsonify({"error": "File not found"}), 404
-
-    try:
-        with open(abs_path, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read()
-    except Exception as e:
-        return jsonify({"error": f"Failed to read file: {str(e)}"}), 500
-
-    ext = os.path.splitext(file_path)[1].lstrip(".").lower()
-    lang_map = {
-        "py": "python",
-        "js": "javascript",
-        "jsx": "jsx",
-        "ts": "typescript",
-        "tsx": "tsx",
-        "html": "html",
-        "css": "css",
-        "json": "json",
-        "sh": "bash",
-        "md": "markdown",
-        "sql": "sql"
-    }
-    language = lang_map.get(ext, "text")
-
-    return jsonify({
-        "path": file_path,
-        "language": language,
-        "content": content,
-        "sizeBytes": os.path.getsize(abs_path),
-        "lineCount": len(content.splitlines())
-    })
+# ── Codebase Graph (Understand Anything) Routes ───────────────────────────
+# Extracted to routes/code_graph.py (uses env-overridable paths, not hardcoded)
+from routes.code_graph import code_graph_bp
+app.register_blueprint(code_graph_bp)
 
 
 if __name__ == "__main__":

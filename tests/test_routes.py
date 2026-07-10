@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 
 
@@ -115,10 +116,20 @@ def test_refresh_endpoint_success_and_failure_preserves_data(client, app_env, mo
         data_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
         app_env["module"].intel_db.update_source_health("github", True, item_count=1)
 
+    def poll_refresh_result(timeout_seconds=10.0):
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            status_payload = client.get("/api/refresh/status").get_json()
+            if not status_payload.get("running"):
+                return status_payload
+            time.sleep(0.05)
+        raise AssertionError("refresh did not finish within timeout")
+
     monkeypatch.setattr(fetch_news, "fetch_all", successful_refresh)
     refresh_response = client.post("/api/refresh")
     assert refresh_response.status_code == 200
-    refresh_payload = refresh_response.get_json()
+    assert refresh_response.get_json() == {"status": "running", "started": True}
+    refresh_payload = poll_refresh_result()
     assert refresh_payload["status"] in {"ok", "partial", "failed"}
     assert "source_health" in refresh_payload
     assert "message" in refresh_payload
@@ -130,8 +141,8 @@ def test_refresh_endpoint_success_and_failure_preserves_data(client, app_env, mo
 
     monkeypatch.setattr(fetch_news, "fetch_all", fail_refresh)
     failure_response = client.post("/api/refresh")
-    failure_payload = failure_response.get_json()
     assert failure_response.status_code == 200
+    failure_payload = poll_refresh_result()
     assert failure_payload["status"] == "failed"
     assert "Existing data preserved" in failure_payload["message"]
     assert (app_env["data_dir"] / "data.json").read_text(encoding="utf-8") == original_data
@@ -505,10 +516,10 @@ def test_codebase_graph_routes(client, app_env):
     assert client.get("/file-content.json?token=daily-dex-code-graph").status_code == 400
 
     # 6. Valid file content retrieval
-    content_resp = client.get("/file-content.json?token=daily-dex-code-graph&path=src/dashboard_new.py")
+    content_resp = client.get("/file-content.json?token=daily-dex-code-graph&path=src/routes/code_graph.py")
     assert content_resp.status_code == 200
     payload = content_resp.get_json()
-    assert payload["path"] == "src/dashboard_new.py"
+    assert payload["path"] == "src/routes/code_graph.py"
     assert payload["language"] == "python"
     assert "route_code_graph" in payload["content"]
     assert payload["sizeBytes"] > 0
