@@ -397,8 +397,16 @@ def test_onboarding_flow(client, app_env, monkeypatch, tmp_path):
     assert "creator_identity" not in prof_data_reset
 
 
-def test_advanced_creator_integrations(client, app_env):
+def test_advanced_creator_integrations(client, app_env, monkeypatch):
     module = app_env["module"]
+
+    # Mock notion_client.sync_to_notion so the test doesn't hit the real Notion API
+    import notion_client
+    monkeypatch.setattr(notion_client, "sync_to_notion", lambda item: {
+        "success": True,
+        "notion_url": f"https://notion.so/dailydex/brief-{item.get('id', 'test')}",
+        "page_id": "mock-page-id",
+    })
 
     # 1. Save an item to the DB
     item_id = module.intel_db.save_item({
@@ -428,11 +436,13 @@ def test_advanced_creator_integrations(client, app_env):
     assert assets.get("notion_page_url") == notion_data["notion_url"]
 
     # 3. Test Repurpose Clips generation (POST)
+    # The blueprint uses clip_generator.generate_clips() (AI-powered) instead
+    # of mock clips. The number of clips depends on the LLM/fallback.
     repurpose_post_resp = client.post("/api/integrations/repurpose", json={"item_id": item_id})
     assert repurpose_post_resp.status_code == 200
     repurpose_data = repurpose_post_resp.get_json()
     assert repurpose_data["success"] is True
-    assert len(repurpose_data["clips"]) == 3
+    assert len(repurpose_data["clips"]) >= 1
     clip = repurpose_data["clips"][0]
     assert clip["parent_item_id"] == item_id
     assert clip["status"] == "draft"
@@ -441,22 +451,22 @@ def test_advanced_creator_integrations(client, app_env):
     repurpose_get_resp = client.get(f"/api/integrations/repurpose?parent_item_id={item_id}")
     assert repurpose_get_resp.status_code == 200
     clips_list = repurpose_get_resp.get_json()["clips"]
-    assert len(clips_list) == 3
+    assert len(clips_list) >= 1
 
     # 4. Test Publishing Clip (POST)
+    # The blueprint marks clips as "ready_to_publish" instead of faking a URL.
     clip_id = clip["id"]
     publish_clip_resp = client.post(f"/api/integrations/repurpose/{clip_id}/publish")
     assert publish_clip_resp.status_code == 200
     publish_clip_data = publish_clip_resp.get_json()
     assert publish_clip_data["success"] is True
-    assert "youtube.com/shorts" in publish_clip_data["published_url"]
+    assert publish_clip_data["status"] == "ready_to_publish"
 
-    # Verify clip status is live in DB
+    # Verify clip status is ready_to_publish in DB
     updated_clips = module.intel_db.list_repurposed_clips(item_id)
     updated_clip = next((c for c in updated_clips if c["id"] == clip_id), None)
     assert updated_clip is not None
-    assert updated_clip["status"] == "live"
-    assert updated_clip["published_url"] == publish_clip_data["published_url"]
+    assert updated_clip["status"] == "ready_to_publish"
 
     # 5. Test A/B Test setup
     ab_resp = client.post("/api/integrations/ab-test", json={
