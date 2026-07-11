@@ -185,13 +185,14 @@ def test_get_hackernews(mock_get, tmp_path, monkeypatch):
     assert results[0]["title"] == "New AI Agent Released"
 
 @patch.object(fetch_news, "update_source_health")
+@patch.object(fetch_news, "get_reddit")
 @patch.object(fetch_news, "get_hackernews")
 @patch.object(fetch_news, "get_arxiv")
 @patch.object(fetch_news, "get_blogs")
 @patch.object(fetch_news, "get_huggingface")
 @patch.object(fetch_news, "get_github_trending")
 @patch.object(fetch_news, "get_youtube_feeds")
-def test_fetch_all(m_yt, m_gh, m_hf, m_bl, m_ar, m_hn, m_update_health, tmp_path, monkeypatch):
+def test_fetch_all(m_yt, m_gh, m_hf, m_bl, m_ar, m_hn, m_rd, m_update_health, tmp_path, monkeypatch):
     data_file = tmp_path / "data.json"
     monkeypatch.setattr(fetch_news, "DATA_FILE", str(data_file))
     
@@ -201,6 +202,7 @@ def test_fetch_all(m_yt, m_gh, m_hf, m_bl, m_ar, m_hn, m_update_health, tmp_path
     m_bl.return_value = [{"title": "bl"}]
     m_ar.return_value = [{"title": "ar"}]
     m_hn.return_value = [{"title": "hn"}]
+    m_rd.return_value = [{"title": "rd"}]
     
     # Fetch all
     last_updated = fetch_news.fetch_all()
@@ -211,7 +213,36 @@ def test_fetch_all(m_yt, m_gh, m_hf, m_bl, m_ar, m_hn, m_update_health, tmp_path
     
     assert len(saved_data["youtube"]) == 1
     assert saved_data["last_updated"] == last_updated
-    assert m_update_health.call_count == 6
+    assert m_update_health.call_count == 7
+    assert "reddit" in saved_data
+    assert len(saved_data["reddit"]) == 1
+
+
+@patch("requests.get")
+def test_get_reddit(mock_get, tmp_path, monkeypatch):
+    config_file = tmp_path / "config.json"
+    config_file.write_text(json.dumps({
+        "reddit": {"subreddits": ["LocalLLaMA"], "limit_per_subreddit": 3}
+    }))
+    monkeypatch.setattr(fetch_news, "CONFIG_FILE", str(config_file))
+
+    mock_res = MagicMock()
+    mock_res.json.return_value = {
+        "data": {
+            "children": [
+                {"data": {"title": "New local LLM runs on Pi", "score": 200, "num_comments": 50, "permalink": "/r/LocalLLaMA/comments/abc/new_llm", "created_utc": 1700000000}},
+                {"data": {"title": "Off-topic post about cooking", "score": 10, "num_comments": 2, "permalink": "/r/LocalLLaMA/comments/def/cooking", "created_utc": 1700000000}},
+            ]
+        }
+    }
+    mock_get.return_value = mock_res
+
+    results = fetch_news.get_reddit()
+    assert len(results) == 1
+    assert results[0]["title"] == "New local LLM runs on Pi"
+    assert results[0]["source"] == "Reddit r/LocalLLaMA"
+    assert results[0]["url"] == "https://www.reddit.com/r/LocalLLaMA/comments/abc/new_llm"
+    assert results[0]["score"] == 200
 
 @patch("fetch_news.get_intel_db")
 def test_update_source_health_exception(mock_db):

@@ -354,6 +354,64 @@ def get_hackernews():
     return results
 
 
+def get_reddit():
+    """Fetch top posts from configured AI/ML subreddits via public JSON API.
+
+    Uses reddit.com/<subreddit>/top.json which is publicly accessible without
+    OAuth. Returns items in the same format as other fetchers.
+    """
+    import requests
+
+    config = load_config()
+    reddit_cfg = config.get("reddit", {})
+    subreddits = reddit_cfg.get("subreddits", ["LocalLLaMA", "MachineLearning"])
+    limit_per_sub = reddit_cfg.get("limit_per_subreddit", 5)
+
+    variant_key = config.get("variant", "default")
+    variant_config = config.get("variants", {}).get(variant_key, {})
+    focus_kws = {kw.lower() for kw in variant_config.get("focus_keywords", [])}
+    base_kws = {
+        "ai", "ml", "llm", "gpt", "claude", "llama", "mcp", "agent",
+        "openai", "anthropic", "gemini", "deepmind", "reasoning model",
+        "open-source model", "neural", "deep learning", "machine learning",
+        "stable diffusion", "huggingface", "vector db", "rag", "copilot",
+        "cursor", "ollama", "vlm", "lmm", "self-host", "local",
+    }
+    keywords = base_kws.union(focus_kws)
+
+    results = []
+    headers = {"User-Agent": "DailyDex/1.0 (signal fetcher)"}
+
+    for sub in subreddits:
+        try:
+            url = f"https://www.reddit.com/r/{sub}/top.json?limit={limit_per_sub}&t=day"
+            r = requests.get(url, headers=headers, timeout=10)
+            r.raise_for_status()
+            data = r.json()
+            posts = data.get("data", {}).get("children", [])
+            for post in posts[:limit_per_sub]:
+                p = post.get("data", {})
+                title = p.get("title", "")
+                title_lower = title.lower()
+                if not any(kw in title_lower for kw in keywords):
+                    continue
+                permalink = p.get("permalink", "")
+                results.append({
+                    "source": f"Reddit r/{sub}",
+                    "title": title,
+                    "url": f"https://www.reddit.com{permalink}" if permalink else "",
+                    "score": p.get("score", 0),
+                    "comments": p.get("num_comments", 0),
+                    "published": datetime.fromtimestamp(p.get("created_utc", 0)).isoformat(),
+                    "type": "social",
+                })
+        except Exception as e:
+            print(f"  Reddit r/{sub}: {e}")
+
+    results.sort(key=lambda x: x.get("score", 0), reverse=True)
+    return results
+
+
 def fetch_all():
     print(f"[{datetime.now().strftime('%H:%M')}] Fetching AI news...")
 
@@ -450,10 +508,24 @@ def fetch_all():
         update_source_health("hackernews", False, len(cached), str(e), cache_age_seconds=cache_age)
         print(f"  Using cache: {len(cached)} items" + (" (stale)" if cached and not is_fresh else ""))
 
+    # Reddit
+    try:
+        new_data["reddit"] = get_reddit()
+        save_source_cache("reddit", new_data["reddit"])
+        update_source_health("reddit", True, len(new_data["reddit"]))
+        print(f"  Reddit: {len(new_data['reddit'])} items")
+    except Exception as e:
+        print(f"  Reddit failed: {e}")
+        cached, is_fresh = load_source_cache("reddit")
+        new_data["reddit"] = cached
+        cache_age = get_cache_age_seconds("reddit")
+        update_source_health("reddit", False, len(cached), str(e), cache_age_seconds=cache_age)
+        print(f"  Using cache: {len(cached)} items" + (" (stale)" if cached and not is_fresh else ""))
+
     # Deduplicate
     global _seen_fingerprints
     _seen_fingerprints = set()
-    for key in ["youtube", "github", "huggingface", "blogs", "papers", "hackernews"]:
+    for key in ["youtube", "github", "huggingface", "blogs", "papers", "hackernews", "reddit"]:
         items = new_data.get(key, [])
         deduplicated = [item for item in items if not is_duplicate(item)]
         new_data[key] = deduplicated
@@ -467,7 +539,7 @@ def fetch_all():
         json.dump(combined, f, indent=2)
 
     print(
-        f"Done: YT:{len(combined['youtube'])} GH:{len(combined['github'])} HF:{len(combined['huggingface'])} Blogs:{len(combined['blogs'])} Papers:{len(combined['papers'])} HN:{len(combined.get('hackernews', []))}"
+        f"Done: YT:{len(combined['youtube'])} GH:{len(combined['github'])} HF:{len(combined['huggingface'])} Blogs:{len(combined['blogs'])} Papers:{len(combined['papers'])} HN:{len(combined.get('hackernews', []))} RD:{len(combined.get('reddit', []))}"
     )
     return combined["last_updated"]
 
@@ -483,7 +555,7 @@ def merge_weekly_data(history, new_data):
     combined = new_data.copy()
 
     # Merge historical items that are within 7 days
-    for key in ["youtube", "github", "huggingface", "blogs", "papers", "hackernews"]:
+    for key in ["youtube", "github", "huggingface", "blogs", "papers", "hackernews", "reddit"]:
         if key not in combined:
             combined[key] = []
 
