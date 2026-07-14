@@ -84,7 +84,20 @@ def step_fetch() -> Dict[str, Any]:
     except Exception as exc:
         _log(f"  WARNING: cluster snapshot failed: {exc}")
 
-    return {"last_updated": last_updated, "scored_items": n}
+    benchmark_count = 0
+    try:
+        from data.fetch_benchmarks import fetch_benchmarks
+        if dd.intel_db is not None:
+            benchmark_count = fetch_benchmarks(db=dd.intel_db)
+            _log(f"  benchmarks refreshed: {benchmark_count} models")
+    except Exception as exc:
+        _log(f"  WARNING: benchmark refresh failed: {exc}")
+
+    return {
+        "last_updated": last_updated,
+        "scored_items": n,
+        "benchmarks": benchmark_count,
+    }
 
 
 def step_enrich() -> Dict[str, Any]:

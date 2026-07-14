@@ -90,6 +90,39 @@ def test_orchestrator_steps_exist():
     assert "--step" in content
 
 
+def test_orchestrator_fetch_refreshes_benchmarks(monkeypatch):
+    import orchestrator
+    import types
+
+    db = MagicMock()
+    dashboard = types.SimpleNamespace(
+        intel_db=db,
+        load_scored_data=lambda force=False: {"github": [{"title": "item"}]},
+    )
+    benchmark_fetcher = MagicMock(return_value=7)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "fetch_news",
+        types.SimpleNamespace(fetch_all=lambda: "now"),
+    )
+    monkeypatch.setitem(sys.modules, "dashboard_new", dashboard)
+    monkeypatch.setitem(
+        sys.modules,
+        "creator_intelligence",
+        types.SimpleNamespace(snapshot_clusters=lambda scored, intel_db: None),
+    )
+    monkeypatch.setattr(
+        "data.fetch_benchmarks.fetch_benchmarks",
+        benchmark_fetcher,
+    )
+
+    result = orchestrator.step_fetch()
+
+    benchmark_fetcher.assert_called_once_with(db=db)
+    assert result["benchmarks"] == 7
+
+
 def test_orchestrator_run_full_cycle_logic():
     """run_full_cycle logic: call all steps and collect results dict."""
     # Test the orchestration logic directly without importing the full orchestrator

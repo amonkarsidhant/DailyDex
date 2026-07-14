@@ -9,7 +9,49 @@ import re
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from data_models import IntelligenceDB
 
-def fetch_benchmarks():
+
+def parse_benchmarks(html):
+    """Extract model metrics from Artificial Analysis JSON-LD datasets."""
+    matches = re.findall(
+        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+        html,
+        re.DOTALL | re.IGNORECASE,
+    )
+    models = {}
+
+    for match in matches:
+        try:
+            data = json.loads(match)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if data.get("@type") != "Dataset":
+            continue
+
+        name = data.get("name")
+        for item in data.get("data") or []:
+            label = item.get("label")
+            if not label:
+                continue
+            metrics = models.setdefault(label, {})
+
+            if name == "Intelligence" and item.get("artificialAnalysisIntelligenceIndex") is not None:
+                metrics["intelligence"] = float(item["artificialAnalysisIntelligenceIndex"])
+            elif name == "Speed" and item.get("medianOutputSpeed") is not None:
+                metrics["speed"] = float(item["medianOutputSpeed"])
+            elif name == "Price" and item.get("pricePerMillionTokens") is not None:
+                metrics["price"] = float(item["pricePerMillionTokens"])
+            elif name == "Pricing: Cache Hit, Input, and Output":
+                prices = {
+                    value.get("name"): value.get("value")
+                    for value in item.get("pricing") or []
+                }
+                if prices.get("outputPrice") is not None:
+                    metrics["price"] = float(prices["outputPrice"])
+
+    return models
+
+
+def fetch_benchmarks(db=None):
     print("Fetching Artificial Analysis benchmarks...")
     headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/115.0"}
     try:
@@ -17,39 +59,14 @@ def fetch_benchmarks():
         r.raise_for_status()
     except Exception as e:
         print(f"Error fetching URL: {e}")
-        return
+        return 0
 
-    # Use regex to find all JSON-LD blocks
-    matches = re.findall(r'<script type="application/ld\+json">(.*?)</script>', r.text, re.DOTALL)
-    
-    models = {}
-
-    for match in matches:
-        try:
-            data = json.loads(match)
-            if data.get("@type") == "Dataset" and "data" in data:
-                name = data.get("name")
-                for item in data["data"]:
-                    label = item.get("label")
-                    if not label:
-                        continue
-                    if label not in models:
-                        models[label] = {}
-                    
-                    if name == "Intelligence" and "artificialAnalysisIntelligenceIndex" in item:
-                        models[label]["intelligence"] = float(item["artificialAnalysisIntelligenceIndex"])
-                    elif name == "Speed" and "medianOutputSpeed" in item:
-                        models[label]["speed"] = float(item["medianOutputSpeed"])
-                    elif name == "Price" and "pricePerMillionTokens" in item:
-                        models[label]["price"] = float(item["pricePerMillionTokens"])
-        except Exception:
-            continue
-            
+    models = parse_benchmarks(r.text)
     if not models:
         print("No models found in JSON-LD.")
-        return
-        
-    db = IntelligenceDB()
+        return 0
+
+    db = db or IntelligenceDB()
     count = 0
     for model_name, metrics in models.items():
         if "intelligence" in metrics or "speed" in metrics or "price" in metrics:
@@ -61,8 +78,9 @@ def fetch_benchmarks():
             )
             count += 1
             print(f"Upserted {model_name}: {metrics}")
-            
+
     print(f"Successfully upserted {count} AI benchmarks.")
+    return count
 
 if __name__ == "__main__":
     fetch_benchmarks()
