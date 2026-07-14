@@ -103,6 +103,24 @@ class EnrichmentService:
     def stop(self) -> None:
         self._stop.set()
 
+    def run_once(self, timeout: float = 120) -> int:
+        """Process all queued items synchronously (no background thread).
+
+        Used by the orchestrator and Vercel cron to run enrichment in a
+        single-shot mode. Returns the number of items processed.
+        """
+        processed = 0
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                job = self._queue.get(timeout=1.0)
+            except queue.Empty:
+                break
+            self._process_job(job)
+            self._queue.task_done()
+            processed += 1
+        return processed
+
     # -- public API ----------------------------------------------------
 
     def is_cached(self, hash_: str) -> bool:

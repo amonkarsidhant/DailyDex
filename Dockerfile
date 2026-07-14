@@ -1,16 +1,8 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
-# Curl for the healthcheck; nodejs+npm so the Gemini CLI can run inside the
-# container the same way it runs on a Raspberry Pi 4. Set DAILYDEX_SKIP_GEMINI=1
-# at build time to skip the CLI install (useful for CI or Ollama-only setups).
-ARG DAILYDEX_SKIP_GEMINI=0
+# curl for healthcheck, git for any pip installs from git
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
-    && if [ "$DAILYDEX_SKIP_GEMINI" = "0" ]; then \
-         curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-         && apt-get install -y --no-install-recommends nodejs \
-         && npm install -g @google/gemini-cli ; \
-       fi \
+    && apt-get install -y --no-install-recommends curl ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -18,14 +10,14 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Application modules
+# Application code
 COPY src ./src
 COPY config.json ./
-ENV PYTHONPATH=/app/src
-COPY v0.1 ./v0.1
 COPY config ./config
+ENV PYTHONPATH=/app/src
 
-RUN mkdir -p /app/data/cache /app/data/digests /app/data/research_packs
+# Data directories (mounted as volume in production)
+RUN mkdir -p /app/data/cache /app/data/digests /app/data/research_packs /app/data/settings
 
 EXPOSE 8888
 
@@ -38,16 +30,15 @@ ENV DB_PATH=/app/data/intelligence.db
 ENV RESEARCH_PACK_DIR=/app/data/research_packs
 ENV DAILYDEX_SETTINGS_DIR=/app/data/settings
 ENV CREATOR_PROFILE_PATH=/app/data/creator_profile.json
-# Single Gunicorn worker by default: the creator-enrichment background thread
-# is per-process, so multiple workers would mean multiple queues and duplicate
-# Gemini subprocess calls. Override GUNICORN_WORKERS only if you also disable
-# the enricher in the extra workers (CREATOR_ENRICHER_PRIMARY=0).
+
+# Single Gunicorn worker: the creator-enrichment background thread
+# is per-process. The orchestrator (orchestrator.py) runs as a sidecar
+# container via docker-compose, not inside gunicorn.
 ENV GUNICORN_WORKERS=1
 ENV GUNICORN_TIMEOUT=180
 ENV CREATOR_ENRICHER_PRIMARY=1
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8888/health || exit 1
 
 CMD ["sh", "-c", "gunicorn -b 0.0.0.0:8888 -w ${GUNICORN_WORKERS:-1} --timeout ${GUNICORN_TIMEOUT:-180} src.dashboard_new:app"]

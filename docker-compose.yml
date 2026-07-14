@@ -1,0 +1,40 @@
+services:
+  # ── Web app (Flask + gunicorn) ─────────────────────────────────────────────
+  web:
+    build: .
+    ports:
+      - "8888:8888"
+    volumes:
+      - dailydex-data:/app/data
+    env_file: .env
+    environment:
+      - CREATOR_ENRICHER_PRIMARY=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Orchestrator (autonomous pipeline daemon) ─────────────────────────────
+  # Runs fetch → score → enrich → studio → notion-sync on a schedule.
+  # Shares the same data volume as the web app.
+  orchestrator:
+    build: .
+    command: python src/orchestrator.py --daemon
+    volumes:
+      - dailydex-data:/app/data
+    env_file: .env
+    environment:
+      - CREATOR_ENRICHER_PRIMARY=0
+      - ORCH_FETCH_INTERVAL=7200
+      - ORCH_STUDIO_INTERVAL=21600
+      - ORCH_TOP_N=3
+      - ORCH_NOTION_SYNC=1
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+
+volumes:
+  dailydex-data:
