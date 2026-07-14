@@ -26,14 +26,22 @@ def test_query_nvidia_prefers_provider_specific_model(monkeypatch):
 def test_studio_nvidia_prefers_environment_model_over_profile(monkeypatch):
     monkeypatch.setenv("NVIDIA_MODEL", "meta/llama-3.3-70b-instruct")
     monkeypatch.setattr(
-        cli_registry,
-        "_get_profile_model",
-        lambda provider, fallback: "stepfun-ai/step-3.5-flash",
+        llm_summary,
+        "load_creator_profile",
+        lambda: {
+            "copilot": {
+                "provider": "nvidia",
+                "model": "stepfun-ai/step-3.5-flash",
+            }
+        },
     )
     query = MagicMock(return_value="working")
     monkeypatch.setattr(llm_summary, "query_nvidia", query)
 
-    result = cli_registry._nvidia_gen("hello", "system", timeout=30)
+    result = cli_registry.generate(
+        "hello", "system", prefer="nvidia", timeout=30
+    )
 
-    assert result == "working"
+    assert result["text"] == "working"
+    assert result["model"] == "meta/llama-3.3-70b-instruct"
     assert query.call_args.kwargs["model"] == "meta/llama-3.3-70b-instruct"

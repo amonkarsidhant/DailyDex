@@ -116,6 +116,9 @@ def _combine(prompt: str, system: Optional[str]) -> str:
 
 def _get_profile_model(provider_name: str, fallback_model: str) -> str:
     """Helper to dynamically fetch model specified in creator_profile.json."""
+    if provider_name == "nvidia" and os.environ.get("NVIDIA_MODEL"):
+        return os.environ["NVIDIA_MODEL"]
+
     prof_data = None
     try:
         import llm_summary
@@ -276,7 +279,7 @@ def _nvidia_detect() -> bool:
 def _nvidia_gen(prompt: str, system: Optional[str], timeout: int) -> Optional[str]:
     try:
         import llm_summary
-        model = os.environ.get("NVIDIA_MODEL", "") or _get_profile_model("nvidia", "")
+        model = _get_profile_model("nvidia", "")
         return llm_summary.query_nvidia(prompt, system, model=model)
     except Exception:
         return None
