@@ -16,12 +16,16 @@ os.environ.setdefault("CREATOR_ENRICHER_PRIMARY", "0")
 os.environ.setdefault("VERCEL", "1")
 
 from flask import Flask, jsonify
+from cron_security import require_cron_secret
 
 cron_app = Flask(__name__)
 
 @cron_app.route("/api/cron/fetch", methods=["GET", "POST"])
 def run_fetch():
     """Vercel Cron: fetch + score latest intelligence items."""
+    auth_error = require_cron_secret()
+    if auth_error:
+        return auth_error
     try:
         # Import the refresh logic from the main app
         from dashboard_new import run_refresh

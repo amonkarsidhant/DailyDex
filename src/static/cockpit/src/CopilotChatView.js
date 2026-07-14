@@ -111,7 +111,7 @@ const CopilotChatView = () => {
     children: m.text
   } : {
     dangerouslySetInnerHTML: {
-      __html: window.marked ? window.marked.parse(m.text) : m.text
+      __html: safeMarkdown(m.text)
     }
   })), m.model && /*#__PURE__*/React.createElement("span", {
     className: "mono",

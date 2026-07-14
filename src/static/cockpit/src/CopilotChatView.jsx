@@ -92,7 +92,7 @@ const CopilotChatView = () => {
                   boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                   backdropFilter: m.role === "user" ? "none" : "blur(8px)"
                 }}
-                {...(m.role === "user" ? { children: m.text } : { dangerouslySetInnerHTML: { __html: window.marked ? window.marked.parse(m.text) : m.text } })}
+                {...(m.role === "user" ? { children: m.text } : { dangerouslySetInnerHTML: { __html: safeMarkdown(m.text) } })}
               />
               {m.model && (
                 <span className="mono" style={{ fontSize: 8.5, color: "var(--text-lo)", marginTop: 4 }}>

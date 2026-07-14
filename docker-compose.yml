@@ -3,12 +3,13 @@ services:
   web:
     build: .
     ports:
-      - "8888:8888"
+      - "127.0.0.1:8888:8888"
     volumes:
       - dailydex-data:/app/data
     env_file: .env
     environment:
       - CREATOR_ENRICHER_PRIMARY=0
+      - DAILYDEX_PRODUCTION=1
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
@@ -27,6 +28,7 @@ services:
     env_file: .env
     environment:
       - CREATOR_ENRICHER_PRIMARY=1
+      - DAILYDEX_PRODUCTION=1
       - ORCH_FETCH_INTERVAL=7200
       - ORCH_STUDIO_INTERVAL=21600
       - ORCH_TOP_N=3

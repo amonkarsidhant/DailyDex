@@ -15,6 +15,19 @@ def test_dockerfile_packages_runtime_files():
     assert "COPY data_scored.json" not in dockerfile
 
 
+def test_compose_binds_web_only_to_loopback():
+    compose = (REPO_DIR / "docker-compose.yml").read_text(encoding="utf-8")
+    assert '"127.0.0.1:8888:8888"' in compose
+    assert '"8888:8888"' not in compose
+    assert "DAILYDEX_PRODUCTION=1" in compose
+
+
+def test_docker_context_excludes_secrets():
+    dockerignore = (REPO_DIR / ".dockerignore").read_text(encoding="utf-8")
+    assert ".env" in dockerignore
+    assert ".git" in dockerignore
+
+
 def test_readme_uses_data_volume_and_env_vars():
     readme = (REPO_DIR / "README.md").read_text(encoding="utf-8")
     assert "-v $(pwd)/data:/app/data" in readme

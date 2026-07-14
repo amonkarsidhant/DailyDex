@@ -12,14 +12,7 @@
 
 /** Render a markdown string safely using the globally-loaded marked lib. */
 const renderMd = text => {
-  if (!text) return "";
-  if (window.marked) {
-    try {
-      return window.marked.parse(text);
-    } catch (_) {}
-  }
-  // Minimal fallback: bold, code, line breaks
-  return text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/`(.+?)`/g, "<code>$1</code>").replace(/\n/g, "<br/>");
+  return safeMarkdown(text);
 };
 
 /**

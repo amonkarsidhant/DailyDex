@@ -118,7 +118,8 @@ The visual concept generator produces optimized thumbnail mockups per topic clus
 docker build -t dailydex .
 
 docker run -d --name dailydex \
-  -p 8888:8888 \
+  -p 127.0.0.1:8888:8888 \
+  --env-file .env \
   -v $(pwd)/data:/app/data \
   -e DATA_DIR=/app/data \
   -e DB_PATH=/app/data/intelligence.db \
@@ -129,7 +130,10 @@ docker run -d --name dailydex \
   --restart unless-stopped \
   dailydex
 ```
-Open `http://localhost:8888` → you'll land on the onboarding wizard.
+For local HTTP only, set `SESSION_COOKIE_SECURE=0`, then open `http://localhost:8888`.
+Public deployments must keep port 8888 loopback-only, use an HTTPS reverse proxy,
+and configure the authentication variables in `.env.example`. The first account
+requires `AUTH_INVITE_CODE`; registration closes automatically after it is created.
 
 ### Local Python Setup
 

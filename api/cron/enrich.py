@@ -16,6 +16,7 @@ os.environ.setdefault("CREATOR_ENRICHER_PRIMARY", "0")
 os.environ.setdefault("VERCEL", "1")
 
 from flask import Flask, jsonify
+from cron_security import require_cron_secret
 
 # Minimal Flask app just for this cron endpoint
 cron_app = Flask(__name__)
@@ -23,6 +24,9 @@ cron_app = Flask(__name__)
 @cron_app.route("/api/cron/enrich", methods=["GET", "POST"])
 def run_enrich():
     """Vercel Cron: process one round of creator enrichment."""
+    auth_error = require_cron_secret()
+    if auth_error:
+        return auth_error
     try:
         from data_models import IntelligenceDB
         from creator_enricher import EnrichmentService

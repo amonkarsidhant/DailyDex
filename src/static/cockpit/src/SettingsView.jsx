@@ -16,7 +16,7 @@ const SettingsView = () => {
   const [identity, setIdentity] = React.useState(window.DD_DATA?.creator_identity || {});
 
   const handleResetOnboarding = async () => {
-    if (!confirm("Are you sure you want to sign out and reset your creator onboarding? This will clear your linked identity and restart the wizard.")) return;
+    if (!confirm("Reset the creator setup? This clears the linked creator identity and restarts the onboarding wizard, but keeps your login account.")) return;
     try {
       const resp = await fetch("/api/onboarding/reset", { method: "POST" });
       if (resp.ok) {
@@ -24,6 +24,16 @@ const SettingsView = () => {
       } else {
         alert("Failed to reset onboarding");
       }
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      const resp = await fetch("/logout", { method: "POST" });
+      if (resp.ok) window.location.assign("/login");
+      else alert("Failed to sign out");
     } catch (e) {
       alert("Error: " + e.message);
     }
@@ -261,14 +271,17 @@ const SettingsView = () => {
                 )}
               </div>
             </div>
-            <button className="btn danger" onClick={handleResetOnboarding} style={{
-              background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.3)",
-              color: "var(--signal-down)", cursor: "pointer", padding: "8px 14px", borderRadius: 6,
-              fontWeight: 600, transition: "background 150ms"
-            }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255,107,107,0.18)"}
-               onMouseLeave={e => e.currentTarget.style.background = "rgba(255,107,107,0.1)"}>
-              Sign Out & Reset
-            </button>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <button className="btn ghost" onClick={handleResetOnboarding}>Reset creator setup</button>
+              <button className="btn danger" onClick={handleLogout} style={{
+                background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.3)",
+                color: "var(--signal-down)", cursor: "pointer", padding: "8px 14px", borderRadius: 6,
+                fontWeight: 600, transition: "background 150ms"
+              }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255,107,107,0.18)"}
+                 onMouseLeave={e => e.currentTarget.style.background = "rgba(255,107,107,0.1)"}>
+                Sign out
+              </button>
+            </div>
           </div>
         </div>
       )}

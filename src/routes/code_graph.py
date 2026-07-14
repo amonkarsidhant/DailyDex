@@ -18,12 +18,22 @@ UA_DASHBOARD_DIST = os.environ.get(
         "~/.understand-anything/repo/understand-anything-plugin/packages/dashboard/dist"
     ),
 )
-CODE_GRAPH_TOKEN = os.environ.get("CODE_GRAPH_TOKEN", "daily-dex-code-graph")
+PRODUCTION = os.environ.get("DAILYDEX_PRODUCTION", "0") == "1"
+CODE_GRAPH_ENABLED = os.environ.get("CODE_GRAPH_ENABLED", "0" if PRODUCTION else "1") == "1"
+CODE_GRAPH_TOKEN = os.environ.get(
+    "CODE_GRAPH_TOKEN", "" if PRODUCTION else "daily-dex-code-graph"
+)
+
+
+def _code_graph_available():
+    return CODE_GRAPH_ENABLED and bool(CODE_GRAPH_TOKEN)
 
 
 @code_graph_bp.route("/code-graph")
 @code_graph_bp.route("/code-graph/")
 def route_code_graph():
+    if not _code_graph_available():
+        return jsonify({"error": "code graph disabled"}), 404
     token = request.args.get("token")
     if not token:
         return redirect(f"/code-graph/?token={CODE_GRAPH_TOKEN}")
@@ -34,6 +44,8 @@ def route_code_graph():
 
 @code_graph_bp.route("/assets/<path:path>")
 def route_code_graph_assets(path):
+    if not _code_graph_available():
+        return "", 404
     assets_dir = os.path.join(UA_DASHBOARD_DIST, "assets")
     if not os.path.isdir(assets_dir):
         return "", 404
@@ -42,6 +54,8 @@ def route_code_graph_assets(path):
 
 @code_graph_bp.route("/favicon.svg")
 def route_code_graph_favicon():
+    if not _code_graph_available():
+        return "", 404
     if os.path.exists(os.path.join(UA_DASHBOARD_DIST, "favicon.svg")):
         return send_from_directory(UA_DASHBOARD_DIST, "favicon.svg")
     return "", 404
@@ -53,6 +67,8 @@ def route_code_graph_favicon():
 @code_graph_bp.route("/diff-overlay.json")
 @code_graph_bp.route("/domain-graph.json")
 def route_code_graph_json():
+    if not _code_graph_available():
+        return jsonify({"error": "code graph disabled"}), 404
     # Only allow validated token
     token = request.args.get("token")
     if token != CODE_GRAPH_TOKEN:
@@ -67,6 +83,8 @@ def route_code_graph_json():
 
 @code_graph_bp.route("/file-content.json")
 def route_code_graph_file_content():
+    if not _code_graph_available():
+        return jsonify({"error": "code graph disabled"}), 404
     token = request.args.get("token")
     if token != CODE_GRAPH_TOKEN:
         return jsonify({"error": "Unauthorized"}), 401
@@ -76,7 +94,7 @@ def route_code_graph_file_content():
         return jsonify({"error": "Path parameter required"}), 400
 
     abs_path = os.path.abspath(os.path.join(BASE_DIR, file_path))
-    if not abs_path.startswith(BASE_DIR):
+    if os.path.commonpath((BASE_DIR, abs_path)) != BASE_DIR:
         return jsonify({"error": "Access denied"}), 403
 
     if not os.path.exists(abs_path) or os.path.isdir(abs_path):

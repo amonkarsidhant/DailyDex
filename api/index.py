@@ -24,6 +24,7 @@ if SRC_DIR not in sys.path:
 # On Vercel, disable the background enrichment thread — it runs via cron instead.
 os.environ.setdefault("CREATOR_ENRICHER_PRIMARY", "0")
 os.environ.setdefault("VERCEL", "1")
+os.environ.setdefault("DAILYDEX_PRODUCTION", "1")
 
 # Import the Flask application object.
 from dashboard_new import app  # noqa: F401 — Vercel picks up the `app` name

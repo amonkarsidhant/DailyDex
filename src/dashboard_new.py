@@ -274,6 +274,8 @@ app.config["RESEARCH_PACK_DIR"] = RESEARCH_PACK_DIR
 app.config["DASH"] = sys.modules[__name__]
 app.config["AGENT_RUNNER"] = agent_runner
 app.config["ENRICHMENT_SERVICE"] = enrichment_service
+from routes.api_auth import init_auth
+init_auth(app, DB_PATH)
 try:
     from routes.api_factory import factory_bp
     app.register_blueprint(factory_bp)

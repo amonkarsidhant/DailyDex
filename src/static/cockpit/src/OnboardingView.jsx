@@ -41,6 +41,11 @@ const OnboardingView = ({ onComplete }) => {
 
   const logsEndRef = useRef(null);
 
+  const handleLogout = async () => {
+    const resp = await fetch("/logout", { method: "POST" });
+    if (resp.ok) window.location.assign("/login");
+  };
+
   // Auto-scroll logs
   useEffect(() => {
     if (logsEndRef.current) {
@@ -210,6 +215,9 @@ const OnboardingView = ({ onComplete }) => {
         position: "relative", overflow: "hidden",
         display: "flex", flexDirection: "column"
       }}>
+        <button className="btn ghost" onClick={handleLogout} style={{ position: "absolute", top: 12, right: 12, zIndex: 2 }}>
+          Sign out
+        </button>
         {/* Glow Header Accent */}
         <div style={{
           height: 3,

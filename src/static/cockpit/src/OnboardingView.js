@@ -40,6 +40,12 @@ const OnboardingView = ({
   const [bootProgress, setBootProgress] = useState(0);
   const [bootComplete, setBootComplete] = useState(false);
   const logsEndRef = useRef(null);
+  const handleLogout = async () => {
+    const resp = await fetch("/logout", {
+      method: "POST"
+    });
+    if (resp.ok) window.location.assign("/login");
+  };
 
   // Auto-scroll logs
   useEffect(() => {
@@ -253,7 +259,16 @@ const OnboardingView = ({
       display: "flex",
       flexDirection: "column"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn ghost",
+    onClick: handleLogout,
+    style: {
+      position: "absolute",
+      top: 12,
+      right: 12,
+      zIndex: 2
+    }
+  }, "Sign out"), /*#__PURE__*/React.createElement("div", {
     style: {
       height: 3,
       background: "linear-gradient(90deg, var(--signal) 0%, var(--signal-hot) 50%, var(--signal-cool) 100%)"

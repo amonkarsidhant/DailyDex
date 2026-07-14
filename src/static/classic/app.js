@@ -13,6 +13,15 @@ const LIVE_POLL_VISIBLE_MS = 60000;
 const LIVE_POLL_HIDDEN_MS = 180000;
 const VIEW_TABS = ['github', 'models', 'research'];
 
+function escapeHTML(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 function toggleSidebar() {
     var sidebar = document.querySelector('.sidebar');
     var toggle = document.querySelector('.sidebar-toggle');
@@ -1131,10 +1140,10 @@ function showToast(title, message, type = 'success') {
     toast.innerHTML = `
         <div class="toast-header">
             ${icons[type] || icons.success}
-            <div class="toast-title">${title}</div>
+            <div class="toast-title">${escapeHTML(title)}</div>
             <button class="toast-close" onclick="dismissToast(this)">×</button>
         </div>
-        <div class="toast-message">${message}</div>
+        <div class="toast-message">${escapeHTML(message)}</div>
     `;
     
     container.appendChild(toast);
@@ -1999,7 +2008,7 @@ async function loadOverviewEtfStrip() {
                 var cls = e.change_pct >= 0 ? 'up' : 'down';
                 var arrow = e.change_pct >= 0 ? '▲' : '▼';
                 return '<div class="etf-item">' +
-                    '<span class="etf-ticker">' + e.ticker + '</span>' +
+                    '<span class="etf-ticker">' + escapeHTML(e.ticker) + '</span>' +
                     '<span class="etf-price">$' + e.price.toFixed(2) + '</span>' +
                     '<span class="stock-change ' + cls + '">' + arrow + ' ' + Math.abs(e.change_pct).toFixed(2) + '%</span>' +
                     '</div>';
@@ -2052,8 +2061,8 @@ async function refreshForgeStudio() {
             card.onclick = () => selectForgeItem(item);
             
             card.innerHTML = `
-                <div class="forge-item-title">${item.working_title || item.title}</div>
-                <div class="forge-item-meta">${item.category} • ${item.source}</div>
+                <div class="forge-item-title">${escapeHTML(item.working_title || item.title)}</div>
+                <div class="forge-item-meta">${escapeHTML(item.category)} • ${escapeHTML(item.source)}</div>
             `;
             list.appendChild(card);
         });

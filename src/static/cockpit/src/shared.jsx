@@ -1,5 +1,22 @@
 // Shared primitives: Sparkline, ScoreBar, SourcePulse, SignalRing, SourceChip, RadarPlot
 
+const escapeHtml = (value) => String(value || "")
+  .replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;")
+  .replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;")
+  .replace(/'/g, "&#039;");
+
+const safeMarkdown = (value) => {
+  const source = String(value || "");
+  if (!window.marked || !window.DOMPurify) return escapeHtml(source).replace(/\n/g, "<br/>");
+  try {
+    return window.DOMPurify.sanitize(window.marked.parse(source), { USE_PROFILES: { html: true } });
+  } catch (_) {
+    return escapeHtml(source).replace(/\n/g, "<br/>");
+  }
+};
+
 const SourceChip = ({ src, size = "sm" }) => {
   const S = window.DD_DATA.SOURCES[src];
   if (!S) return null;
@@ -242,4 +259,3 @@ Object.assign(window, {
   SourceChip, Sparkline, ScoreBar, Momentum, SourceStack,
   Waveform, FakeThumb, FormatBadge, KPI, PanelHeader, downloadScript,
 });
-

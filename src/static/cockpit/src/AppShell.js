@@ -630,7 +630,7 @@ const EditorialBoard = () => {
   // Use a ref to manage innerHTML lifecycle and prevent detached DOM leaks
   useEffect(() => {
     if (briefingRef.current && briefing?.briefing) {
-      briefingRef.current.innerHTML = window.marked ? window.marked.parse(briefing.briefing) : briefing.briefing;
+      briefingRef.current.innerHTML = safeMarkdown(briefing.briefing);
     }
     return () => {
       if (briefingRef.current) briefingRef.current.innerHTML = '';
