@@ -29,6 +29,7 @@ def auth_app(tmp_path, monkeypatch):
     monkeypatch.setenv("AUTH_INVITE_CODE", "invite-code-with-32-safe-characters")
     monkeypatch.setenv("AUTH_ALLOW_SIGNUP", "1")
     monkeypatch.setenv("SESSION_COOKIE_SECURE", "1")
+    monkeypatch.setenv("DAILYDEX_ALLOWED_HOSTS", "dailydex.test")
 
     app = Flask(
         __name__,
@@ -84,6 +85,7 @@ def test_anonymous_requests_are_denied_but_health_is_public(auth_app):
     static = client.get("/static/auth-client.js", base_url=HTTPS)
     assert static.status_code == 401
     assert client.get("/health", base_url=HTTPS).status_code == 200
+    assert client.get("/login", base_url="https://evil.example").status_code == 400
 
 
 def test_invite_signup_hashes_password_and_closes_registration(auth_app):

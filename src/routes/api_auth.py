@@ -393,6 +393,8 @@ def init_auth(app, db_path: str) -> None:
 
     @app.before_request
     def require_authentication():
+        if request.routing_exception is not None:
+            raise request.routing_exception
         endpoint = request.endpoint or ""
         if request.method == "OPTIONS":
             return None
