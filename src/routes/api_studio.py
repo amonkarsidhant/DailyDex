@@ -71,18 +71,19 @@ def api_studio_run():
     body = request.get_json(silent=True) or {}
     top_n = int(body.get("top_n", 0)) or None
     slugs = body.get("slugs") or None
+    intel_db = _db()
+    _studio_run_state.update(running=True, started_at=datetime.now().isoformat())
 
     def _runner():
         global _studio_logs
         with _studio_sub_lock:
             _studio_logs.clear()
         add_studio_log("Factory run started.")
-        _studio_run_state.update(running=True, started_at=datetime.now().isoformat())
         try:
             import studio_job
 
             _studio_run_state["last"] = studio_job.run(
-                intel_db=_db(), top_n=top_n, slugs=slugs, log_fn=add_studio_log
+                intel_db=intel_db, top_n=top_n, slugs=slugs, log_fn=add_studio_log
             )
             add_studio_log("Factory run completed.")
         except Exception as exc:

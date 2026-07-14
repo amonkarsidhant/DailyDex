@@ -133,6 +133,35 @@ def test_run_does_not_duplicate_existing_pipeline_story(
     assert res["pipeline_saved"] == 0
     mock_db.save_item.assert_not_called()
 
+
+def test_api_studio_run_retains_db_outside_request_context(app_env, monkeypatch):
+    import routes.api_studio as api_studio
+
+    captured = {}
+
+    class DeferredThread:
+        def __init__(self, target, **kwargs):
+            captured["target"] = target
+
+        def start(self):
+            pass
+
+    run = MagicMock(return_value={"ok": True, "pipeline_saved": 1})
+    monkeypatch.setattr(api_studio.threading, "Thread", DeferredThread)
+    monkeypatch.setattr(studio_job, "run", run)
+    api_studio._studio_run_state.update(running=False, started_at=None, last=None)
+
+    client = app_env["module"].app.test_client()
+    response = client.post("/api/studio/run", json={"slugs": ["coding-ai"]})
+
+    assert response.status_code == 200
+    assert response.get_json() == {"status": "started"}
+    captured["target"]()
+    assert run.call_args.kwargs["intel_db"] is app_env["module"].intel_db
+    assert run.call_args.kwargs["slugs"] == ["coding-ai"]
+    assert api_studio._studio_run_state["last"]["pipeline_saved"] == 1
+
+
 @patch("cli_registry.available_providers")
 def test_run_no_providers(mock_avail):
     mock_avail.return_value = []
