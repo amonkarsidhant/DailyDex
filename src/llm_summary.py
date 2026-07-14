@@ -316,8 +316,12 @@ def query_nvidia(prompt: str, system_prompt: Optional[str] = None,
     if not key:
         print("NVIDIA NIM: no API key set")
         return None
-    url = get_llm_setting("LLM_BASE_URL", "") or "https://integrate.api.nvidia.com/v1"
-    resolved_model = model or get_llm_setting("LLM_MODEL", "minimaxai/minimax-m2.7")
+    url = get_llm_setting("LLM_BASE_URL", "") or NVIDIA_BASE_URL
+    resolved_model = (
+        model
+        or get_llm_setting("NVIDIA_MODEL", "")
+        or get_llm_setting("LLM_MODEL", NVIDIA_MODEL)
+    )
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})

@@ -63,17 +63,75 @@ def test_run_success(mock_avail, mock_gen_fmt, mock_profile, mock_clusters, monk
     mock_clusters.return_value = [{"slug": "s1", "topic": "T1"}]
     mock_profile.return_value = {}
     
-    mock_gen_fmt.return_value = {"ok": True, "provider": "mock", "elapsed_ms": 100}
+    mock_gen_fmt.return_value = {
+        "ok": True,
+        "body": "Generated content",
+        "provider": "mock",
+        "model": "mock-model",
+        "elapsed_ms": 100,
+    }
     
     mock_db = MagicMock()
+    mock_db.get_saved_items.return_value = []
+    mock_db.studio_get_story.return_value = [
+        {
+            "fmt": "video",
+            "body": "Generated video script",
+            "provider": "mock",
+            "model": "mock-model",
+            "status": "ready",
+        },
+        {
+            "fmt": "blog",
+            "body": "Generated blog",
+            "provider": "mock",
+            "model": "mock-model",
+            "status": "ready",
+        },
+    ]
+    mock_db.save_item.return_value = 42
     
     res = studio_job.run(intel_db=mock_db, top_n=1)
     
     assert res["ok"] is True
     assert res["stories"] == 1
+    assert res["pipeline_saved"] == 1
     # Check that formats were generated
     assert mock_gen_fmt.called
     assert mock_db.studio_save_result.called
+    saved_payload = mock_db.save_item.call_args.args[0]
+    assert saved_payload["status"] == "script_ready"
+    assert saved_payload["pipeline_type"] == "creator"
+    assert saved_payload["format"] == "video"
+    assert saved_payload["notes"] == "Generated video script"
+    mock_db.set_production_assets.assert_called_once()
+
+
+@patch("studio_job.build_topic_clusters")
+@patch("studio.load_profile")
+@patch("studio.generate_format")
+@patch("cli_registry.available_providers")
+def test_run_does_not_duplicate_existing_pipeline_story(
+    mock_avail, mock_gen_fmt, mock_profile, mock_clusters
+):
+    mock_avail.return_value = ["mock_provider"]
+    mock_clusters.return_value = [{"slug": "s1", "topic": "T1"}]
+    mock_profile.return_value = {}
+    mock_gen_fmt.return_value = {
+        "ok": True,
+        "body": "Generated content",
+        "provider": "mock",
+        "model": "mock-model",
+        "elapsed_ms": 100,
+    }
+
+    mock_db = MagicMock()
+    mock_db.get_saved_items.return_value = [{"url": "s1"}]
+
+    res = studio_job.run(intel_db=mock_db, top_n=1)
+
+    assert res["pipeline_saved"] == 0
+    mock_db.save_item.assert_not_called()
 
 @patch("cli_registry.available_providers")
 def test_run_no_providers(mock_avail):

@@ -228,7 +228,72 @@ def run(intel_db=None, top_n: int = None, slugs: List[str] = None, log_fn=None) 
                 _log(f"  {fmt:8} {mark} via {result.get('provider')} {result.get('elapsed_ms')}ms")
 
     _log(f"done — {made} assets generated across {len(targets)} stories")
-    return {"ok": True, "stories": len(targets), "assets": made}
+
+    # Auto-save stories to the content pipeline so the board fills up
+    saved_count = 0
+    existing_urls = {
+        item.get("url")
+        for item in intel_db.get_saved_items(pipeline_type="creator")
+    }
+    for cluster in targets:
+        story_key = cluster["slug"]
+        topic = cluster["topic"]
+        try:
+            if story_key in existing_urls:
+                continue
+            story_rows = intel_db.studio_get_story(story_key)
+            ready_rows = {
+                row.get("fmt"): row
+                for row in story_rows
+                if row.get("status") == "ready" and row.get("body")
+            }
+            best_fmt = next(
+                (
+                    ready_rows[fmt]
+                    for fmt in ("video", "shorts", "podcast", "blog")
+                    if fmt in ready_rows
+                ),
+                None,
+            )
+            if not best_fmt:
+                continue
+            item_id = intel_db.save_item({
+                "title": topic,
+                "url": story_key,
+                "source": "studio",
+                "source_type": "studio",
+                "category": cluster.get("category") or "General",
+                "signal_score": cluster.get("momentum") or 50,
+                "creator_score": cluster.get("creator_score") or 50,
+                "pipeline_type": "creator",
+                "status": "script_ready",
+                "working_title": topic,
+                "format": best_fmt.get("fmt", "video"),
+                "hook": (best_fmt.get("body") or "")[:200],
+                "outline": [],
+                "notes": best_fmt.get("body") or "",
+                "production_status": "ready",
+            })
+            assets = {
+                row.get("fmt"): {
+                    "body": row.get("body", ""),
+                    "provider": row.get("provider", ""),
+                    "model": row.get("model", ""),
+                    "status": row.get("status", ""),
+                }
+                for row in story_rows
+            }
+            intel_db.set_production_assets(item_id, assets, status="ready")
+            existing_urls.add(story_key)
+            saved_count += 1
+            _log(f"  saved to pipeline: {topic} (item #{item_id})")
+        except Exception as exc:
+            _log(f"  warn: pipeline save failed for {topic}: {exc}")
+
+    if saved_count:
+        _log(f"auto-saved {saved_count} stories to content pipeline")
+
+    return {"ok": True, "stories": len(targets), "assets": made, "pipeline_saved": saved_count}
 
 
 def main() -> int:
