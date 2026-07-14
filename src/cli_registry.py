@@ -276,7 +276,7 @@ def _nvidia_detect() -> bool:
 def _nvidia_gen(prompt: str, system: Optional[str], timeout: int) -> Optional[str]:
     try:
         import llm_summary
-        model = _get_profile_model("nvidia", os.environ.get("NVIDIA_MODEL", ""))
+        model = os.environ.get("NVIDIA_MODEL", "") or _get_profile_model("nvidia", "")
         return llm_summary.query_nvidia(prompt, system, model=model)
     except Exception:
         return None
