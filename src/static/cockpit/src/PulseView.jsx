@@ -1,453 +1,43 @@
-// PulseView — the hero. Trend radar + cross-source momentum board.
-// "Get there first" — the entire screen is built around emergence over time.
+// TodayView - the action-first home for deciding what to make next.
 
-const RadarPlot = ({ clusters, onPick, picked }) => {
-  const size = 460;
-  const cx = size / 2, cy = size / 2;
-  const rings = [0.25, 0.5, 0.75, 1];
-  const [angle, setAngle] = useState(0);
-  const [hoveredBlip, setHoveredBlip] = useState(null);
-
-  useEffect(() => {
-    let raf;
-    const tick = () => { setAngle(a => (a + 0.5) % 360); raf = requestAnimationFrame(tick); };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
-  // each ring = age bucket
-  const rings_labels = ["NOW", "24h", "72h", "1w+"];
-
-  const rawBlips = clusters.map((c, i) => {
-    const minR = 45;
-    const maxR = size / 2 - 35;
-    const r = minR + Math.min(1, c.first_seen_hrs / 168) * (maxR - minR);
-    const mag = Math.hypot(c.angle_x, c.angle_y);
-    const baseAng = mag < 0.05
-      ? (i * (360 / clusters.length) * Math.PI) / 180
-      : Math.atan2(c.angle_y, c.angle_x);
-    // Add deterministic angular spread so they don't align on a straight line
-    const ang = baseAng + (i - clusters.length / 2) * 0.18;
-    return {
-      cluster: c,
-      i,
-      x: cx + Math.cos(ang) * r,
-      y: cy + Math.sin(ang) * r,
-      radius: 6 + (c.creator_score - 60) / 6
-    };
-  });
-
-  // Relaxation loop to resolve overlaps
-  const adjustedBlips = [...rawBlips];
-  const iterations = 80;
-  const minVerticalDist = 20; // text line height/vertical clearance
-  const minHorizontalDist = 120; // horizontal region of label collision
-  const minR = 45;
-
-  for (let step = 0; step < iterations; step++) {
-    for (let j = 0; j < adjustedBlips.length; j++) {
-      for (let k = j + 1; k < adjustedBlips.length; k++) {
-        const a = adjustedBlips[j];
-        const b = adjustedBlips[k];
-
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const dist = Math.hypot(dx, dy);
-
-        // 1. Circle overlap check
-        const rSum = a.radius + b.radius + 12; // sum of radii + padding
-        if (dist < rSum) {
-          const push = (rSum - dist) / 2;
-          const ux = dist > 0.1 ? dx / dist : Math.cos(j);
-          const uy = dist > 0.1 ? dy / dist : Math.sin(j);
-          a.x -= ux * push;
-          a.y -= uy * push;
-          b.x += ux * push;
-          b.y += uy * push;
-        }
-
-        // 2. Text/label overlap check (horizontal proximity requires vertical stack)
-        if (Math.abs(a.x - b.x) < minHorizontalDist && Math.abs(a.y - b.y) < minVerticalDist) {
-          const overlap = minVerticalDist - Math.abs(a.y - b.y);
-          const pushY = overlap / 2;
-          if (a.y <= b.y) {
-            a.y -= pushY;
-            b.y += pushY;
-          } else {
-            a.y += pushY;
-            b.y -= pushY;
-          }
-        }
-        
-        // 3. Enforce minimum radius from center (repel from center NOW zone)
-        const distA = Math.hypot(a.x - cx, a.y - cy);
-        if (distA < minR) {
-          const ux = distA > 0.1 ? (a.x - cx) / distA : 1;
-          const uy = distA > 0.1 ? (a.y - cy) / distA : 0;
-          a.x = cx + ux * minR;
-          a.y = cy + uy * minR;
-        }
-        const distB = Math.hypot(b.x - cx, b.y - cy);
-        if (distB < minR) {
-          const ux = distB > 0.1 ? (b.x - cx) / distB : 1;
-          const uy = distB > 0.1 ? (b.y - cy) / distB : 0;
-          b.x = cx + ux * minR;
-          b.y = cy + uy * minR;
-        }
-        
-        // Clamp to SVG view box boundaries
-        a.x = Math.max(25, Math.min(size - 130, a.x));
-        a.y = Math.max(25, Math.min(size - 25, a.y));
-        b.x = Math.max(25, Math.min(size - 130, b.x));
-        b.y = Math.max(25, Math.min(size - 25, b.y));
-      }
-    }
-  }
-
-  // Final clamping pass to guarantee all blips and text labels stay inside the canvas
-  adjustedBlips.forEach(b => {
-    b.x = Math.max(30, Math.min(size - 140, b.x));
-    b.y = Math.max(35, Math.min(size - 30, b.y));
-  });
-
-  return (
-    <div style={{ position: "relative", width: size, height: size, margin: "0 auto" }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {/* Rings */}
-        {rings.map((r, i) => (
-          <circle key={i} cx={cx} cy={cy} r={r * (size / 2 - 12)}
-                  fill="none" stroke="var(--line-2)" strokeWidth={1}
-                  strokeDasharray={i < rings.length - 1 ? "2 4" : "0"}
-                  opacity={0.6}/>
-        ))}
-        {/* Cross axes */}
-        <line x1={cx} y1={12} x2={cx} y2={size - 12} stroke="var(--line)" strokeWidth={1}/>
-        <line x1={12} y1={cy} x2={size - 12} y2={cy} stroke="var(--line)" strokeWidth={1}/>
-
-        {/* Ring labels */}
-        {rings.map((r, i) => (
-          <text key={"l" + i} x={cx + 4} y={cy - r * (size / 2 - 12) - 4}
-                fill="var(--text-lo)" fontSize="9" fontFamily="var(--font-mono)" letterSpacing="0.08em">
-            {rings_labels[i]}
-          </text>
-        ))}
-
-        {/* Sweep */}
-        <defs>
-          <linearGradient id="sweep" x1="0" x2="1" y1="0" y2="0">
-            <stop offset="0%"   stopColor="var(--signal)" stopOpacity="0"/>
-            <stop offset="100%" stopColor="var(--signal)" stopOpacity="0.35"/>
-          </linearGradient>
-        </defs>
-        <g transform={`rotate(${angle} ${cx} ${cy})`}>
-          <path d={`M ${cx} ${cy} L ${cx + size / 2 - 12} ${cy} A ${size / 2 - 12} ${size / 2 - 12} 0 0 0 ${cx + (size / 2 - 12) * Math.cos(-Math.PI / 4)} ${cy + (size / 2 - 12) * Math.sin(-Math.PI / 4)} Z`}
-                fill="url(#sweep)"/>
-          <line x1={cx} y1={cy}
-                x2={cx + size / 2 - 12} y2={cy}
-                stroke="var(--signal)" strokeWidth={1} opacity={0.6}/>
-        </g>
-
-        {/* Blips */}
-        {adjustedBlips.map((bInfo) => {
-          const c = bInfo.cluster;
-          const { x, y, radius } = bInfo;
-          const S = window.DD_DATA.SOURCES;
-          const sourceColors = c.sources.map(s => S[s].color);
-          const isPicked = picked === c.slug;
-          return (
-            <g key={c.slug} onClick={() => onPick(c.slug)} style={{ cursor: "pointer" }}
-               onMouseEnter={() => setHoveredBlip(bInfo)}
-               onMouseLeave={() => setHoveredBlip(null)}>
-              {/* Ping */}
-              {c.momentum > 20 && (
-                <circle cx={x} cy={y} r={radius} fill="none" stroke={sourceColors[0]} strokeWidth={1}
-                        style={{ transformOrigin: `${x}px ${y}px`, animation: "ping 2s ease-out infinite" }}/>
-              )}
-              {/* Halo if picked */}
-              {isPicked && <circle cx={x} cy={y} r={radius + 8} fill="none" stroke="var(--signal)" strokeWidth={1} strokeDasharray="3 3"/>}
-              {/* Multi-source ring (each arc = one source family) */}
-              {sourceColors.map((col, ci) => {
-                const start = (ci / sourceColors.length) * Math.PI * 2;
-                const end = ((ci + 1) / sourceColors.length) * Math.PI * 2;
-                const x1 = x + Math.cos(start) * (radius + 2);
-                const y1 = y + Math.sin(start) * (radius + 2);
-                const x2 = x + Math.cos(end) * (radius + 2);
-                const y2 = y + Math.sin(end) * (radius + 2);
-                return (
-                  <path key={ci}
-                        d={`M ${x1} ${y1} A ${radius + 2} ${radius + 2} 0 0 1 ${x2} ${y2}`}
-                        fill="none" stroke={col} strokeWidth={1.8} strokeLinecap="butt"/>
-                );
-              })}
-              <circle cx={x} cy={y} r={radius} fill={sourceColors[0]} opacity={0.92}/>
-              <circle cx={x} cy={y} r={radius - 2} fill="var(--bg-0)"/>
-              <text x={x} y={y + 3} fill={sourceColors[0]} fontSize="9" fontFamily="var(--font-mono)" textAnchor="middle" fontWeight={600}>
-                {c.creator_score}
-              </text>
-              <text x={x + radius + 8} y={y + 3}
-                    fill={isPicked ? "var(--text-hi)" : "var(--text)"} fontSize="11"
-                    fontFamily="var(--font-sans)" fontWeight={isPicked ? 600 : 500}>
-                {c.topic}
-              </text>
-              <text x={x + radius + 8} y={y + 14}
-                    fill="var(--text-lo)" fontSize="9.5" fontFamily="var(--font-mono)" letterSpacing="0.04em">
-                {c.first_seen_hrs}h · {c.source_count}× sources · {c.momentum > 0 ? "+" : ""}{c.momentum}%
-              </text>
-            </g>
-          );
-        })}
-
-        {/* Center mark */}
-        <circle cx={cx} cy={cy} r={3} fill="var(--signal)"/>
-        <text x={cx + 8} y={cy + 12} fill="var(--text-lo)" fontSize="9" fontFamily="var(--font-mono)" letterSpacing="0.08em">YOU · NOW</text>
-
-        {/* Axis labels positioned at the ends of the crosshairs */}
-        <text x={18} y={cy - 6} fill="var(--text-lo)" fontSize="9" fontFamily="var(--font-mono)" letterSpacing="0.08em">VISUAL</text>
-        <text x={size - 18} y={cy - 6} fill="var(--text-lo)" fontSize="9" fontFamily="var(--font-mono)" letterSpacing="0.08em" textAnchor="end">DEMO</text>
-        <text x={cx + 8} y={22} fill="var(--text-lo)" fontSize="9" fontFamily="var(--font-mono)" letterSpacing="0.08em">EXPLAINER</text>
-        <text x={cx + 8} y={size - 16} fill="var(--text-lo)" fontSize="9" fontFamily="var(--font-mono)" letterSpacing="0.08em">CULTURAL</text>
-      </svg>
-
-      {/* Floating Glassmorphic Tooltip */}
-      {hoveredBlip && (
-        <div style={{
-          position: "absolute",
-          left: hoveredBlip.x,
-          top: hoveredBlip.y - 48,
-          transform: "translateX(-50%)",
-          pointerEvents: "none",
-          background: "rgba(22, 22, 26, 0.88)",
-          backdropFilter: "blur(12px) saturate(180%)",
-          border: "1px solid var(--line-2)",
-          boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.4)",
-          borderRadius: 6,
-          padding: "8px 12px",
-          zIndex: 100,
-          minWidth: 160,
-          textAlign: "center"
-        }}>
-          <div style={{ fontWeight: 600, fontSize: 11.5, color: "var(--text-hi)", marginBottom: 2 }}>{hoveredBlip.cluster.topic}</div>
-          <div className="mono" style={{ fontSize: 9.5, color: "var(--text-lo)" }}>
-            Score: <span style={{ color: "var(--signal)", fontWeight: 600 }}>{hoveredBlip.cluster.creator_score}</span> · {hoveredBlip.cluster.source_count}× sources
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const PulseDetail = ({ cluster, onJump }) => {
+const todayOpportunityFor = (opportunities, cluster) => {
   if (!cluster) return null;
-  const S = window.DD_DATA.SOURCES;
-  return (
-    <div className="panel" style={{ overflow: "hidden", marginTop: 16 }}>
-      <PanelHeader no="03"
-        actions={
-          <>
-            <button className="btn ghost" onClick={() => onJump("clusters")}>Open cluster →</button>
-            <button className="btn ghost" style={{ color: "var(--signal-down)", borderColor: "rgba(255,90,90,0.3)" }}
-                    onClick={async () => {
-                      if (confirm(`Ignore trend cluster "${cluster.topic}"? This will hide all associated items.`)) {
-                        await window.DDX.ignoreTopic(cluster.topic, cluster.related_items);
-                        window.DDX.refresh();
-                      }
-                    }}>Ignore Trend</button>
-            <button className="btn primary" onClick={() => onJump("brief")}>Make this today</button>
-          </>
-        }>
-        Focused signal · {cluster.topic}
-      </PanelHeader>
-      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr 1fr", gap: 0 }}>
-        {/* Why now */}
-        <div style={{ padding: "14px 16px", borderRight: "1px solid var(--line)" }}>
-          <div className="micro">Why this is a story now</div>
-          <p className="serif" style={{
-            fontSize: 18, lineHeight: 1.32, marginTop: 8, color: "var(--text-hi)",
-            fontStyle: "italic", textWrap: "pretty",
-          }}>{cluster.why_this_is_a_story}</p>
-          <div className="micro" style={{ marginTop: 16 }}>Recommended angle</div>
-          <p style={{ fontSize: 13, lineHeight: 1.45, marginTop: 6, color: "var(--text)", textWrap: "pretty" }}>
-            {cluster.recommended_angle}
-          </p>
-        </div>
-
-        {/* Pulse + scores */}
-        <div style={{ padding: "14px 16px", borderRight: "1px solid var(--line)" }}>
-          <div className="micro">24h pulse</div>
-          <div style={{ marginTop: 10 }}>
-            <Waveform data={cluster.pulse} w={280} h={56} color={S[cluster.sources[0]].color}/>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-              <span className="mono" style={{ fontSize: 9.5, color: "var(--text-lo)" }}>−24h</span>
-              <span className="mono" style={{ fontSize: 9.5, color: "var(--text-lo)" }}>−12h</span>
-              <span className="mono" style={{ fontSize: 9.5, color: "var(--text-hi)" }}>NOW</span>
-            </div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 14 }}>
-            <KPI label="Creator score" value={cluster.creator_score} sub="of 100" color="var(--signal)"/>
-            <KPI label="Signal score" value={cluster.average_signal_score} sub="avg of cluster"/>
-            <KPI label="Momentum" value={(cluster.momentum > 0 ? "+" : "") + cluster.momentum + "%"} sub="24h Δ"
-                 color={cluster.momentum > 0 ? "var(--signal-up)" : "var(--signal-down)"}/>
-            <KPI label="First seen" value={cluster.first_seen_hrs + "h"} sub="ago"/>
-          </div>
-          
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
-            <div className="micro" style={{ marginBottom: 8 }}>Creator Score Breakdown</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-                <span style={{ color: "var(--text-mid)" }}>📅 Recency</span>
-                <span className="mono" style={{ color: "var(--text-hi)" }}>{cluster.score_breakdown?.recency ?? 50}/100</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-                <span style={{ color: "var(--text-mid)" }}>🔥 Popularity & Growth</span>
-                <span className="mono" style={{ color: "var(--text-hi)" }}>{cluster.score_breakdown?.popularity ?? 50}/100</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-                <span style={{ color: "var(--text-mid)" }}>🤖 Agentic Suitability</span>
-                <span className="mono" style={{ color: "var(--text-hi)" }}>{cluster.score_breakdown?.agentic ?? 50}/100</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-                <span style={{ color: "var(--text-mid)" }}>🔌 Local Suitability</span>
-                <span className="mono" style={{ color: "var(--text-hi)" }}>{cluster.score_breakdown?.local ?? 50}/100</span>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
-            <div className="micro" style={{ marginBottom: 8 }}>Score Changelog</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 100, overflowY: "auto" }}>
-              {(cluster.changelog || []).map((ch, idx) => (
-                <div key={idx} style={{
-                  fontSize: 11, lineHeight: 1.35, padding: "5px 8px", borderRadius: 4,
-                  background: ch.type === "up" ? "rgba(124,255,178,0.06)" : ch.type === "down" ? "rgba(255,107,107,0.06)" : "var(--bg-0)",
-                  borderLeft: `2px solid ${ch.type === "up" ? "var(--signal-up)" : ch.type === "down" ? "var(--signal-down)" : "var(--line-hi)"}`,
-                  color: "var(--text-hi)",
-                }}>
-                  {ch.message}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Source evidence */}
-        <div style={{ padding: "14px 16px" }}>
-          <div className="micro">Source evidence ({cluster.source_count})</div>
-          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-            {cluster.related_items.slice(0, 5).map((it, i) => (
-              <a href={it.url} target="_blank" rel="noopener noreferrer" key={i} className="evidence-link" style={{
-                display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 10, alignItems: "center",
-                padding: "6px 8px", background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 4,
-                textDecoration: "none", cursor: "pointer", transition: "border-color 0.15s ease, background 0.15s ease"
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--signal)"; e.currentTarget.style.background = "var(--bg-3)"; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--line)"; e.currentTarget.style.background = "var(--bg-2)"; }}>
-                <SourceChip src={it.source_type}/>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ color: "var(--text-hi)", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.title}</div>
-                  <div className="mono" style={{ fontSize: 10, color: "var(--text-lo)", marginTop: 2 }}>
-                    {[it.stars && `★ ${it.stars}`, it.downloads && `↓ ${it.downloads}`, it.views && `▶ ${it.views}`, it.citations].filter(Boolean).join(" · ")}
-                    {it.delta && <span style={{ color: "var(--signal-up)", marginLeft: 6 }}>{it.delta}</span>}
-                  </div>
-                </div>
-                <span className="mono tnum" style={{ fontSize: 11, color: "var(--text-hi)", fontWeight: 600 }}>{it.signal_score}</span>
-              </a>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return (opportunities || []).find(o =>
+    o.cluster_slug === cluster.slug ||
+    o.slug === cluster.slug ||
+    o.creator_topic === cluster.topic ||
+    o.topic === cluster.topic
+  ) || null;
 };
 
-const PULSE_SORTS = [
-  ["momentum", "Momentum", (a, b) => b.momentum - a.momentum],
-  ["creator", "Creator score", (a, b) => b.creator_score - a.creator_score],
-  ["signal", "Signal", (a, b) => b.average_signal_score - a.average_signal_score],
-  ["fresh", "First seen", (a, b) => a.first_seen_hrs - b.first_seen_hrs],
-];
+const todayRelativeTime = (value) => {
+  if (!value) return "Not fetched yet";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Fetch time unavailable";
+  const minutes = Math.max(0, Math.floor((Date.now() - parsed.getTime()) / 60000));
+  if (minutes < 1) return "Updated just now";
+  if (minutes < 60) return `Updated ${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Updated ${hours}h ago`;
+  return `Updated ${Math.floor(hours / 24)}d ago`;
+};
 
-const PulseTable = ({ clusters, picked, onPick }) => {
-  const [sortIdx, setSortIdx] = useState(0);
-  const [demoOnly, setDemoOnly] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [, label, cmp] = PULSE_SORTS[sortIdx];
-  let rows = demoOnly ? clusters.filter(c => c.has_demoable_item) : clusters.slice();
-  if (searchQuery) {
-    rows = rows.filter(c => c.topic.toLowerCase().includes(searchQuery.toLowerCase()));
-  }
-  rows = rows.sort(cmp);
+const TodaySourceStrip = () => {
+  const { SOURCES = {}, sourceHealth = {} } = window.DD_DATA;
   return (
-    <div className="panel" style={{ overflow: "hidden" }}>
-      <PanelHeader no="02"
-        actions={
-          <>
-            <input type="text" placeholder="Search trends..." value={searchQuery}
-                   onChange={e => setSearchQuery(e.target.value)}
-                   style={{
-                     background: "var(--bg-3)", border: "1px solid var(--line)", borderRadius: 4,
-                     padding: "4px 8px", fontSize: 11, color: "var(--text-hi)", fontFamily: "var(--font-sans)",
-                     outline: "none", width: 140, marginRight: 8
-                   }}/>
-            <button className="btn ghost" onClick={() => setDemoOnly(v => !v)}
-                    style={{ color: demoOnly ? "var(--signal)" : undefined }}>
-              <I.Filter size={12}/> {demoOnly ? "Demoable only" : "Filter"}
-            </button>
-            <button className="btn ghost" onClick={() => setSortIdx(i => (i + 1) % PULSE_SORTS.length)}>
-              Sort · {label}
-            </button>
-          </>
-        }>
-        Momentum board · {rows.length} active topics
-      </PanelHeader>
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "30px 1.4fr 0.9fr 110px 90px 90px 90px 90px",
-        padding: "8px 14px", borderBottom: "1px solid var(--line)",
-        color: "var(--text-lo)", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.06em",
-        textTransform: "uppercase", gap: 12,
-      }}>
-        <span>#</span>
-        <span>Topic</span>
-        <span>Sources</span>
-        <span>24h Pulse</span>
-        <span style={{ textAlign: "right" }}>Creator</span>
-        <span style={{ textAlign: "right" }}>Signal</span>
-        <span style={{ textAlign: "right" }}>Δ24h</span>
-        <span style={{ textAlign: "right" }}>First Seen</span>
-      </div>
-      {rows.map((c, i) => {
-        const S = window.DD_DATA.SOURCES;
-        const isPicked = picked === c.slug;
+    <div className="today-source-strip" aria-label="Source freshness">
+      {Object.keys(SOURCES).map(key => {
+        const source = SOURCES[key];
+        const health = sourceHealth[key] || {};
+        const hasIssue = !!health.error || health.status === "failed" || health.using_cache
+          || (health.last_fetch_min != null && !health.fresh);
+        const age = health.last_fetch_min == null ? "not fetched" : `${health.last_fetch_min}m ago`;
         return (
-          <div key={c.slug} onClick={() => onPick(c.slug)}
-               style={{
-                 display: "grid",
-                 gridTemplateColumns: "30px 1.4fr 0.9fr 110px 90px 90px 90px 90px",
-                 padding: "10px 14px",
-                 borderBottom: "1px solid var(--line)",
-                 gap: 12, alignItems: "center",
-                 cursor: "pointer",
-                 background: isPicked ? "var(--bg-2)" : "transparent",
-                 borderLeft: isPicked ? "2px solid var(--signal)" : "2px solid transparent",
-               }}
-               onMouseEnter={e => { if (!isPicked) e.currentTarget.style.background = "var(--bg-2)"; }}
-               onMouseLeave={e => { if (!isPicked) e.currentTarget.style.background = "transparent"; }}>
-            <span className="mono tnum" style={{ color: "var(--text-lo)", fontSize: 11 }}>{String(i + 1).padStart(2, "0")}</span>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ color: "var(--text-hi)", fontWeight: 600, fontSize: 13.5, letterSpacing: "-0.005em" }}>{c.topic}</div>
-              <div className="mono" style={{ fontSize: 10, color: "var(--text-lo)", marginTop: 2 }}>
-                {c.best_content_format} · {c.has_demoable_item ? "demoable" : "explainer-only"}
-              </div>
-            </div>
-            <SourceStack sources={c.sources}/>
-            <Sparkline data={c.pulse} w={100} h={22} color={S[c.sources[0]].color} dotLast/>
-            <span style={{ textAlign: "right" }}>
-              <ScoreBar value={c.creator_score} w={60} color="var(--signal)" label={false}/>
-              <span className="mono tnum" style={{ fontSize: 11, color: "var(--text-hi)", marginLeft: 6, fontWeight: 600 }}>{c.creator_score}</span>
-            </span>
-            <span className="mono tnum" style={{ textAlign: "right", color: "var(--text-hi)", fontSize: 12 }}>{c.average_signal_score}</span>
-            <span style={{ textAlign: "right" }}><Momentum delta={c.momentum}/></span>
-            <span className="mono tnum" style={{ textAlign: "right", color: "var(--text-mid)", fontSize: 11 }}>{c.first_seen_hrs}h</span>
+          <div className={`today-source${hasIssue ? " today-source--issue" : ""}`} key={key}
+               title={health.error || `${health.item_count || 0} items in latest fetch`}>
+            <span className="today-source__dot" style={{ background: hasIssue ? "var(--signal-down)" : health.last_fetch_min == null ? "var(--text-lo)" : source.color }}/>
+            <span className="today-source__abbr">{source.abbr}</span>
+            <span className="today-source__age">{age}</span>
           </div>
         );
       })}
@@ -455,118 +45,317 @@ const PulseTable = ({ clusters, picked, onPick }) => {
   );
 };
 
-const PulseView = ({ onJump }) => {
-  const { clusters } = window.DD_DATA;
-  const [picked, setPicked] = useState(clusters[0] ? clusters[0].slug : null);
+const TodayActionQueue = ({ onJump }) => {
+  const { factory_queue = [], pipeline = {}, sourceHealth = {}, SOURCES = {}, stats = {} } = window.DD_DATA;
+  const [busyId, setBusyId] = useState(null);
+  const [message, setMessage] = useState("");
+  const allScripts = pipeline.script_ready || [];
+  const scripts = allScripts.slice(0, 3);
+  const allSourceIssues = Object.entries(sourceHealth)
+    .filter(([, health]) => health.error || health.status === "failed" || health.using_cache
+      || (health.last_fetch_min != null && !health.fresh));
+  const sourceIssues = allSourceIssues.slice(0, 3);
+  const sourceValues = Object.values(sourceHealth);
+  const hasKnownSources = sourceValues.some(health => health.last_fetch_min != null);
+  const allSourcesCurrent = Object.keys(SOURCES).length > 0
+    && Object.keys(SOURCES).every(key => sourceHealth[key]?.fresh === true);
 
-  if (!clusters.length) {
+  const reviewFactoryItem = async (item, action) => {
+    setBusyId(`${item.id}:${action}`);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/factory/${item.id}/${action}`, { method: "POST" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `${action} failed`);
+      setMessage(action === "approve" ? "Short approved for publishing." : "Short rejected.");
+      if (window.DDX) await window.DDX.reload();
+    } catch (error) {
+      setMessage(error.message || "Could not update the review item.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const count = (stats.approval_count ?? factory_queue.length) + allScripts.length + allSourceIssues.length;
+  return (
+    <section className="panel today-attention" aria-labelledby="attention-title">
+      <PanelHeader no="02" actions={<span className="today-count">{count} open</span>}>
+        <span id="attention-title">Needs attention</span>
+      </PanelHeader>
+      <div className="today-attention__body">
+        {factory_queue.map(item => (
+          <div className="today-action" key={`review-${item.id}`}>
+            <span className="today-action__marker today-action__marker--review"/>
+            <div className="today-action__copy">
+              <span className="today-action__type">Review ready</span>
+              <strong>{item.title || item.topic}</strong>
+              <span>{item.virality_score ? `Virality score ${Math.round(item.virality_score)}` : "Rendered short awaiting a decision"}</span>
+            </div>
+            <div className="today-action__controls">
+              <button className="btn ghost" disabled={busyId != null}
+                      onClick={() => reviewFactoryItem(item, "reject")}>Reject</button>
+              <button className="btn primary" disabled={busyId != null}
+                      onClick={() => reviewFactoryItem(item, "approve")}>
+                {busyId === `${item.id}:approve` ? "Approving..." : "Approve"}
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {scripts.map(item => (
+          <button className="today-action today-action--button" key={`script-${item.id}`}
+                  onClick={() => onJump("pipeline")}>
+            <span className="today-action__marker today-action__marker--ready"/>
+            <span className="today-action__copy">
+              <span className="today-action__type">Ready to record</span>
+              <strong>{item.working_title || item.topic || "Untitled script"}</strong>
+              <span>{item.format || "Script ready"}</span>
+            </span>
+            <I.ArrowR size={13}/>
+          </button>
+        ))}
+
+        {sourceIssues.map(([key, health]) => {
+          const source = window.DD_DATA.SOURCES[key];
+          return (
+            <div className="today-action" key={`source-${key}`}>
+              <span className="today-action__marker today-action__marker--issue"/>
+              <div className="today-action__copy">
+                <span className="today-action__type">{health.error || health.using_cache ? "Source issue" : "Source stale"}</span>
+                <strong>{source?.label || key}</strong>
+                <span>{health.error || (health.using_cache ? "Using cached data" : `Last fetched ${health.last_fetch_min}m ago`)}</span>
+              </div>
+              <button className="btn ghost" onClick={() => window.DDX && window.DDX.refresh()}>Retry</button>
+            </div>
+          );
+        })}
+
+        {count > factory_queue.length + scripts.length + sourceIssues.length && (
+          <div className="today-inline-message">Additional review or source items are not shown in this compact list.</div>
+        )}
+
+        {count === 0 && (
+          <div className="today-clear">
+            <span className="today-clear__mark">OK</span>
+            <div><strong>No queued actions</strong><span>{allSourcesCurrent ? "Nothing needs review and all sources are current." : hasKnownSources ? "No review items are queued; some sources are still awaiting a current fetch." : "Source status will appear after the first fetch."}</span></div>
+          </div>
+        )}
+        {message && <div className="today-inline-message" role="status">{message}</div>}
+      </div>
+    </section>
+  );
+};
+
+const TodayChanges = ({ clusters, selectedSlug, onSelect, onJump }) => {
+  const changed = [...clusters]
+    .sort((a, b) => Math.abs(b.momentum || 0) - Math.abs(a.momentum || 0) || b.source_count - a.source_count)
+    .slice(0, 4);
+  return (
+    <section className="panel today-changes" aria-labelledby="changes-title">
+      <PanelHeader no="03" actions={<button className="btn ghost" onClick={() => onJump("clusters", selectedSlug)}>Open Discover</button>}>
+        <span id="changes-title">What changed</span>
+      </PanelHeader>
+      <div className="today-changes__list">
+        {changed.map(cluster => {
+          const note = cluster.changelog?.[0]?.message || "No measured change since the previous snapshot.";
+          return (
+            <button key={cluster.slug}
+                    className={`today-change${selectedSlug === cluster.slug ? " today-change--active" : ""}`}
+                    onClick={() => onSelect(cluster.slug)}>
+              <span className="today-change__topic">{cluster.topic}</span>
+              <Momentum delta={cluster.momentum}/>
+              <span className="today-change__note">{note}</span>
+              <span className="today-change__sources">{cluster.source_count} sources</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+};
+
+const TodayProduction = ({ onJump }) => {
+  const { pipeline = {}, calendar = [], agents = [] } = window.DD_DATA;
+  const lanes = [
+    ["researching", "Researching"],
+    ["script_ready", "Script ready"],
+    ["recording", "Recording"],
+  ];
+  const nextDay = calendar.find(day => (day.items || []).length > 0);
+  return (
+    <section className="panel today-production" aria-labelledby="production-title">
+      <PanelHeader no="04" actions={<button className="btn ghost" onClick={() => onJump("pipeline")}>Open Publish</button>}>
+        <span id="production-title">Production now</span>
+      </PanelHeader>
+      <div className="today-production__body">
+        <div className="today-production__lanes">
+          {lanes.map(([key, label]) => (
+            <button key={key} onClick={() => onJump("pipeline")} className="today-lane">
+              <span>{label}</span>
+              <strong>{(pipeline[key] || []).length}</strong>
+            </button>
+          ))}
+        </div>
+        <div className="today-production__next">
+          <span className="micro">Next scheduled</span>
+          {nextDay ? (
+            <><strong>{nextDay.day} {nextDay.date}</strong><span>{nextDay.items.length} production event{nextDay.items.length === 1 ? "" : "s"}</span></>
+          ) : (
+            <><strong>Calendar open</strong><span>No production events scheduled in the next seven days.</span></>
+          )}
+        </div>
+        <div className="today-production__agents">
+          <span className="micro">Agents</span>
+          {agents.length ? (
+            <><strong>{agents.length} active</strong><span>{agents.slice(0, 2).map(agent => agent.name).join(" + ")}</span></>
+          ) : (
+            <><strong>Idle</strong><span>Dispatch work from the recommendation when you are ready.</span></>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const TodayView = ({ onJump, selectedClusterSlug, setSelectedClusterSlug }) => {
+  const { clusters = [], opportunities = [], titleSets = {}, meta = {}, pipeline = {} } = window.DD_DATA;
+  const fallbackSlug = clusters[0]?.slug || null;
+  const selectedSlug = clusters.some(cluster => cluster.slug === selectedClusterSlug)
+    ? selectedClusterSlug
+    : fallbackSlug;
+  const cluster = clusters.find(item => item.slug === selectedSlug) || clusters[0] || null;
+  const opportunity = todayOpportunityFor(opportunities, cluster);
+  const titles = cluster ? (titleSets[cluster.slug] || opportunity?.suggested_titles || {}) : {};
+  const recommendationTitle = titles.practical || titles.curiosity || opportunity?.title || cluster?.topic || "";
+  const isTopRecommendation = cluster.slug === clusters[0]?.slug;
+  const hook = opportunity?.opening_hook || opportunity?.hook_line || cluster?.recommended_angle || "";
+  const saved = Object.values(pipeline).flat().some(item =>
+    item.topic === cluster?.topic || item.working_title === recommendationTitle
+  );
+  const [saving, setSaving] = useState(false);
+  const [researching, setResearching] = useState(false);
+
+  const selectCluster = slug => {
+    if (setSelectedClusterSlug) setSelectedClusterSlug(slug);
+  };
+
+  const saveRecommendation = async () => {
+    if (!cluster || !window.DDX || saved || saving) return;
+    setSaving(true);
+    try {
+      await window.DDX.saveToPipeline({
+        title: recommendationTitle,
+        working_title: recommendationTitle,
+        topic: cluster.topic,
+        category: cluster.topic,
+        format: opportunity?.best_format || cluster.best_content_format || "YouTube long-form",
+        creator_score: cluster.creator_score,
+        signal_score: cluster.average_signal_score,
+        pipeline_type: "creator",
+        status: "idea",
+      });
+      await window.DDX.reload();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const startResearch = async () => {
+    if (!cluster || !window.DDX || researching) return;
+    setResearching(true);
+    try {
+      await window.DDX.dispatch("topic_researcher", cluster.topic, cluster.slug);
+      onJump("research", cluster.slug);
+    } finally {
+      setResearching(false);
+    }
+  };
+
+  if (!cluster) {
     return (
-      <div className="panel crosshair" style={{ padding: "48px 22px", textAlign: "center" }}>
-        <span className="ch-bl"/><span className="ch-br"/>
-        <div className="label" style={{ marginBottom: 10 }}>Trend pulse</div>
-        <h1 className="serif" style={{ fontSize: 26, color: "var(--text-hi)", margin: "0 0 12px", fontWeight: 600 }}>
-          No clusters yet
-        </h1>
-        <p style={{ color: "var(--text-mid)", maxWidth: 420, margin: "0 auto 18px" }}>
-          The radar fills in once sources have been fetched and grouped into cross-source topics.
-        </p>
-        <button className="btn primary" onClick={() => window.DDX && window.DDX.refresh()}>
-          Fetch sources now
-        </button>
+      <div className="panel today-empty">
+        <span className="micro">Today</span>
+        <h1>No recommendation yet</h1>
+        <p>Fetch sources to build the first cross-source story recommendation.</p>
+        <button className="btn primary" onClick={() => window.DDX && window.DDX.refresh()}>Fetch sources</button>
       </div>
     );
   }
 
-  const focused = clusters.find(c => c.slug === picked) || clusters[0];
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Hero — radar + top stats */}
-      <div className="panel crosshair" style={{ overflow: "hidden" }}>
+    <div className="today-view">
+      <section className="panel crosshair today-hero" aria-labelledby="today-title">
         <span className="ch-bl"/><span className="ch-br"/>
-        <PanelHeader no="01"
-          actions={
-            <>
-              <span className="chip" style={{ color: "var(--signal-up)", borderColor: "rgba(124,255,178,0.35)", background: "rgba(124,255,178,0.06)" }}>
-                <span style={{ width: 5, height: 5, borderRadius: 999, background: "var(--signal-up)" }}/>
-                3 emerging now
-              </span>
-              <button className="btn ghost" onClick={() => window.DDX && window.DDX.refresh()}>Last 7d</button>
-              <button className="btn ghost" onClick={() => setPicked(clusters[0].slug)}>Reset</button>
-            </>
-          }>
-          Trend pulse · cross-source emergence radar
-        </PanelHeader>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 460px 1fr", padding: "18px 22px", gap: 18, alignItems: "center" }}>
+        <div className="today-hero__topline">
           <div>
-            <div className="label">Hero of the day</div>
-            <h1 className="serif" style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: 38, lineHeight: 1.05, letterSpacing: "-0.02em",
-              margin: "10px 0 14px", color: "var(--text-hi)", fontWeight: 600,
-              textWrap: "balance",
-            }}>
-              <span style={{ color: "var(--signal)" }}>{focused.topic}</span> is breaking out across {focused.source_count} source families.
-            </h1>
-            <p style={{ fontSize: 14, lineHeight: 1.55, color: "var(--text)", margin: 0, maxWidth: 380, textWrap: "pretty" }}>
-              First lit up <span className="mono" style={{ color: "var(--text-hi)" }}>{focused.first_seen_hrs}h ago</span>.
-              Momentum <span style={{ color: "var(--signal-up)" }}>{focused.momentum > 0 ? "+" : ""}{focused.momentum}%</span> in
-              the last 24h. The agentic researcher is already pulling a brief.
-            </p>
-            <div style={{ display: "flex", gap: 8, marginTop: 18, flexWrap: "wrap" }}>
-              <button className="btn primary" onClick={() => onJump("brief")}>Open today's brief <I.ArrowR size={12}/></button>
-              <button className="btn ghost" onClick={() => onJump("research")}>Watch the research</button>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginTop: 26, paddingTop: 18, borderTop: "1px solid var(--line)" }}>
-              <KPI label="Tracked topics" value={window.DD_DATA.stats?.tracked_topics_count ?? 11} sub="in pipeline"/>
-              <KPI label="Active agents" value={window.DD_DATA.agents?.active?.length ?? window.DD_DATA.stats?.active_agents_count ?? 4} sub="researching now" color="var(--signal)"/>
-              <KPI label="Avg lead time" value={`${window.DD_DATA.stats?.avg_lead_time_days ?? 2.4}d`} sub="vs press cycle" color="var(--signal-up)"/>
-            </div>
+            <span className="today-eyebrow">{isTopRecommendation ? "Make this next" : "Selected story"}</span>
+            <span className="today-freshness">{todayRelativeTime(meta.last_updated || meta.fetched_at)}</span>
           </div>
-
-          <RadarPlot clusters={clusters} picked={picked} onPick={setPicked}/>
-
-          <div>
-            <div className="label" style={{ marginBottom: 10 }}>Source pulse · 24h</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {["github","huggingface","youtube","blogs","papers","hackernews"].map(k => {
-                const S = window.DD_DATA.SOURCES[k];
-                const h = window.DD_DATA.sourceHealth[k];
-                // synthesize per-source pulse from clusters
-                const series = Array.from({ length: 24 }, (_, i) =>
-                  clusters.filter(c => c.sources.includes(k)).reduce((s, c) => s + c.pulse[i], 0) / 4
-                );
-                return (
-                  <div key={k} style={{
-                    display: "grid", gridTemplateColumns: "auto 1fr auto",
-                    gap: 10, alignItems: "center",
-                    padding: "8px 10px", background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 4,
-                  }}>
-                    <SourceChip src={k}/>
-                    <Sparkline data={series} w={120} h={22} color={S.color} dotLast/>
-                    <span className="mono tnum" style={{ fontSize: 11, color: "var(--text-hi)" }}>
-                      {h.items_24h}
-                      <span className="mono" style={{
-                        fontSize: 9.5, color: h.delta > 0 ? "var(--signal-up)" : "var(--signal-down)", marginLeft: 4
-                      }}>{h.delta > 0 ? "+" : ""}{h.delta}</span>
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mono" style={{ fontSize: 10, color: "var(--text-lo)", marginTop: 10, letterSpacing: "0.04em" }}>
-              {window.DD_DATA.sourceHealth.papers.error && (
-                <span style={{ color: "var(--signal-down)" }}>⚠ {window.DD_DATA.sourceHealth.papers.error}</span>
-              )}
-            </div>
-          </div>
+          <TodaySourceStrip/>
         </div>
-      </div>
 
-      <PulseTable clusters={clusters} picked={picked} onPick={setPicked}/>
-      <PulseDetail cluster={focused} onJump={onJump}/>
+        <div className="today-hero__grid">
+          <div className="today-recommendation">
+            <div className="today-recommendation__meta">
+              <FormatBadge format={opportunity?.best_format || cluster.best_content_format}/>
+              <span className="chip">Creator score {cluster.creator_score}</span>
+              <span className="chip">{cluster.source_count} source families</span>
+              <Momentum delta={cluster.momentum} big/>
+            </div>
+            <h1 id="today-title">{recommendationTitle}</h1>
+            <p className="today-recommendation__why">{cluster.why_this_is_a_story}</p>
+            {hook && (
+              <div className="today-hook">
+                <span>Opening angle</span>
+                <p>{hook}</p>
+              </div>
+            )}
+            <div className="today-recommendation__actions">
+              <button className="btn primary today-primary-action" onClick={() => onJump("brief", cluster.slug)}>
+                Open production brief <I.ArrowR size={13}/>
+              </button>
+              <button className="btn ghost" disabled={researching} onClick={startResearch}>
+                {researching ? "Dispatching..." : "Build research pack"}
+              </button>
+              <button className="btn ghost" disabled={saved || saving} onClick={saveRecommendation}>
+                {saved ? "In pipeline" : saving ? "Saving..." : "Save idea"}
+              </button>
+            </div>
+          </div>
+
+          <aside className="today-evidence" aria-label="Recommendation evidence">
+            <div className="today-evidence__header">
+              <span className="micro">Evidence behind the pick</span>
+              <button className="text-button" onClick={() => onJump("clusters", cluster.slug)}>Inspect cluster</button>
+            </div>
+            <div className="today-evidence__list">
+              {(cluster.related_items || []).slice(0, 4).map((item, index) => (
+                <a key={`${item.url || item.title}-${index}`} href={item.url || undefined}
+                   target={item.url ? "_blank" : undefined} rel="noopener noreferrer"
+                   className="today-evidence__item">
+                  <SourceChip src={item.source_type}/>
+                  <span>{item.title}</span>
+                  <strong>{item.signal_score}</strong>
+                </a>
+              ))}
+            </div>
+            <div className="today-evidence__angle">
+              <span className="micro">Recommended angle</span>
+              <p>{cluster.recommended_angle}</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <div className="today-work-grid">
+        <TodayActionQueue onJump={onJump}/>
+        <EditorialBoard/>
+      </div>
+      <TodayChanges clusters={clusters} selectedSlug={selectedSlug} onSelect={selectCluster} onJump={onJump}/>
+      <TodayProduction onJump={onJump}/>
     </div>
   );
 };
 
-window.PulseView = PulseView;
+window.TodayView = TodayView;
+window.PulseView = TodayView;

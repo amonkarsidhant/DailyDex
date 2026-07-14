@@ -33,26 +33,25 @@ const NavItem = ({ icon, label, sub, active, hot, onClick }) => (
   </button>
 );
 
-const Nav = ({ view, setView }) => {
+const Nav = ({ view, setView, onClose }) => {
   const freshCount = useMemo(() => {
     if (!window.DD_DATA || !window.DD_DATA.clusters) return 0;
     return window.DD_DATA.clusters.filter(c => c.first_seen_hrs <= 24).length;
   }, [window.DD_DATA?.clusters]);
 
-  const items = [
-    { key: "pulse",     icon: <I.Pulse size={15}/>,    label: "Pulse",    sub: "trend radar",         hot: freshCount > 0 ? `${freshCount} new` : null },
-    { key: "brief",     icon: <I.Brief size={15}/>,    label: "Brief",    sub: "today's pick" },
-    { key: "clusters",  icon: <I.Cluster size={15}/>,  label: "Clusters", sub: "cross-source stories" },
-    { key: "thumbs",    icon: <I.Thumb size={15}/>,    label: "Thumb Lab",sub: "title × thumb"  },
-    { key: "research",  icon: <I.Research size={15}/>, label: "Research", sub: "evidence packs" },
-    { key: "pipeline",  icon: <I.Pipeline size={15}/>, label: "Pipeline", sub: "+ calendar"        },
-    { key: "studio",    icon: <I.Studio size={15}/>,   label: "Creator Central", sub: "autonomous content" },
-    { key: "benchmarks",icon: <I.Spark size={15}/>,    label: "AI Benchmarks", sub: "speed vs cost" },
-    { key: "profile",   icon: <I.User size={15}/>,     label: "Profile",   sub: "tone & voice"        },
-    { key: "copilot",   icon: <I.Spark size={15}/>,    label: "Copilot Chat",    sub: "AI strategist" },
+  const workflowItems = [
+    { key: "today",      icon: <I.Pulse size={15}/>,    label: "Today",    sub: "decide and act", hot: freshCount > 0 ? `${freshCount} new` : null },
+    { key: "clusters",   icon: <I.Cluster size={15}/>,  label: "Discover", sub: "signals and stories" },
+    { key: "studio",     icon: <I.Studio size={15}/>,   label: "Produce",  sub: "multi-format drafts" },
+    { key: "pipeline",   icon: <I.Pipeline size={15}/>, label: "Publish",  sub: "pipeline and calendar" },
+    { key: "benchmarks", icon: <I.Trend size={15}/>,    label: "Insights", sub: "AI model benchmarks" },
+  ];
+  const toolItems = [
+    { key: "research", icon: <I.Research size={15}/>, label: "Research", sub: "evidence packs" },
+    { key: "thumbs",   icon: <I.Thumb size={15}/>,    label: "Thumb Lab", sub: "title and thumbnail" },
   ];
   return (
-    <nav className="nav" style={{ display: "flex", flexDirection: "column" }}>
+    <nav id="primary-navigation" className="nav" style={{ display: "flex", flexDirection: "column" }}>
       {/* Brand */}
       <div style={{
         padding: "16px 16px 14px", borderBottom: "1px solid var(--line)",
@@ -68,19 +67,20 @@ const Nav = ({ view, setView }) => {
             <path d="M2 13 L7 3 L9 7 L12 7 L14 13 Z"/>
           </svg>
         </div>
-        <div style={{ lineHeight: 1.1 }}>
+        <div style={{ lineHeight: 1.1, flex: 1 }}>
           <div style={{ color: "var(--text-hi)", fontWeight: 700, fontSize: 15, letterSpacing: "-0.01em" }}>DailyDex</div>
           <div className="mono" style={{ fontSize: 9.5, color: "var(--text-lo)", letterSpacing: "0.12em", marginTop: 2 }}>CREATOR · COCKPIT</div>
         </div>
+        <button className="nav-mobile-close" aria-label="Close navigation" onClick={onClose}><I.X size={14}/></button>
       </div>
 
-      {/* Persona switch (mini display) */}
-      <PersonaBadge />
+      <PersonaBadge onClick={() => setView("settings")}/>
 
-      {/* Items */}
       <div style={{ padding: "8px 0", display: "flex", flexDirection: "column", gap: 2 }}>
-        <div className="micro" style={{ padding: "8px 16px 4px" }}>Workspace</div>
-        {items.map(it => <NavItem key={it.key} {...it} active={view === it.key} onClick={() => setView(it.key)} />)}
+        <div className="micro" style={{ padding: "8px 16px 4px" }}>Workflow</div>
+        {workflowItems.map(it => <NavItem key={it.key} {...it} active={view === it.key} onClick={() => setView(it.key)} />)}
+        <div className="micro" style={{ padding: "14px 16px 4px" }}>Tools</div>
+        {toolItems.map(it => <NavItem key={it.key} {...it} active={view === it.key} onClick={() => setView(it.key)} />)}
       </div>
 
       {/* Settings at bottom */}
@@ -96,98 +96,98 @@ const Nav = ({ view, setView }) => {
         />
       </div>
 
-      {/* Saved / tracked counts at bottom */}
-      <div style={{ marginTop: "auto", padding: 14, borderTop: "1px solid var(--line)" }}>
-        <div className="micro" style={{ marginBottom: 8 }}>State</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <MiniStat label="Saved" value={window.DD_DATA?.stats?.saved_count ?? 0} />
-          <MiniStat label="Tracked" value={window.DD_DATA?.stats?.tracked_count ?? 0} />
-          <MiniStat label="In pipe" value={window.DD_DATA?.stats?.in_pipe_count ?? 0} />
-          <MiniStat label="Drafts" value={window.DD_DATA?.stats?.drafts_count ?? 0} color="var(--signal)"/>
-        </div>
+      <div className="nav-footnote">
+        <span className="micro">Private workspace</span>
+        <span>Actions and source state now live on Today.</span>
       </div>
     </nav>
   );
 };
 
-const MiniStat = ({ label, value, color }) => (
-  <div style={{ padding: "6px 8px", background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 4 }}>
-    <div className="mono tnum" style={{ color: color || "var(--text-hi)", fontWeight: 600, fontSize: 16 }}>{value}</div>
-    <div className="micro" style={{ marginTop: 2 }}>{label}</div>
-  </div>
-);
-
-const PersonaBadge = () => {
+const PersonaBadge = ({ onClick }) => {
   const persona = window.__tweaks?.persona || "multi";
-  const p = window.DD_DATA.personas[persona];
+  const p = window.DD_DATA.personas[persona] || window.DD_DATA.personas.multi || Object.values(window.DD_DATA.personas)[0];
+  if (!p) return null;
   return (
-    <div style={{
+    <button className="persona-badge" onClick={onClick} style={{
       margin: "12px 12px 4px", padding: "10px 12px",
       background: "var(--bg-2)", border: "1px solid var(--line)",
-      borderRadius: 6,
+      borderRadius: 6, textAlign: "left", cursor: "pointer", fontFamily: "var(--font-sans)",
     }}>
       <div className="micro">Persona</div>
       <div style={{ color: "var(--text-hi)", fontWeight: 600, marginTop: 4, fontSize: 13 }}>{p.label}</div>
       <div className="mono" style={{ fontSize: 10, color: "var(--text-lo)", marginTop: 2, letterSpacing: "0.04em" }}>{p.sub}</div>
-    </div>
+    </button>
   );
 };
 
 // ─── Topbar ─────────────────────────────────────────────────────────────────
-const Topbar = ({ now, onOpenTweaks, onRefresh, refreshing }) => {
-  const { sourceHealth, SOURCES } = window.DD_DATA;
+const Topbar = ({ now, onOpenSettings, onRefresh, refreshing, onToggleAgents, railOpen, onToggleNav, navOpen }) => {
+  const { sourceHealth = {}, SOURCES = {} } = window.DD_DATA;
+  const sourceKeys = Object.keys(SOURCES || {});
+  const issueCount = sourceKeys.filter(key => {
+    const health = sourceHealth[key] || {};
+    return health.error || health.status === "failed" || health.using_cache;
+  }).length;
+  const knownCount = sourceKeys.filter(key => sourceHealth[key]?.last_fetch_min != null).length;
+  const staleCount = sourceKeys.filter(key => sourceHealth[key]?.last_fetch_min != null && !sourceHealth[key]?.fresh).length;
+  const allCurrent = sourceKeys.length > 0 && knownCount === sourceKeys.length && staleCount === 0 && issueCount === 0;
+  const statusLabel = issueCount > 0
+    ? `${issueCount} source issue${issueCount === 1 ? "" : "s"}`
+    : staleCount > 0 ? `${staleCount} source${staleCount === 1 ? "" : "s"} stale`
+      : allCurrent ? "Sources current"
+        : knownCount > 0 ? `${knownCount}/${sourceKeys.length} sources reporting` : "Awaiting first fetch";
+  const identity = window.DD_DATA.creator_identity || {};
+  const initials = (identity.name || identity.email || "DD")
+    .split(/\s|@/).filter(Boolean).slice(0, 2).map(part => part[0].toUpperCase()).join("") || "DD";
+  const activeAgents = window.DD_DATA.stats?.active_agents_count || 0;
   return (
     <header className="topbar" style={{
       display: "grid",
       gridTemplateColumns: "auto 1fr auto",
       alignItems: "center", padding: "0 16px", gap: 16,
     }}>
-      {/* Left: clock + status */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      <div className="topbar-left" style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <button className="btn ghost icon topbar-menu" aria-label="Open navigation" aria-controls="primary-navigation" aria-expanded={navOpen} onClick={onToggleNav}><I.Menu size={15}/></button>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span className="blink" style={{ width: 7, height: 7, borderRadius: 999, background: "var(--signal-up)", boxShadow: "0 0 6px var(--signal-up)" }}/>
-          <span className="mono" style={{ fontSize: 11, color: "var(--text-mid)", letterSpacing: "0.06em" }}>LIVE</span>
+          <span style={{ width: 7, height: 7, borderRadius: 999,
+                         background: issueCount ? "var(--signal-down)" : allCurrent ? "var(--signal-up)" : knownCount ? "var(--signal)" : "var(--text-lo)" }}/>
+          <span className="mono" style={{ fontSize: 11, color: issueCount ? "var(--signal-down)" : allCurrent ? "var(--text-mid)" : knownCount ? "var(--signal)" : "var(--text-mid)", letterSpacing: "0.04em" }}>{statusLabel}</span>
         </div>
         <span style={{ width: 1, height: 18, background: "var(--line)" }}/>
         <span className="mono tnum" style={{ fontSize: 12, color: "var(--text)" }}>{now}</span>
-        <span className="micro">{(new Date()).toDateString().slice(4)}</span>
       </div>
 
-      {/* Center: source health */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14, justifySelf: "center" }}>
-        {["github","huggingface","youtube","blogs","papers","hackernews"].map(k => {
-          const h = sourceHealth[k]; const S = SOURCES[k];
+      <div className="topbar-sources" style={{ display: "flex", alignItems: "center", gap: 14, justifySelf: "center" }}>
+        {sourceKeys.map(k => {
+          const h = sourceHealth[k] || {}; const S = SOURCES[k];
+          const age = h.last_fetch_min == null ? "--" : `${h.last_fetch_min}m`;
           return (
-            <div key={k} title={`${S.label} · last fetch ${h.last_fetch_min}m ago · ${h.items_24h} items / 24h`}
+            <div key={k} title={`${S.label} - ${h.item_count || 0} items in latest fetch${h.error ? ` - ${h.error}` : ""}`}
                  style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 6, height: 6, borderRadius: 999, background: h.fresh ? S.color : "var(--text-lo)",
-                             boxShadow: h.fresh ? `0 0 4px ${S.color}` : "none" }}/>
+              <span style={{ width: 6, height: 6, borderRadius: 999, background: h.error ? "var(--signal-down)" : h.fresh ? S.color : "var(--text-lo)" }}/>
               <span className="mono" style={{ fontSize: 11, color: "var(--text)", letterSpacing: "0.04em", textTransform: "uppercase" }}>{S.abbr}</span>
-              <span className="mono tnum" style={{ fontSize: 10, color: "var(--text-lo)" }}>{h.last_fetch_min}m</span>
-              <Momentum delta={h.delta} />
+              <span className="mono tnum" style={{ fontSize: 10, color: "var(--text-lo)" }}>{age}</span>
             </div>
           );
         })}
       </div>
 
-      {/* Right: actions */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div className="topbar-actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <button className="btn ghost" onClick={onRefresh} disabled={refreshing}
                 style={{ opacity: refreshing ? 0.6 : 1 }}>
           <I.Refresh size={13}/> {refreshing ? "Refreshing…" : "Refresh"}
         </button>
-        <button className="btn ghost icon" aria-label="notifications" onClick={() => {
-          const sh = window.DD_DATA.sourceHealth || {};
-          const lines = Object.entries(sh).map(([k, v]) => `${k}: ${v.items_24h} items${v.error ? " ⚠ " + v.error : ""}`);
-          alert("Fetch status (24h):\n\n" + lines.join("\n"));
-        }}><I.Bell size={14}/></button>
-        <button className="btn ghost icon" onClick={onOpenTweaks} aria-label="settings"><I.Settings size={14}/></button>
+        <button className={`btn ghost${railOpen ? " is-active" : ""}`} onClick={onToggleAgents} aria-expanded={railOpen}>
+          <I.Spark size={13}/> Agents{activeAgents ? ` ${activeAgents}` : ""}
+        </button>
+        <button className="btn ghost icon" onClick={onOpenSettings} aria-label="Open settings"><I.Settings size={14}/></button>
         <span style={{ width: 1, height: 22, background: "var(--line)", margin: "0 4px" }}/>
-        <div style={{
+        <div className="topbar-avatar" title={identity.name || identity.email || "DailyDex creator"} style={{
           width: 28, height: 28, borderRadius: 999,
-          background: "linear-gradient(135deg, var(--signal), var(--src-youtube))",
+          background: identity.avatar ? `url(${identity.avatar}) center/cover` : "linear-gradient(135deg, var(--signal), var(--src-youtube))",
           display: "grid", placeItems: "center", color: "#1A1100", fontWeight: 700, fontSize: 11,
-        }}>JM</div>
+        }}>{identity.avatar ? "" : initials}</div>
       </div>
     </header>
   );
@@ -249,19 +249,25 @@ const AgentCard = ({ a }) => {
 
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
         <span className="mono" style={{ fontSize: 10, color: "var(--text-lo)" }}>{a.stage}</span>
-        <span className="mono tnum" style={{ fontSize: 10, color: "var(--text-lo)" }}>~{a.eta_sec}s</span>
+        <span className="mono tnum" style={{ fontSize: 10, color: "var(--text-lo)" }}>{a.eta_sec != null ? `~${a.eta_sec}s` : ""}</span>
       </div>
     </div>
   );
 };
 
 const EditorialBoard = () => {
-  const briefing = window.DD_DATA?.editorial_briefing;
+  const [briefing, setBriefing] = useState(window.DD_DATA?.editorial_briefing || null);
   const [loading, setLoading] = useState(false);
   const [approving, setApproving] = useState(false);
   const [msg, setMsg] = useState("");
   const [expanded, setExpanded] = useState(false);
   const briefingRef = useRef(null);
+  const verified = briefing?.status === "ready";
+  const approved = briefing?.status === "approved";
+
+  useEffect(() => {
+    setBriefing(window.DD_DATA?.editorial_briefing || null);
+  }, [window.DD_DATA?.editorial_briefing?.generated_at]);
 
   // Use a ref to manage innerHTML lifecycle and prevent detached DOM leaks
   useEffect(() => {
@@ -279,8 +285,10 @@ const EditorialBoard = () => {
     try {
       const res = await fetch("/api/editorial/briefing", { method: "POST" });
       if (res.ok) {
+        const result = await res.json();
+        setBriefing(result);
         if (window.DDX) await window.DDX.reload();
-        setMsg("Briefing regenerated.");
+        setMsg(result.status === "ready" ? "Editorial plan regenerated." : (result.note || "No verified plan was generated."));
       } else {
         setMsg("Failed to regenerate.");
       }
@@ -292,6 +300,7 @@ const EditorialBoard = () => {
   };
 
   const handleApprove = async () => {
+    if (!verified) return;
     setApproving(true);
     setMsg("");
     try {
@@ -311,24 +320,38 @@ const EditorialBoard = () => {
     }
   };
 
-  if (!briefing || !briefing.briefing) return null;
+  if (!briefing || !briefing.briefing) {
+    return (
+      <section className="panel today-editorial" aria-labelledby="editorial-title">
+        <PanelHeader no="PLAN"><span id="editorial-title">Editorial plan</span></PanelHeader>
+        <div className="today-editorial__empty">
+          <span className="micro">Optional strategy pass</span>
+          <strong>Turn the top signals into a cross-format production plan.</strong>
+          <p>Generate this only when you want an LLM synthesis. Opening Today never invokes a model.</p>
+          <button className="btn ghost" onClick={handleRegen} disabled={loading}>
+            {loading ? "Generating..." : "Generate editorial plan"}
+          </button>
+          {msg && <span className="today-inline-message" role="status">{msg}</span>}
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <div style={{
-      margin: "12px 14px 6px",
-      padding: "12px",
-      background: "linear-gradient(135deg, rgba(240, 183, 47, 0.08) 0%, rgba(20, 15, 10, 0.4) 100%)",
-      border: "1px solid rgba(240, 183, 47, 0.25)",
-      borderRadius: 8,
-      boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-    }}>
+    <section className="panel today-editorial" aria-labelledby="editorial-title">
+      <PanelHeader no="PLAN"><span id="editorial-title">Editorial plan</span></PanelHeader>
+      <div className="today-editorial__body">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ color: "var(--signal)", display: "flex" }}><I.Spark size={14}/></span>
-          <span className="micro" style={{ letterSpacing: "0.06em", color: "var(--text-hi)", fontWeight: 600 }}>Editorial Board</span>
+          <span className="micro" style={{ letterSpacing: "0.06em", color: "var(--text-hi)", fontWeight: 600 }}>Cross-format strategy</span>
         </div>
-        <span className="mono" style={{ fontSize: 9, color: "var(--text-lo)" }}>Proactive Strategy</span>
+        <span className="mono" style={{ fontSize: 9, color: verified ? "var(--signal-up)" : "var(--signal)", textTransform: "uppercase" }}>
+          {verified ? "Verified synthesis" : briefing.status || "Unverified"}
+        </span>
       </div>
+
+      {!verified && briefing.note && <div className="today-editorial__note">{briefing.note}</div>}
 
       <div style={{
         maxHeight: expanded ? "300px" : "110px",
@@ -377,9 +400,9 @@ const EditorialBoard = () => {
               fontWeight: 600
             }} 
             onClick={handleApprove} 
-            disabled={approving}
+            disabled={approving || !verified}
           >
-            {approving ? "Queuing..." : "Approve & Queue All"}
+            {approving ? "Queuing..." : verified ? "Approve & Queue All" : approved ? "Plan queued" : "Approval unavailable"}
           </button>
         </div>
       </div>
@@ -394,7 +417,8 @@ const EditorialBoard = () => {
           {msg}
         </div>
       )}
-    </div>
+      </div>
+    </section>
   );
 };
 
@@ -405,12 +429,14 @@ const AGENT_OPTIONS = [
   ["cross_poster", "Cross-Poster"],
 ];
 
-const AgentRail = () => {
+const AgentRail = ({ selectedClusterSlug, onClose }) => {
   const [active, setActive] = useState(window.DD_DATA.agents || []);
   const [recent, setRecent] = useState([]);
   const [picking, setPicking] = useState(false);
   const [enrichStatus, setEnrichStatus] = useState(null);
   const lastActiveRef = useRef(false);
+  const dispatchTarget = window.DD_DATA.clusters.find(cluster => cluster.slug === selectedClusterSlug)
+    || window.DD_DATA.clusters[0] || {};
 
   const pull = useCallback(async () => {
     if (!window.DDX) return;
@@ -444,13 +470,12 @@ const AgentRail = () => {
 
   const dispatch = async (agent_type) => {
     setPicking(false);
-    const top = window.DD_DATA.clusters[0] || {};
-    try { await window.DDX.dispatch(agent_type, top.topic, top.slug); } catch (e) {}
+    try { await window.DDX.dispatch(agent_type, dispatchTarget.topic, dispatchTarget.slug); } catch (e) {}
     pull();
   };
 
   return (
-    <aside className="rail" style={{ display: "flex", flexDirection: "column" }}>
+    <aside className="rail" style={{ display: "flex", flexDirection: "column" }} aria-label="Agent activity">
       <div style={{
         padding: "12px 14px", borderBottom: "1px solid var(--line)",
         display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -462,11 +487,15 @@ const AgentRail = () => {
             {active.length} active
           </span>
         </div>
-        <button className="btn ghost icon" aria-label="dispatch" onClick={() => setPicking(p => !p)}><I.Plus size={12}/></button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button className="btn ghost icon" aria-label="Dispatch agent" onClick={() => setPicking(p => !p)}><I.Plus size={12}/></button>
+          <button className="btn ghost icon" aria-label="Close agents" onClick={onClose}><I.X size={12}/></button>
+        </div>
       </div>
 
       {picking && (
         <div key="agent-picker" style={{ padding: "8px 14px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 6 }}>
+          <span className="mono" style={{ width: "100%", color: "var(--text-lo)", fontSize: 9.5 }}>Target: {dispatchTarget.topic || "No selected story"}</span>
           {AGENT_OPTIONS.map(([type, label]) => (
             <button key={type} className="btn ghost" style={{ textTransform: "none", letterSpacing: 0 }}
               onClick={() => dispatch(type)}>{label}</button>
@@ -475,8 +504,6 @@ const AgentRail = () => {
       )}
 
       <div style={{ flex: 1, overflowY: "auto" }}>
-        <EditorialBoard />
-
         {/* Background Enrichment Service Status */}
         {enrichStatus && enrichStatus.enabled && (
           <div style={{
@@ -581,27 +608,43 @@ const cleanMarkdownForTicker = (txt) => {
   return clean.replace(/\s+/g, " ").trim();
 };
 
-const CopilotDock = ({ context }) => {
+const CopilotDock = ({ context, selectedClusterSlug }) => {
+  const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [answer, setAnswer] = useState("");
   const [model, setModel] = useState("");
+  const requestVersion = useRef(0);
+
+  useEffect(() => {
+    requestVersion.current += 1;
+    setQ("");
+    setAnswer("");
+    setModel("");
+    setBusy(false);
+  }, [context, selectedClusterSlug]);
+
   const submit = async () => {
     if (!q.trim()) return;
+    const version = ++requestVersion.current;
     setBusy(true); setAnswer("");
     try {
-      const focused = (window.DD_DATA.clusters[0] || {}).slug;
-      const r = await window.DDX.copilot(context, q, { focused_cluster: focused });
+      const r = await window.DDX.copilot(context, q, { focused_cluster: selectedClusterSlug });
+      if (version !== requestVersion.current) return;
       setAnswer(r.answer || "No answer.");
       if (r.model) setModel(r.model);
     } catch (e) {
-      setAnswer("Copilot is offline — check the LLM provider on the server.");
-    } finally { setBusy(false); }
+      if (version !== requestVersion.current) return;
+      setAnswer("Copilot is offline. Check the LLM provider in Settings.");
+    } finally {
+      if (version === requestVersion.current) setBusy(false);
+    }
   };
-  const modelLabel = (model || (window.DD_DATA.copilotModel) || "minimaxai/minimax-m2.7")
-    .split("/").pop().replace(/-/g, " ").toUpperCase();
+  const configuredModel = model || window.DD_DATA.copilotModel || "";
+  const modelLabel = configuredModel ? configuredModel.split("/").pop().replace(/-/g, " ").toUpperCase() : "AUTO";
   const suggestions = {
-    pulse: ["rank clusters by momentum", "which topic peaks tonight?", "what did I miss yesterday?"],
+    today: ["why is this the best pick?", "what should I make first?", "what changed today?"],
+    pulse: ["why is this the best pick?", "what should I make first?", "what changed today?"],
     brief: ["rewrite the hook punchier", "generate 3 contrarian titles", "what's the strongest counterpoint?"],
     clusters: ["which cluster has best demo value?", "draft a comparison outline", "what would Karpathy cover?"],
     thumbs: ["pick the winning thumbnail", "generate a variant with a face", "what colors maximize CTR?"],
@@ -610,9 +653,19 @@ const CopilotDock = ({ context }) => {
   };
   const sugs = suggestions[context] || suggestions.pulse;
 
+  if (!open) {
+    return (
+      <button className="copilot-launcher" onClick={() => setOpen(true)} aria-label="Open creator copilot">
+        <span className="copilot-launcher__icon"><I.Spark size={14} stroke="#1A1100"/></span>
+        <span>Ask Copilot</span>
+      </button>
+    );
+  }
+
   return (
-    <div className="dock" style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", gap: 12, padding: "0 16px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <aside className="dock dock--open" aria-label="Creator copilot">
+      <div className="dock__header">
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <div style={{
           width: 26, height: 26, borderRadius: 6,
           background: "linear-gradient(135deg, var(--signal), var(--src-papers))",
@@ -625,32 +678,26 @@ const CopilotDock = ({ context }) => {
           <div style={{ color: "var(--text-hi)", fontSize: 12, fontWeight: 600 }}>Copilot</div>
           <div className="mono" style={{ fontSize: 9.5, color: "var(--text-lo)", letterSpacing: "0.06em" }}>CONTEXT · {context.toUpperCase()}</div>
         </div>
+        </div>
+        <span className="dock__model mono">{modelLabel}</span>
+        <button className="btn ghost icon" onClick={() => setOpen(false)} aria-label="Close copilot"><I.X size={12}/></button>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div className="dock__body">
         {answer ? (
-          <div style={{
-            flex: 1, padding: "8px 12px", background: "var(--bg-2)", border: "1px solid var(--line)",
-            borderRadius: 6, color: "var(--text-hi)", fontSize: 12.5, lineHeight: 1.4,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>{cleanMarkdownForTicker(answer)}</div>
+          <div className="dock__answer">{cleanMarkdownForTicker(answer)}</div>
         ) : (
-          <>
-            <div style={{ display: "flex", gap: 6, overflow: "hidden" }}>
-              {sugs.map((s, i) => (
-                <button key={i} className="btn ghost" style={{ textTransform: "none", letterSpacing: "0" }}
-                        onClick={() => { setQ(s); }}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </>
+          <div className="dock__suggestions">
+            {sugs.map((s, i) => (
+              <button key={i} className="text-button" onClick={() => setQ(s)}>{s}</button>
+            ))}
+          </div>
         )}
-        <div style={{ flex: 1, position: "relative" }}>
+        <div className="dock__input">
           <input
             value={q} onChange={e => setQ(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") submit(); }}
-            placeholder="Ask the copilot about this view…"
+            placeholder="Ask about the selected story..."
             style={{
               width: "100%", height: 36, padding: "0 38px 0 14px",
               background: "var(--bg-2)", border: "1px solid var(--line-2)", borderRadius: 6,
@@ -668,12 +715,7 @@ const CopilotDock = ({ context }) => {
           </button>
         </div>
       </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span className="mono" style={{ fontSize: 10, color: "var(--text-lo)", letterSpacing: "0.06em" }}>{modelLabel}</span>
-        <span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--signal-up)", boxShadow: "0 0 4px var(--signal-up)" }}/>
-      </div>
-    </div>
+    </aside>
   );
 };
 

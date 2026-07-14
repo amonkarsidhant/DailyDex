@@ -1,6 +1,6 @@
 // React hooks come from AppShell's shared destructure (single source to avoid duplicate const in shared script scope).
 
-const CopilotChatView = () => {
+const CopilotChatView = ({ selectedClusterSlug }) => {
   const [messages, setMessages] = useState([
     {
       role: "assistant",
@@ -36,8 +36,7 @@ const CopilotChatView = () => {
     setBusy(true);
 
     try {
-      const topSlug = (window.DD_DATA.clusters[0] || {}).slug;
-      const res = await window.DDX.copilot("copilot_chat", q, { focused_cluster: topSlug });
+      const res = await window.DDX.copilot("copilot_chat", q, { focused_cluster: selectedClusterSlug });
       setMessages(prev => [...prev, {
         role: "assistant",
         text: res.answer || "No response.",
@@ -54,7 +53,8 @@ const CopilotChatView = () => {
     }
   };
 
-  const topPick = window.DD_DATA.clusters[0] || null;
+  const topPick = window.DD_DATA.clusters.find(cluster => cluster.slug === selectedClusterSlug)
+    || window.DD_DATA.clusters[0] || null;
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 16, height: "calc(100vh - 120px)" }}>

@@ -221,6 +221,9 @@ const I = {
     cx: "8",
     cy: "6",
     r: "3"
+  })),
+  Menu: p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+    d: "M2.5 4h11M2.5 8h11M2.5 12h11"
   }))
 };
 window.I = I;

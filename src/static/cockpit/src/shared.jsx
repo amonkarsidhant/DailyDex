@@ -98,7 +98,7 @@ const Momentum = ({ delta, big }) => {
 // Source pulse — small stacked bars colored by source
 const SourceStack = ({ sources }) => (
   <span style={{ display: "inline-flex", gap: 2 }}>
-    {["github","huggingface","youtube","blogs","papers","hackernews"].map(k => {
+    {Object.keys(window.DD_DATA.SOURCES || {}).map(k => {
       const S = window.DD_DATA.SOURCES[k];
       const on = sources.includes(k);
       return (
@@ -231,7 +231,7 @@ const KPI = ({ label, value, sub, color }) => (
 
 // PanelHeader — small uppercase label + actions on the right, ASCII rule
 const PanelHeader = ({ children, no, actions }) => (
-  <div style={{
+  <div className="panel-header" style={{
     display: "flex", alignItems: "center", justifyContent: "space-between",
     padding: "10px 14px",
     borderBottom: "1px solid var(--line)",
@@ -245,6 +245,79 @@ const PanelHeader = ({ children, no, actions }) => (
   </div>
 );
 
+// Static trend radar. The sweep is CSS-driven so animation never re-renders React.
+const TrendRadar = ({ clusters = [], selectedSlug, onSelect }) => {
+  const size = 460;
+  const center = size / 2;
+  const points = React.useMemo(() => clusters.slice(0, 10).map((cluster, index) => {
+    const magnitude = Math.hypot(cluster.angle_x || 0, cluster.angle_y || 0);
+    const angle = magnitude < 0.05
+      ? (index / Math.max(1, clusters.length)) * Math.PI * 2
+      : Math.atan2(cluster.angle_y, cluster.angle_x);
+    const radius = 45 + Math.min(1, (cluster.first_seen_hrs || 0) / 168) * 158;
+    return {
+      cluster,
+      x: Math.max(34, Math.min(size - 142, center + Math.cos(angle + index * 0.08) * radius)),
+      y: Math.max(34, Math.min(size - 34, center + Math.sin(angle + index * 0.08) * radius)),
+      radius: Math.max(5, Math.min(12, 5 + ((cluster.creator_score || 60) - 60) / 7)),
+    };
+  }), [clusters]);
+
+  const activate = (event, slug) => {
+    if (event.type === "keydown" && event.key !== "Enter" && event.key !== " ") return;
+    if (event.type === "keydown") event.preventDefault();
+    if (onSelect) onSelect(slug);
+  };
+
+  return (
+    <div className="trend-radar">
+      <svg viewBox={`0 0 ${size} ${size}`} role="group" aria-label="Interactive trend emergence radar">
+        {[0.25, 0.5, 0.75, 1].map((ring, index) => (
+          <circle key={ring} cx={center} cy={center} r={ring * (size / 2 - 14)}
+                  fill="none" stroke="var(--line-2)" strokeWidth="1"
+                  strokeDasharray={index < 3 ? "2 4" : undefined}/>
+        ))}
+        <line x1={center} y1="14" x2={center} y2={size - 14} stroke="var(--line)"/>
+        <line x1="14" y1={center} x2={size - 14} y2={center} stroke="var(--line)"/>
+        <defs>
+          <linearGradient id="discover-radar-sweep" x1="0" x2="1">
+            <stop offset="0%" stopColor="var(--signal)" stopOpacity="0"/>
+            <stop offset="100%" stopColor="var(--signal)" stopOpacity="0.28"/>
+          </linearGradient>
+        </defs>
+        <g className="trend-radar__sweep">
+          <path d={`M ${center} ${center} L ${size - 14} ${center} A ${size / 2 - 14} ${size / 2 - 14} 0 0 0 ${center + 153} ${center - 153} Z`}
+                fill="url(#discover-radar-sweep)"/>
+          <line x1={center} y1={center} x2={size - 14} y2={center} stroke="var(--signal)" opacity="0.6"/>
+        </g>
+        <circle cx={center} cy={center} r="3" fill="var(--signal)"/>
+        <text x={center + 8} y={center + 14} className="trend-radar__axis">NOW</text>
+        <text x="18" y={center - 7} className="trend-radar__axis">VISUAL</text>
+        <text x={size - 18} y={center - 7} textAnchor="end" className="trend-radar__axis">DEMO</text>
+        <text x={center + 8} y="24" className="trend-radar__axis">EXPLAINER</text>
+        <text x={center + 8} y={size - 17} className="trend-radar__axis">CULTURAL</text>
+        {points.map(({ cluster, x, y, radius }) => {
+          const source = window.DD_DATA.SOURCES[cluster.sources?.[0]] || { color: "var(--signal)" };
+          const selected = cluster.slug === selectedSlug;
+          return (
+            <g key={cluster.slug} role="button" tabIndex="0"
+               aria-label={`${cluster.topic}, creator score ${cluster.creator_score}, momentum ${cluster.momentum || 0} percent`}
+               className={`trend-radar__blip${selected ? " trend-radar__blip--selected" : ""}`}
+               onClick={event => activate(event, cluster.slug)}
+               onKeyDown={event => activate(event, cluster.slug)}>
+              {selected && <circle cx={x} cy={y} r={radius + 7} fill="none" stroke="var(--signal)" strokeDasharray="3 3"/>}
+              <circle cx={x} cy={y} r={radius} fill="var(--bg-0)" stroke={source.color} strokeWidth="2"/>
+              <text x={x} y={y + 3} textAnchor="middle" fill={source.color} className="trend-radar__score">{cluster.creator_score}</text>
+              <text x={x + radius + 7} y={y + 3} className="trend-radar__label">{cluster.topic}</text>
+              <text x={x + radius + 7} y={y + 15} className="trend-radar__meta">{cluster.first_seen_hrs}h · {cluster.source_count} sources</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
 const downloadScript = (filename, text) => {
   const element = document.createElement("a");
   const file = new Blob([text], {type: 'text/markdown'});
@@ -257,5 +330,5 @@ const downloadScript = (filename, text) => {
 
 Object.assign(window, {
   SourceChip, Sparkline, ScoreBar, Momentum, SourceStack,
-  Waveform, FakeThumb, FormatBadge, KPI, PanelHeader, downloadScript,
+  Waveform, FakeThumb, FormatBadge, KPI, PanelHeader, TrendRadar, downloadScript,
 });

@@ -740,7 +740,9 @@ const QuickWins = ({
 // ── BriefView ─────────────────────────────────────────────────────────────
 
 const BriefView = ({
-  onJump
+  onJump,
+  selectedClusterSlug,
+  setSelectedClusterSlug
 }) => {
   const {
     clusters,
@@ -751,9 +753,9 @@ const BriefView = ({
     meta
   } = window.DD_DATA;
   const persona = window.__tweaks?.persona || "multi";
-  const P = window.DD_DATA.personas[persona];
-  const hero = clusters[0] || null;
-  const opp = hero ? opportunities?.find(o => o.slug === hero.slug) || opportunities?.find(o => o.creator_topic === hero.topic) || null : null;
+  const P = window.DD_DATA.personas[persona] || window.DD_DATA.personas.multi || Object.values(window.DD_DATA.personas)[0];
+  const hero = clusters.find(cluster => cluster.slug === selectedClusterSlug) || clusters[0] || null;
+  const opp = hero ? opportunities?.find(o => o.cluster_slug === hero.slug) || opportunities?.find(o => o.slug === hero.slug) || opportunities?.find(o => o.creator_topic === hero.topic) || null : null;
   const titles = hero ? titleSets?.[hero.slug] || {} : {};
   const heroThumb = hero ? thumbnails?.find(t => t.topic === hero.slug) : null;
   const [titleKey, setTitleKey] = useState(Object.keys(titles)[0] || "practical");
@@ -885,10 +887,13 @@ const BriefView = ({
       stroke: "var(--signal)"
     }), fetchedAgo ? `fetched ${fetchedAgo}` : `${hero.sources?.length || 0} sources`), /*#__PURE__*/React.createElement("button", {
       className: "btn ghost",
-      onClick: () => window.DDX && window.DDX.reload()
+      onClick: () => {
+        const topSlug = clusters[0]?.slug;
+        if (topSlug && setSelectedClusterSlug) setSelectedClusterSlug(topSlug);
+      }
     }, /*#__PURE__*/React.createElement(I.Refresh, {
       size: 12
-    }), " Re-pick"))
+    }), " Use top pick"))
   }, P.hero_title), (!opp || opp.enrichment_status !== "ready" && opp.enrichment_status !== "ready_with_warnings") && /*#__PURE__*/React.createElement("div", {
     style: {
       margin: "12px 24px 0",
@@ -1027,7 +1032,7 @@ const BriefView = ({
     className: "btn primary",
     onClick: () => {
       if (window.DDX) window.DDX.dispatch("script_writer", hero.topic, hero.slug);
-      onJump("research");
+      onJump("research", hero.slug);
     }
   }, P.cta, " ", /*#__PURE__*/React.createElement(I.ArrowR, {
     size: 12
@@ -1035,7 +1040,7 @@ const BriefView = ({
     className: "btn ghost",
     onClick: () => {
       if (window.DDX) window.DDX.dispatch("topic_researcher", hero.topic, hero.slug);
-      onJump("research");
+      onJump("research", hero.slug);
     }
   }, "Generate research pack"), /*#__PURE__*/React.createElement("button", {
     className: "btn ghost",
@@ -1058,11 +1063,16 @@ const BriefView = ({
     }
   }, /*#__PURE__*/React.createElement(I.Save, {
     size: 12
-  }), " Save to pipeline"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(FakeThumb, {
+  }), " Save to pipeline"))), /*#__PURE__*/React.createElement("div", null, heroThumb ? /*#__PURE__*/React.createElement(FakeThumb, {
     t: heroThumb,
     w: 420,
     h: 236
-  }), /*#__PURE__*/React.createElement("div", {
+  }) : /*#__PURE__*/React.createElement("button", {
+    className: "brief-thumb-empty",
+    onClick: () => onJump("thumbs", hero.slug)
+  }, /*#__PURE__*/React.createElement(I.Thumb, {
+    size: 22
+  }), /*#__PURE__*/React.createElement("strong", null, "No thumbnail selected"), /*#__PURE__*/React.createElement("span", null, "Open Thumb Lab to compile or generate variants.")), /*#__PURE__*/React.createElement("div", {
     className: "mono",
     style: {
       fontSize: 10,
@@ -1072,9 +1082,9 @@ const BriefView = ({
       display: "flex",
       justifyContent: "space-between"
     }
-  }, /*#__PURE__*/React.createElement("span", null, "thumb \xB7 variant A \xB7 CTR-likelihood ", heroThumb?.ctr || 0), /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("span", null, heroThumb ? `thumb variant · predicted CTR ${heroThumb.ctr}` : "thumbnail not generated"), /*#__PURE__*/React.createElement("button", {
     className: "btn ghost",
-    onClick: () => onJump("thumbs"),
+    onClick: () => onJump("thumbs", hero.slug),
     style: {
       padding: "2px 6px",
       fontSize: 10
@@ -1154,7 +1164,7 @@ const BriefView = ({
     eyebrow: "YouTube \xB7 14\u201318 min",
     title: displayTitle || hero.topic,
     body: videoBody,
-    meta: [["Effort", opp?.production_effort || "medium"], ["Demo Value", `${fDemo}`], ["Best post-time", "Wed 6pm"]],
+    meta: [["Effort", opp?.production_effort || "medium"], ["Demo Value", `${fDemo}`], ["Evidence", `${hero.source_count} sources`]],
     cta: "Draft a script",
     topic: hero.topic,
     format: "video",
@@ -1165,7 +1175,7 @@ const BriefView = ({
     eyebrow: "YT Short \xB7 47s",
     title: titles.curiosity || titles[Object.keys(titles)[0]] || `${hero.topic} in 47 seconds`,
     body: shortsBody,
-    meta: [["Effort", "low"], ["Tension", `${fTension}`], ["Vertical", "ready"]],
+    meta: [["Effort", "low"], ["Tension", `${fTension}`], ["Vertical", "planned"]],
     cta: "Write short script",
     topic: hero.topic,
     format: "shorts",

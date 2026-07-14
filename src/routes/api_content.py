@@ -179,19 +179,8 @@ def api_forge_status(item_id):
 
 _EDITORIAL_FALLBACK = (
     "# Daily Production Briefing\n\n"
-    "## Strategic Focus: Local AI & Coding Agents\n"
-    "Today's momentum is heavily clustered around **Local AI** and **Coding Agents**. "
-    "Here is your structured production plan:\n\n"
-    "### \U0001f4fd YouTube Long-form\n"
-    "- **Topic**: Local AI Sharding on Commodity Hardware\n"
-    "- **Angle**: Why you don't need a $2,000 GPU to run deep models. Show a demo sharding a model across two cheap mini-PCs.\n"
-    "- **Hook**: \"Two mini PCs. One model. Sharded locally with zero cloud dependencies. Let's bench it.\"\n\n"
-    "### \U0001f4f1 YouTube Short\n"
-    "- **Topic**: Coding Agents vs. Coding Tools\n"
-    "- **Angle**: 45-second high-tempo comparison of dynamic agents vs static autocomplete.\n\n"
-    "### \u270d\ufe0f Substack Newsletter\n"
-    "- **Topic**: The Rise of Autocomplete in Terminal\n"
-    "- **Angle**: Benchmarking open-source coding models against proprietary tools.\n"
+    "## Plan generation timed out\n\n"
+    "No editorial plan was produced. Retry generation or work from the grounded recommendation on Today.\n"
 )
 
 
@@ -230,15 +219,25 @@ def api_editorial_approve():
     try:
         scored_data = _load_scored_data()
         dash = _dash()
+        briefing = dash._load_cached_editorial_briefing()
+        if not briefing or briefing.get("status") != "ready":
+            return jsonify({"error": "A current verified editorial plan is required before approval"}), 409
+        current_version = scored_data.get("last_updated") if isinstance(scored_data, dict) else None
+        if briefing.get("source_version") != current_version:
+            return jsonify({"error": "Source data changed after this plan was generated; regenerate it before approval"}), 409
         clusters = dash._cockpit_clusters(scored_data)
         if not clusters:
             return jsonify({"error": "No clusters available to approve"}), 400
+        plan_items = briefing.get("plan_items") or []
+        if not plan_items:
+            return jsonify({"error": "Editorial plan has no bound production items; regenerate it"}), 409
+        clusters_by_slug = {cluster.get("slug"): cluster for cluster in clusters}
 
-        formats = [
-            {"fmt": "video", "idx": 0, "agents": ["topic_researcher", "script_writer"]},
-            {"fmt": "short", "idx": 1, "agents": ["script_writer", "thumbnail_director"]},
-            {"fmt": "newsletter", "idx": 2, "agents": ["topic_researcher"]}
-        ]
+        # Mark the plan as approved *before* side effects so a concurrent
+        # approval request or a write failure cannot duplicate work.
+        marked = dash._mark_editorial_briefing_approved()
+        if not marked or marked.get("status") != "approved":
+            return jsonify({"error": "Editorial plan was already approved or could not be locked"}), 409
 
         base = datetime.now()
         rec_day = (base + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -249,38 +248,40 @@ def api_editorial_approve():
 
         agent_runner = _agent_runner()
 
-        for f_info in formats:
-            idx = f_info["idx"]
-            if idx >= len(clusters):
-                c = clusters[0]
-            else:
-                c = clusters[idx]
+        for plan_item in plan_items:
+            c = clusters_by_slug.get(plan_item.get("cluster_slug"))
+            if not c:
+                return jsonify({"error": "A planned story is no longer active; regenerate the editorial plan"}), 409
 
             topic_title = c.get("topic")
             slug = c.get("slug")
             category = c.get("category") or "General"
+            content_format = plan_item.get("format") or "YouTube long-form"
+            plan_key = int(briefing.get("generated_at") or 0)
 
             item_id = db.save_item({
                 "title": topic_title,
-                "url": slug,
+                "working_title": topic_title,
+                "url": f"editorial://{plan_key}/{slug}/{content_format.lower().replace(' ', '-')}",
                 "category": category,
-                "signal_score": c.get("momentum") or 50,
+                "signal_score": c.get("average_signal_score") or 0,
                 "creator_score": c.get("creator_score") or 50,
                 "pipeline_type": "creator",
-                "status": "to_read",
-                "format": f_info["fmt"],
+                "status": "researching",
+                "format": content_format,
                 "outline": [c.get("why_this_is_a_story") or ""]
             })
             saved_items_count += 1
 
             sid_rec = f"sched-{uuid.uuid4().hex[:12]}"
-            db.insert_schedule(sid_rec, str(item_id), rec_day, "record", time="10:00")
+            work_kind = "record" if content_format.startswith("YouTube") else "outline"
+            db.insert_schedule(sid_rec, str(item_id), rec_day, work_kind, time="10:00")
 
             sid_pub = f"sched-{uuid.uuid4().hex[:12]}"
             db.insert_schedule(sid_pub, str(item_id), pub_day, "publish", time="12:00")
 
             if agent_runner:
-                for agent_t in f_info["agents"]:
+                for agent_t in plan_item.get("agent_types") or []:
                     try:
                         run_id = agent_runner.dispatch(
                             agent_t,

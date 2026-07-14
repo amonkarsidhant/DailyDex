@@ -318,7 +318,7 @@ const ClusterCard = ({ c, expanded, onToggle }) => {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
           <Waveform data={c.pulse} w={140} h={36} color={primarySrc.color}/>
-          <button className="btn ghost" style={{ padding: "4px 8px" }} onClick={onToggle}>
+          <button className="btn ghost" style={{ padding: "4px 8px" }} onClick={event => { event.stopPropagation(); onToggle(); }}>
             {expanded ? "−" : "+"} details
           </button>
         </div>
@@ -473,7 +473,7 @@ const CompilationCard = ({ comp, expanded, onToggle }) => {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
           <div className="mono" style={{ fontSize: 10, color: "var(--text-lo)" }}>THEMED COMPILATION</div>
-          <button className="btn ghost" style={{ padding: "4px 8px" }} onClick={onToggle}>
+          <button className="btn ghost" style={{ padding: "4px 8px" }} onClick={event => { event.stopPropagation(); onToggle(); }}>
             {expanded ? "−" : "+"} details
           </button>
         </div>
@@ -571,11 +571,26 @@ const ActionTile = ({ label, icon, sub, hot, onClick }) => (
 
 // ── ClustersView ──────────────────────────────────────────────────────────
 
-const ClustersView = ({ onJump }) => {
+const ClustersView = ({ onJump, selectedClusterSlug, setSelectedClusterSlug }) => {
   const { clusters, compilations } = window.DD_DATA;
   const [activeTab, setActiveTab] = useState("single"); // "single" or "listicle"
-  const [expandedId, setExpandedId] = useState(clusters[0] ? clusters[0].slug : null);
+  const initialSlug = clusters.some(cluster => cluster.slug === selectedClusterSlug)
+    ? selectedClusterSlug
+    : (clusters[0] ? clusters[0].slug : null);
+  const [expandedId, setExpandedId] = useState(initialSlug);
   const [sortMode, setSortMode] = useState("momentum");
+  const [viewMode, setViewMode] = useState("list");
+
+  useEffect(() => {
+    if (selectedClusterSlug && clusters.some(cluster => cluster.slug === selectedClusterSlug)) {
+      setExpandedId(selectedClusterSlug);
+    }
+  }, [selectedClusterSlug]);
+
+  const selectCluster = slug => {
+    setExpandedId(slug);
+    if (setSelectedClusterSlug) setSelectedClusterSlug(slug);
+  };
 
   if (!clusters.length) {
     return (
@@ -616,7 +631,12 @@ const ClustersView = ({ onJump }) => {
                 borderRadius: "4px",
                 border: "1px solid var(--line)"
               }}>
-                <button className="btn ghost" onClick={() => { setActiveTab("single"); setExpandedId(clusters[0] ? clusters[0].slug : null); }}
+                <button className="btn ghost" onClick={() => {
+                  const firstSlug = clusters[0] ? clusters[0].slug : null;
+                  setActiveTab("single");
+                  setExpandedId(firstSlug);
+                  if (firstSlug && setSelectedClusterSlug) setSelectedClusterSlug(firstSlug);
+                }}
                   style={{
                     padding: "3px 8px", fontSize: 11,
                     background: activeTab === "single" ? "var(--bg-0)" : "transparent",
@@ -639,6 +659,14 @@ const ClustersView = ({ onJump }) => {
                     borderColor: sortMode === m ? "var(--signal)" : "var(--line-2)",
                   }}>{m}</button>
               ))}
+              {activeTab === "single" && (
+                <div className="discover-view-toggle">
+                  <button className="btn ghost" onClick={() => setViewMode("list")}
+                          aria-pressed={viewMode === "list"}>List</button>
+                  <button className="btn ghost" onClick={() => setViewMode("radar")}
+                          aria-pressed={viewMode === "radar"}>Radar</button>
+                </div>
+              )}
             </div>
           }>
           {activeTab === "single"
@@ -668,11 +696,39 @@ const ClustersView = ({ onJump }) => {
         </div>
       </div>
 
-      {activeTab === "single" ? (
+      {activeTab === "single" && viewMode === "radar" ? (
+        <div className="panel discover-radar-panel">
+          <TrendRadar clusters={sorted} selectedSlug={expandedId} onSelect={selectCluster}/>
+          {(() => {
+            const selected = clusters.find(cluster => cluster.slug === expandedId) || clusters[0];
+            if (!selected) return null;
+            return (
+              <div className="discover-radar-detail">
+                <span className="micro">Selected signal</span>
+                <h2>{selected.topic}</h2>
+                <p>{selected.why_this_is_a_story}</p>
+                <div className="discover-radar-detail__metrics">
+                  <span>Creator <strong>{selected.creator_score}</strong></span>
+                  <span>Signal <strong>{selected.average_signal_score}</strong></span>
+                  <span>Sources <strong>{selected.source_count}</strong></span>
+                </div>
+                <div className="discover-radar-detail__actions">
+                  <button className="btn primary" onClick={() => onJump("brief", selected.slug)}>Open brief</button>
+                  <button className="btn ghost" onClick={() => setViewMode("list")}>View evidence</button>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      ) : activeTab === "single" ? (
         sorted.map(c => (
           <ClusterCard key={c.slug} c={c}
             expanded={expandedId === c.slug}
-            onToggle={() => setExpandedId(expandedId === c.slug ? null : c.slug)}/>
+            onToggle={() => {
+              const next = expandedId === c.slug ? null : c.slug;
+              setExpandedId(next);
+              if (next && setSelectedClusterSlug) setSelectedClusterSlug(next);
+            }}/>
         ))
       ) : (
         (!compilations || compilations.length === 0) ? (

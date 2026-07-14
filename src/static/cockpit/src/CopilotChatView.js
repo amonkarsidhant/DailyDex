@@ -1,7 +1,9 @@
 function _extends() { return _extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, _extends.apply(null, arguments); }
 // React hooks come from AppShell's shared destructure (single source to avoid duplicate const in shared script scope).
 
-const CopilotChatView = () => {
+const CopilotChatView = ({
+  selectedClusterSlug
+}) => {
   const [messages, setMessages] = useState([{
     role: "assistant",
     text: "Hello! I am your DailyDex Strategist Copilot. Ask me anything about the active trends, pipeline, or today's top picks. I have direct access to our live crawled data."
@@ -30,9 +32,8 @@ const CopilotChatView = () => {
     setInput("");
     setBusy(true);
     try {
-      const topSlug = (window.DD_DATA.clusters[0] || {}).slug;
       const res = await window.DDX.copilot("copilot_chat", q, {
-        focused_cluster: topSlug
+        focused_cluster: selectedClusterSlug
       });
       setMessages(prev => [...prev, {
         role: "assistant",
@@ -49,7 +50,7 @@ const CopilotChatView = () => {
       setBusy(false);
     }
   };
-  const topPick = window.DD_DATA.clusters[0] || null;
+  const topPick = window.DD_DATA.clusters.find(cluster => cluster.slug === selectedClusterSlug) || window.DD_DATA.clusters[0] || null;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",

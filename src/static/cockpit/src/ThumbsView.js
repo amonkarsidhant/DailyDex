@@ -1,21 +1,43 @@
 // ThumbsView — thumbnail explorations with side-by-side title experiments
 
 const ThumbsView = ({
-  onJump
+  onJump,
+  selectedClusterSlug,
+  setSelectedClusterSlug
 }) => {
   const {
     thumbnails,
     titleSets,
-    clusters
+    clusters,
+    opportunities = []
   } = window.DD_DATA;
-  const _firstTopic = thumbnails[0] && thumbnails[0].topic || clusters[0] && clusters[0].slug || "";
+  const _firstTopic = selectedClusterSlug || thumbnails[0] && thumbnails[0].topic || clusters[0] && clusters[0].slug || "";
   const [topic, setTopic] = useState(_firstTopic);
   const topicThumbs = thumbnails.filter(t => t.topic === topic);
   const allTopics = [...new Set([...thumbnails.map(t => t.topic), ...clusters.map(c => c.slug).filter(Boolean)])];
   const titles = titleSets[topic] || {};
   const cluster = clusters.find(c => c.slug === topic);
+  const opportunity = opportunities.find(item => item.cluster_slug === topic || item.slug === topic);
+  const topicContentHash = opportunity?.content_hash || topic;
   const [picked, setPicked] = useState(topicThumbs[0]?.id);
   const [generatingId, setGeneratingId] = useState(null);
+  useEffect(() => {
+    if (selectedClusterSlug && clusters.some(cluster => cluster.slug === selectedClusterSlug)) {
+      setTopic(selectedClusterSlug);
+      setPicked(thumbnails.find(thumbnail => thumbnail.topic === selectedClusterSlug)?.id);
+    }
+  }, [selectedClusterSlug]);
+  useEffect(() => {
+    const current = thumbnails.filter(thumbnail => thumbnail.topic === topic);
+    if (!current.some(thumbnail => thumbnail.id === picked)) {
+      setPicked(current[0]?.id);
+    }
+  }, [thumbnails, topic]);
+  const selectTopic = nextTopic => {
+    setTopic(nextTopic);
+    setPicked(thumbnails.find(thumbnail => thumbnail.topic === nextTopic)?.id);
+    if (setSelectedClusterSlug) setSelectedClusterSlug(nextTopic);
+  };
   const handleGenerate = async p => {
     setGeneratingId(p.id);
     try {
@@ -65,7 +87,7 @@ const ThumbsView = ({
       className: "btn primary",
       onClick: () => {
         const cl = clusters.find(c => c.slug === topic) || {};
-        const ch = (topicThumbs[0] || {}).content_hash || topic;
+        const ch = (topicThumbs[0] || {}).content_hash || topicContentHash;
         if (window.DDX) window.DDX.dispatch("thumbnail_director", cl.topic, ch);
       }
     }, /*#__PURE__*/React.createElement(I.Spark, {
@@ -85,10 +107,7 @@ const ThumbsView = ({
     const c = clusters.find(cl => cl.slug === t);
     return /*#__PURE__*/React.createElement("button", {
       key: t,
-      onClick: () => {
-        setTopic(t);
-        setPicked(thumbnails.find(th => th.topic === t)?.id);
-      },
+      onClick: () => selectTopic(t),
       style: {
         padding: "6px 12px",
         background: topic === t ? "var(--bg-3)" : "var(--bg-2)",
@@ -116,7 +135,7 @@ const ThumbsView = ({
         color: "var(--text-lo)",
         letterSpacing: "0.06em"
       }
-    }, topicThumbs.length, " variants \xB7 sorted by CTR likelihood")
+    }, topicThumbs.length, " variants \xB7 sorted by heuristic CTR score")
   }, "Variants for ", cluster?.topic), /*#__PURE__*/React.createElement("div", {
     style: {
       display: topicThumbs.length > 0 ? "grid" : "block",
@@ -160,7 +179,7 @@ const ThumbsView = ({
     onClick: async () => {
       if (window.DDX) {
         const cl = clusters.find(c => c.slug === topic) || {};
-        await window.DDX.genThumbnails(topic, cl.topic || topic, 6);
+        await window.DDX.genThumbnails(topicContentHash, cl.topic || topic, 6);
         window.DDX.reload();
       }
     }
@@ -168,7 +187,7 @@ const ThumbsView = ({
     className: "btn ghost",
     onClick: () => {
       const cl = clusters.find(c => c.slug === topic) || {};
-      if (window.DDX) window.DDX.dispatch("thumbnail_director", cl.topic || topic, topic);
+      if (window.DDX) window.DDX.dispatch("thumbnail_director", cl.topic || topic, topicContentHash);
     }
   }, /*#__PURE__*/React.createElement(I.Spark, {
     size: 11
@@ -205,7 +224,7 @@ const ThumbsView = ({
         color: "var(--signal-up)",
         fontWeight: 600
       }
-    }, "CTR-likelihood ", p.ctr), /*#__PURE__*/React.createElement("button", {
+    }, "CTR heuristic ", p.ctr), /*#__PURE__*/React.createElement("button", {
       className: "btn primary",
       disabled: generatingId === p.id,
       onClick: () => handleGenerate(p),
@@ -246,30 +265,14 @@ const ThumbsView = ({
       style: {
         color: "var(--text-hi)"
       }
-    }, "Predicted CTR vs your channel baseline"), /*#__PURE__*/React.createElement("div", {
+    }, "Heuristic score, not measured channel CTR"), /*#__PURE__*/React.createElement("p", {
       style: {
-        marginTop: 12,
-        display: "flex",
-        flexDirection: "column",
-        gap: 8
+        margin: "7px 0 0",
+        color: "var(--text-mid)",
+        fontSize: 11.5,
+        lineHeight: 1.45
       }
-    }, /*#__PURE__*/React.createElement(BaselineBar, {
-      label: "Your last 30 videos",
-      val: 0.62,
-      max: 12,
-      note: "6.2% avg"
-    }), /*#__PURE__*/React.createElement(BaselineBar, {
-      label: "Your top 10%",
-      val: 0.88,
-      max: 12,
-      note: "8.8% avg"
-    }), /*#__PURE__*/React.createElement(BaselineBar, {
-      label: `This thumb`,
-      val: p.ctr / 12,
-      max: 12,
-      note: `${p.ctr}% pred · top decile`,
-      hot: true
-    })))) : null;
+    }, "This score ranks visual variants using format and visual-potential signals. It is not a claim about historical channel performance."))) : null;
   })()), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "label"
   }, "Pair with title"), /*#__PURE__*/React.createElement("div", {
@@ -279,59 +282,38 @@ const ThumbsView = ({
       gap: 6,
       marginTop: 8
     }
-  }, Object.entries(titles).map(([k, v], i) => /*#__PURE__*/React.createElement("div", {
+  }, Object.entries(titles).map(([k, v]) => /*#__PURE__*/React.createElement("div", {
     key: k,
     style: {
       padding: "10px 12px",
-      background: i === 1 ? "rgba(240,183,47,0.06)" : "var(--bg-2)",
-      border: `1px solid ${i === 1 ? "rgba(240,183,47,0.4)" : "var(--line)"}`,
+      background: "var(--bg-2)",
+      border: "1px solid var(--line)",
       borderRadius: 4
     }
   }, /*#__PURE__*/React.createElement("div", {
-    className: "micro",
-    style: {
-      color: i === 1 ? "var(--signal)" : "var(--text-lo)"
-    }
-  }, k.toUpperCase(), i === 1 ? " · top pair" : ""), /*#__PURE__*/React.createElement("div", {
+    className: "micro"
+  }, k.toUpperCase()), /*#__PURE__*/React.createElement("div", {
     style: {
       color: "var(--text-hi)",
       fontSize: 13.5,
       lineHeight: 1.3,
       marginTop: 4,
-      fontWeight: i === 1 ? 600 : 500,
+      fontWeight: 500,
       textWrap: "balance"
     }
-  }, v), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      marginTop: 6
-    }
-  }, /*#__PURE__*/React.createElement(ScoreBar, {
-    value: 60 + i * 8,
-    w: 60,
-    label: false
-  }), /*#__PURE__*/React.createElement("span", {
-    className: "mono tnum",
-    style: {
-      fontSize: 10.5,
-      color: "var(--text-mid)"
-    }
-  }, "pair-fit ", 60 + i * 8))))), /*#__PURE__*/React.createElement("div", {
+  }, v)))), /*#__PURE__*/React.createElement("div", {
     className: "label",
     style: {
       marginTop: 18
     }
-  }, "Director's notes"), /*#__PURE__*/React.createElement("ul", {
+  }, "Director analysis"), /*#__PURE__*/React.createElement("p", {
     style: {
       margin: "8px 0 0",
-      paddingLeft: 18,
       fontSize: 12.5,
       lineHeight: 1.5,
-      color: "var(--text)"
+      color: "var(--text-mid)"
     }
-  }, /*#__PURE__*/React.createElement("li", null, "Face-zoom variants outperform headline-only by ~22% for this channel."), /*#__PURE__*/React.createElement("li", null, "Yellow + dark contrast is your signature \u2014 keep it."), /*#__PURE__*/React.createElement("li", null, "Avoid \"open-source\" as a thumbnail word (last 3 underperformed).")))))), topicThumbs.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "Dispatch the Thumbnail Director for story-specific visual reasoning. No channel-performance claim is shown without analytics data."))))), topicThumbs.length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "panel",
     style: {
       overflow: "hidden"
@@ -346,7 +328,7 @@ const ThumbsView = ({
       background: "var(--line)",
       padding: 1
     }
-  }, topicThumbs.map((t, i) => /*#__PURE__*/React.createElement("div", {
+  }, topicThumbs.map((t, i) => /*#__PURE__*/React.createElement("button", {
     key: t.id,
     onClick: () => setPicked(t.id),
     style: {
@@ -356,7 +338,12 @@ const ThumbsView = ({
       display: "flex",
       flexDirection: "column",
       gap: 10,
-      borderLeft: picked === t.id ? "2px solid var(--signal)" : "2px solid transparent"
+      borderLeft: picked === t.id ? "2px solid var(--signal)" : "2px solid transparent",
+      borderTop: 0,
+      borderRight: 0,
+      borderBottom: 0,
+      color: "inherit",
+      textAlign: "left"
     }
   }, /*#__PURE__*/React.createElement(FakeThumb, {
     t: t,
@@ -406,44 +393,4 @@ const ThumbsView = ({
     }
   }, t.ctr))))))));
 };
-const BaselineBar = ({
-  label,
-  val,
-  max,
-  note,
-  hot
-}) => /*#__PURE__*/React.createElement("div", {
-  style: {
-    display: "grid",
-    gridTemplateColumns: "180px 1fr auto",
-    gap: 10,
-    alignItems: "center"
-  }
-}, /*#__PURE__*/React.createElement("span", {
-  style: {
-    fontSize: 12,
-    color: "var(--text)"
-  }
-}, label), /*#__PURE__*/React.createElement("div", {
-  style: {
-    height: 6,
-    background: "var(--bg-0)",
-    borderRadius: 3,
-    position: "relative",
-    overflow: "hidden"
-  }
-}, /*#__PURE__*/React.createElement("div", {
-  style: {
-    height: "100%",
-    width: `${val * 100}%`,
-    background: hot ? "var(--signal-up)" : "var(--text-mid)",
-    boxShadow: hot ? "0 0 8px var(--signal-up)" : "none"
-  }
-})), /*#__PURE__*/React.createElement("span", {
-  className: "mono tnum",
-  style: {
-    fontSize: 10.5,
-    color: hot ? "var(--signal-up)" : "var(--text-mid)"
-  }
-}, note));
 window.ThumbsView = ThumbsView;

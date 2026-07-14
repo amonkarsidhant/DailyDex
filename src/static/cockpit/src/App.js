@@ -1,16 +1,43 @@
 // App.jsx — root, tweaks, view switching, time tick
 
+const storedPreference = (key, fallback) => {
+  try {
+    return window.localStorage.getItem(`dailydex:${key}`) || fallback;
+  } catch (_) {
+    return fallback;
+  }
+};
+const storedChoice = (key, fallback, choices) => {
+  const value = storedPreference(key, fallback);
+  if (choices.includes(value)) return value;
+  try {
+    window.localStorage.removeItem(`dailydex:${key}`);
+  } catch (_) {}
+  return fallback;
+};
+const serverPersona = window.DD_DATA && window.DD_DATA.persona || "multi";
+const personaChoices = Object.keys(window.DD_DATA?.personas || {});
 const TWEAK_DEFAULTS = {
-  "theme": "dark",
-  "persona": window.DD_DATA && window.DD_DATA.persona || "multi"
+  "theme": storedChoice("theme", "dark", ["dark", "light", "editorial"]),
+  "persona": storedChoice("persona", personaChoices.includes(serverPersona) ? serverPersona : "multi", personaChoices.length ? personaChoices : ["multi"])
 };
 const App = () => {
-  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [view, setView] = useState("pulse");
+  const [t, setRawTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [view, setView] = useState("today");
   const [now, setNow] = useState("");
   const [dataVersion, setDataVersion] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedClusterSlug, setSelectedClusterSlug] = useState(window.DD_DATA?.clusters?.[0]?.slug || null);
+  const [railOpen, setRailOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [onboarded, setOnboarded] = useState(window.DD_DATA?.creator_identity?.onboarding_completed === true);
+  const previousFocusRef = useRef(null);
+  const setTweak = React.useCallback((key, value) => {
+    setRawTweak(key, value);
+    try {
+      window.localStorage.setItem(`dailydex:${key}`, value);
+    } catch (_) {}
+  }, [setRawTweak]);
 
   // expose tweaks for nav rendering without prop-drilling
   window.__tweaks = t;
@@ -18,24 +45,53 @@ const App = () => {
   // Re-render whenever the live data layer swaps window.DD_DATA.
   useEffect(() => window.DDX && window.DDX.onReload(() => setDataVersion(v => v + 1)), []);
 
-  // Auto-refresh: pick up a fetch triggered elsewhere (e.g. the home dashboard)
-  // when the tab regains focus, plus a slow background poll.
+  // Pick up work triggered elsewhere when focus returns, plus a conservative poll.
   useEffect(() => {
     if (!window.DDX) return;
-    let last = window.DD_DATA && window.DD_DATA.last_updated || null;
     const pull = async () => {
       try {
-        const d = await window.DDX.reload();
-        last = d.last_updated || last;
+        await window.DDX.reload();
       } catch (e) {}
     };
     const onFocus = () => pull();
     window.addEventListener("focus", onFocus);
-    const id = setInterval(pull, 30000);
+    const id = setInterval(pull, 120000);
     return () => {
       window.removeEventListener("focus", onFocus);
       clearInterval(id);
     };
+  }, []);
+  useEffect(() => {
+    const main = document.querySelector(".main");
+    const topbar = document.querySelector(".topbar");
+    if (navOpen) {
+      previousFocusRef.current = document.activeElement;
+      if (main) main.inert = true;
+      if (topbar) topbar.inert = true;
+      requestAnimationFrame(() => document.querySelector(".nav-mobile-close")?.focus());
+    } else {
+      if (main) main.inert = false;
+      if (topbar) topbar.inert = false;
+      if (previousFocusRef.current?.focus) previousFocusRef.current.focus();
+      previousFocusRef.current = null;
+    }
+  }, [navOpen]);
+  useEffect(() => {
+    const clusters = window.DD_DATA?.clusters || [];
+    if (!clusters.length) {
+      setSelectedClusterSlug(null);
+    } else if (!clusters.some(cluster => cluster.slug === selectedClusterSlug)) {
+      setSelectedClusterSlug(clusters[0].slug);
+    }
+  }, [dataVersion]);
+  useEffect(() => {
+    const closeOverlays = event => {
+      if (event.key !== "Escape") return;
+      setNavOpen(false);
+      setRailOpen(false);
+    };
+    window.addEventListener("keydown", closeOverlays);
+    return () => window.removeEventListener("keydown", closeOverlays);
   }, []);
   const onRefresh = async () => {
     if (!window.DDX || refreshing) return;
@@ -65,8 +121,15 @@ const App = () => {
     const id = setInterval(fmt, 1000);
     return () => clearInterval(id);
   }, []);
+  const navigate = (nextView, clusterSlug) => {
+    const normalizedView = nextView === "pulse" ? "today" : nextView;
+    if (clusterSlug) setSelectedClusterSlug(clusterSlug);else if (normalizedView === "today") setSelectedClusterSlug(window.DD_DATA?.clusters?.[0]?.slug || null);
+    React.startTransition(() => setView(normalizedView));
+    setNavOpen(false);
+  };
   const Views = {
-    pulse: PulseView,
+    today: TodayView,
+    pulse: TodayView,
     brief: BriefView,
     clusters: ClustersView,
     thumbs: ThumbsView,
@@ -78,67 +141,50 @@ const App = () => {
     copilot: CopilotChatView,
     settings: SettingsView
   };
-  const CurrentView = Views[view] || PulseView;
+  const CurrentView = Views[view] || TodayView;
   if (!onboarded) {
     return /*#__PURE__*/React.createElement(OnboardingView, {
       onComplete: () => setOnboarded(true)
     });
   }
   return /*#__PURE__*/React.createElement("div", {
-    className: "app"
+    className: `app${railOpen ? " app--rail-open" : ""}${navOpen ? " app--nav-open" : ""}`
   }, /*#__PURE__*/React.createElement(Nav, {
     view: view,
-    setView: setView
+    setView: navigate,
+    onClose: () => setNavOpen(false)
+  }), navOpen && /*#__PURE__*/React.createElement("button", {
+    className: "nav-backdrop",
+    "aria-label": "Close navigation",
+    onClick: () => setNavOpen(false)
   }), /*#__PURE__*/React.createElement(Topbar, {
     now: now,
-    onOpenTweaks: () => window.__toggleTweaks && window.__toggleTweaks(),
+    onOpenSettings: () => navigate("settings"),
     onRefresh: onRefresh,
-    refreshing: refreshing
+    refreshing: refreshing,
+    onToggleAgents: () => setRailOpen(open => !open),
+    railOpen: railOpen,
+    onToggleNav: () => setNavOpen(open => !open),
+    navOpen: navOpen
   }), /*#__PURE__*/React.createElement("main", {
-    className: "main"
+    className: "main",
+    "data-version": dataVersion
   }, /*#__PURE__*/React.createElement("div", {
     className: "main-scroll",
     key: view
   }, /*#__PURE__*/React.createElement(CurrentView, {
-    onJump: setView
-  }))), /*#__PURE__*/React.createElement(AgentRail, null), /*#__PURE__*/React.createElement(CopilotDock, {
-    context: view
-  }), /*#__PURE__*/React.createElement(TweaksPanel, null, /*#__PURE__*/React.createElement(TweakSection, {
-    label: "Theme"
-  }), /*#__PURE__*/React.createElement(TweakRadio, {
-    label: "Visual theme",
-    value: t.theme,
-    options: ["dark", "light", "editorial"],
-    onChange: v => setTweak("theme", v)
-  }), /*#__PURE__*/React.createElement(TweakSection, {
-    label: "Persona"
-  }), /*#__PURE__*/React.createElement(TweakSelect, {
-    label: "Creator persona",
-    value: t.persona,
-    options: [{
-      value: "multi",
-      label: "Multi-format (YT + LI + Newsletter)"
-    }, {
-      value: "shorts",
-      label: "Shorts-first"
-    }, {
-      value: "newsletter",
-      label: "Newsletter writer"
-    }, {
-      value: "educator",
-      label: "Educator"
-    }],
-    onChange: v => setTweak("persona", v)
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "8px 10px",
-      background: "rgba(0,0,0,0.04)",
-      borderRadius: 6,
-      fontSize: 11,
-      lineHeight: 1.4,
-      color: "rgba(41,38,27,0.65)"
-    }
-  }, "Persona rewrites the Brief headline, CTAs, and which format gets priority in the cross-post split.")));
+    onJump: navigate,
+    selectedClusterSlug: selectedClusterSlug,
+    setSelectedClusterSlug: setSelectedClusterSlug,
+    tweaks: t,
+    setTweak: setTweak
+  }))), railOpen && /*#__PURE__*/React.createElement(AgentRail, {
+    selectedClusterSlug: selectedClusterSlug,
+    onClose: () => setRailOpen(false)
+  }), /*#__PURE__*/React.createElement(CopilotDock, {
+    context: view,
+    selectedClusterSlug: selectedClusterSlug
+  }));
 };
 
 // Error boundary — a single render throw must never blank the whole app.

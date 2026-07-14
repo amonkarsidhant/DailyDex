@@ -410,13 +410,14 @@ const QuickWins = ({ items = [], topic, genContext, onJump }) => {
 
 // ── BriefView ─────────────────────────────────────────────────────────────
 
-const BriefView = ({ onJump }) => {
+const BriefView = ({ onJump, selectedClusterSlug, setSelectedClusterSlug }) => {
   const { clusters, titleSets, thumbnails, opportunities, creator_brief, meta } = window.DD_DATA;
   const persona = window.__tweaks?.persona || "multi";
-  const P = window.DD_DATA.personas[persona];
-  const hero = clusters[0] || null;
+  const P = window.DD_DATA.personas[persona] || window.DD_DATA.personas.multi || Object.values(window.DD_DATA.personas)[0];
+  const hero = clusters.find(cluster => cluster.slug === selectedClusterSlug) || clusters[0] || null;
   const opp = hero
-    ? (opportunities?.find(o => o.slug === hero.slug) ||
+    ? (opportunities?.find(o => o.cluster_slug === hero.slug) ||
+       opportunities?.find(o => o.slug === hero.slug) ||
        opportunities?.find(o => o.creator_topic === hero.topic) ||
        null)
     : null;
@@ -521,7 +522,10 @@ const BriefView = ({ onJump }) => {
                 <I.Spark size={10} stroke="var(--signal)"/>
                 {fetchedAgo ? `fetched ${fetchedAgo}` : `${hero.sources?.length || 0} sources`}
               </span>
-              <button className="btn ghost" onClick={() => window.DDX && window.DDX.reload()}><I.Refresh size={12}/> Re-pick</button>
+              <button className="btn ghost" onClick={() => {
+                const topSlug = clusters[0]?.slug;
+                if (topSlug && setSelectedClusterSlug) setSelectedClusterSlug(topSlug);
+              }}><I.Refresh size={12}/> Use top pick</button>
             </>
           }>
           {P.hero_title}
@@ -608,11 +612,11 @@ const BriefView = ({ onJump }) => {
             <div style={{ display: "flex", gap: 8, marginTop: 24, flexWrap: "wrap" }}>
               <button className="btn primary" onClick={() => {
                 if (window.DDX) window.DDX.dispatch("script_writer", hero.topic, hero.slug);
-                onJump("research");
+                onJump("research", hero.slug);
               }}>{P.cta} <I.ArrowR size={12}/></button>
               <button className="btn ghost" onClick={() => {
                 if (window.DDX) window.DDX.dispatch("topic_researcher", hero.topic, hero.slug);
-                onJump("research");
+                onJump("research", hero.slug);
               }}>Generate research pack</button>
               <button className="btn ghost" onClick={() => {
                 if (!window.DDX) return;
@@ -631,11 +635,17 @@ const BriefView = ({ onJump }) => {
 
           {/* Right: thumbnail + score breakdown */}
           <div>
-            <FakeThumb t={heroThumb} w={420} h={236}/>
+            {heroThumb ? <FakeThumb t={heroThumb} w={420} h={236}/> : (
+              <button className="brief-thumb-empty" onClick={() => onJump("thumbs", hero.slug)}>
+                <I.Thumb size={22}/>
+                <strong>No thumbnail selected</strong>
+                <span>Open Thumb Lab to compile or generate variants.</span>
+              </button>
+            )}
             <div className="mono" style={{ fontSize: 10, color: "var(--text-lo)", marginTop: 8,
               letterSpacing: "0.04em", display: "flex", justifyContent: "space-between" }}>
-              <span>thumb · variant A · CTR-likelihood {heroThumb?.ctr || 0}</span>
-              <button className="btn ghost" onClick={() => onJump("thumbs")}
+              <span>{heroThumb ? `thumb variant · predicted CTR ${heroThumb.ctr}` : "thumbnail not generated"}</span>
+              <button className="btn ghost" onClick={() => onJump("thumbs", hero.slug)}
                 style={{ padding: "2px 6px", fontSize: 10 }}>Open Thumb Lab</button>
             </div>
 
@@ -682,7 +692,7 @@ const BriefView = ({ onJump }) => {
           eyebrow="YouTube · 14–18 min"
           title={displayTitle || hero.topic}
           body={videoBody}
-          meta={[["Effort", opp?.production_effort || "medium"], ["Demo Value", `${fDemo}`], ["Best post-time", "Wed 6pm"]]}
+          meta={[["Effort", opp?.production_effort || "medium"], ["Demo Value", `${fDemo}`], ["Evidence", `${hero.source_count} sources`]]}
           cta="Draft a script"
           topic={hero.topic}
           format="video"
@@ -693,7 +703,7 @@ const BriefView = ({ onJump }) => {
           eyebrow="YT Short · 47s"
           title={titles.curiosity || titles[Object.keys(titles)[0]] || `${hero.topic} in 47 seconds`}
           body={shortsBody}
-          meta={[["Effort","low"], ["Tension", `${fTension}`], ["Vertical", "ready"]]}
+          meta={[["Effort","low"], ["Tension", `${fTension}`], ["Vertical", "planned"]]}
           cta="Write short script"
           topic={hero.topic}
           format="shorts"

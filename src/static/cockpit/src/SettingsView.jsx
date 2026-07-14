@@ -3,7 +3,7 @@
 // LLM provider configuration (gemini / claude / ollama / openai / nvidia).
 // Keys are stored locally on the server (never shipped to any cloud).
 
-const SettingsView = () => {
+const SettingsView = ({ tweaks, setTweak, onJump }) => {
   const [schema, setSchema] = React.useState({});
   const [values, setValues] = React.useState({});
   const [draft, setDraft] = React.useState({});
@@ -170,10 +170,10 @@ const SettingsView = () => {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <div>
           <div style={{ color: "var(--text-hi)", fontWeight: 700, fontSize: 20, letterSpacing: "-0.02em" }}>
-            🔑 Creator Settings
+            Creator workspace settings
           </div>
           <div style={{ color: "var(--text-lo)", fontSize: 13, marginTop: 4, lineHeight: 1.4 }}>
-            Bring your own keys. Stored locally in <code style={{ background: "var(--bg-2)", padding: "1px 5px", borderRadius: 3, fontSize: 11 }}>~/.dailydex/settings.json</code> — never sent to any cloud.
+            Appearance, creator profile, and private provider configuration in one place.
           </div>
         </div>
         {hasDraft && (
@@ -186,6 +186,36 @@ const SettingsView = () => {
             {saving ? "Saving…" : "💾 Save Changes"}
           </button>
         )}
+      </div>
+
+      <div className="settings-workspace-card">
+        <div>
+          <span className="micro">Appearance</span>
+          <strong>Workspace theme</strong>
+          <div className="settings-choice-row">
+            {["dark", "light", "editorial"].map(theme => (
+              <button key={theme} className={`btn ghost${tweaks?.theme === theme ? " is-active" : ""}`}
+                      onClick={() => setTweak && setTweak("theme", theme)}>{theme}</button>
+            ))}
+          </div>
+          <span className="settings-local-note">Saved in this browser.</span>
+        </div>
+        <div>
+          <span className="micro">Creator mode</span>
+          <strong>Default production persona</strong>
+          <select value={tweaks?.persona || "multi"} onChange={event => setTweak && setTweak("persona", event.target.value)}>
+            <option value="multi">Multi-format</option>
+            <option value="shorts">Shorts-first</option>
+            <option value="newsletter">Newsletter writer</option>
+            <option value="educator">Educator</option>
+          </select>
+          <span className="settings-local-note">Saved in this browser.</span>
+        </div>
+        <div>
+          <span className="micro">Voice and audience</span>
+          <strong>Creator profile</strong>
+          <button className="btn ghost" onClick={() => onJump && onJump("profile")}>Edit brand profile</button>
+        </div>
       </div>
 
       {/* Status message */}
@@ -272,6 +302,7 @@ const SettingsView = () => {
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <button className="btn ghost" onClick={() => onJump && onJump("profile")}>Edit voice and audience</button>
               <button className="btn ghost" onClick={handleResetOnboarding}>Reset creator setup</button>
               <button className="btn danger" onClick={handleLogout} style={{
                 background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.3)",
@@ -585,9 +616,9 @@ const SettingsView = () => {
         background: "var(--bg-2)", border: "1px solid var(--line)",
         fontSize: 12, color: "var(--text-lo)", lineHeight: 1.5,
       }}>
-        <div style={{ fontWeight: 600, color: "var(--text-mid)", marginBottom: 4 }}>🔒 Privacy Note</div>
-        Keys are stored at <code style={{ background: "var(--bg-0)", padding: "1px 4px", borderRadius: 3, fontSize: 11 }}>~/.dailydex/settings.json</code> on your local machine.
-        They are <strong style={{ color: "var(--text-hi)" }}>never</strong> sent to any cloud or third-party server by DailyDex itself.
+        <div style={{ fontWeight: 600, color: "var(--text-mid)", marginBottom: 4 }}>Provider key handling</div>
+        Keys are stored at <code style={{ background: "var(--bg-0)", padding: "1px 4px", borderRadius: 3, fontSize: 11 }}>~/.dailydex/settings.json</code> on the DailyDex host.
+        DailyDex sends a configured provider's key only to that provider when making an API request.
         Environment variables in <code style={{ background: "var(--bg-0)", padding: "1px 4px", borderRadius: 3, fontSize: 11 }}>.env</code> always take priority over saved settings.
       </div>
 

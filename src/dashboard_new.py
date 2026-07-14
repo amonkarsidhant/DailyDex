@@ -659,6 +659,7 @@ def list_research_packs(limit: int = 12):
                 "title": lines[0].lstrip("# ") if lines else filename,
                 "excerpt": lines[1][:180] if len(lines) > 1 else "",
                 "updated_at": format_timestamp(datetime.fromtimestamp(os.path.getmtime(path)).isoformat()),
+                "revision": os.path.getmtime(path),
             })
         except Exception:
             continue
@@ -767,9 +768,9 @@ def _get_score_changelog(topic_name):
         return [{"message": f"Score stable (history check failed: {e})", "delta": 0, "type": "stable"}]
 
 
-def _cockpit_clusters(scored_data):
+def _cockpit_clusters(scored_data, raw_clusters=None):
     """build_topic_clusters output mapped to the prototype's DD_DATA.clusters shape."""
-    clusters = build_topic_clusters(scored_data, intel_db=intel_db)
+    clusters = raw_clusters if raw_clusters is not None else build_topic_clusters(scored_data, intel_db=intel_db)
     out = []
     for c in clusters:
         radar = c.get("radar_coords") or {"x": 0, "y": 0}
@@ -846,7 +847,7 @@ def _cockpit_source_health():
     out = {}
     for key in COCKPIT_SOURCES:
         r = rows.get(key) or {}
-        status = r.get("status", "unknown")
+        status = status_key_for_source(r)
         last_min = None
         stamp = r.get("last_attempt") or r.get("last_success")
         if stamp:
@@ -858,10 +859,15 @@ def _cockpit_source_health():
             except Exception:
                 last_min = None
         out[key] = {
-            "fresh": status == "ok" and (last_min is None or last_min < 30),
-            "last_fetch_min": last_min if last_min is not None else 99,
+            "fresh": status == "ok",
+            "status": status,
+            "last_fetch_min": last_min,
+            "item_count": r.get("item_count", 0),
             "items_24h": r.get("item_count", 0),
-            "delta": 0,
+            "count_label": "cached snapshot" if status in ("cache", "stale") else "latest fetch" if status != "unknown" else "not fetched",
+            "delta": None,
+            "using_cache": bool(r.get("using_cache")),
+            "cache_age_seconds": int(r.get("cache_age_seconds") or 0),
             "error": r.get("failure_reason") if status in ("failed", "stale", "cache") else None,
         }
     return out
@@ -925,9 +931,9 @@ def _cockpit_agents():
 
 
 def _cockpit_thumbnails(clusters, opp_by_slug):
-    """Variants for the top clusters (keyed by cluster slug), generated on demand."""
+    """Existing variants for the top clusters, without mutating state during reads."""
     import hashlib
-    from creator_intelligence import generate_thumbnail_variants, serialize_thumbnail_variant
+    from creator_intelligence import serialize_thumbnail_variant
     if intel_db is None:
         return []
     out = []
@@ -936,21 +942,21 @@ def _cockpit_thumbnails(clusters, opp_by_slug):
         if not slug:
             continue
         opp = opp_by_slug.get(slug)
-        if opp and creator_content_hash is not None:
+        if opp and opp.get("content_hash"):
+            chash = opp["content_hash"]
+        elif opp and creator_content_hash is not None:
             chash = creator_content_hash(opp)
         else:
             chash = hashlib.sha1(slug.encode("utf-8")).hexdigest()
         existing = intel_db.get_thumbnail_variants(chash)
-        if not existing:
-            generate_thumbnail_variants(intel_db, chash, topic=c.get("topic"),
-                                        count=6, base_item=opp)
-            existing = intel_db.get_thumbnail_variants(chash)
+        if not existing and slug != chash:
+            existing = intel_db.get_thumbnail_variants(slug)
         for r in existing:
             v = serialize_thumbnail_variant(r)
             out.append({"id": v["id"], "topic": slug, "text": v["text"],
                         "subtext": v["subtext"], "hue": v["hue"],
                         "ctr": v["ctr_pred"], "kind": v["kind"],
-                        "content_hash": chash, "picked": v["picked"]})
+                        "content_hash": v["content_hash"], "picked": v["picked"]})
     return out
 
 
@@ -958,7 +964,7 @@ def _calculate_lead_time_days(saved_items):
     """Calculate average lead time from saved items in pipeline."""
     published_items = [item for item in saved_items if item.get("status") == "published"]
     if not published_items:
-        return 2.4
+        return None
     
     diffs = []
     for item in published_items:
@@ -986,7 +992,63 @@ def _calculate_lead_time_days(saved_items):
             pass
     if diffs:
         return round(sum(diffs) / len(diffs), 1)
-    return 2.4
+    return None
+
+
+def _load_cached_editorial_briefing():
+    """Return an already-generated briefing without invoking an LLM on page load."""
+    path = os.path.join(DATA_DIR, "editorial_briefing.json")
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        generated_at = data.get("generated_at") if isinstance(data, dict) else None
+        if not generated_at or time.time() - float(generated_at) >= 3600:
+            return None
+        return data
+    except (OSError, ValueError):
+        return None
+
+
+def _mark_editorial_briefing_approved():
+    """Atomically mark the currently cached plan as approved.
+
+    Returns the updated dict on success, or ``None`` if the plan was
+    already approved (or missing/unreadable), making approval idempotent.
+    """
+    path = os.path.join(DATA_DIR, "editorial_briefing.json")
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        if data.get("status") == "approved":
+            return None
+        data["status"] = "approved"
+        data["approved_at"] = time.time()
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2)
+        return data
+    except (OSError, ValueError):
+        return None
+
+
+def _cockpit_factory_queue(limit=5):
+    """Small approval summary for Today; omit scripts and local file paths."""
+    if intel_db is None:
+        return [], 0
+    try:
+        summary = intel_db.factory_review_summary(limit=limit)
+    except Exception:
+        return [], 0
+    items = [{
+        "id": row.get("id"),
+        "topic": row.get("topic", ""),
+        "title": row.get("title", ""),
+        "hook": row.get("hook", ""),
+        "virality_score": row.get("virality_score", 0),
+        "status": row.get("status", "pending_review"),
+        "created_at": row.get("created_at"),
+        "error": row.get("error", ""),
+    } for row in summary.get("items", [])]
+    return items, int(summary.get("total", 0))
 
 
 def generate_editorial_briefing(force=False):
@@ -1003,26 +1065,33 @@ def generate_editorial_briefing(force=False):
 
     scored_data = load_scored_data()
     clusters = _cockpit_clusters(scored_data)[:3]
+    plan_formats = [
+        ("YouTube long-form", ["topic_researcher", "script_writer"]),
+        ("YouTube short", ["script_writer", "thumbnail_director"]),
+        ("Newsletter", ["topic_researcher"]),
+    ]
+    plan_items = []
+    if clusters:
+        for index, (fmt, agent_types) in enumerate(plan_formats):
+            cluster = clusters[index] if index < len(clusters) else clusters[0]
+            plan_items.append({
+                "format": fmt,
+                "cluster_slug": cluster.get("slug"),
+                "topic": cluster.get("topic"),
+                "agent_types": agent_types,
+            })
     
     briefing_text = ""
+    briefing_status = "ready"
+    briefing_note = ""
     if not clusters:
         briefing_text = (
             "# Daily Production Briefing\n\n"
-            "## Strategic Focus: Local AI & Coding Agents\n"
-            "Today's momentum is heavily clustered around **Local AI** and **Coding Agents**. Here is your structured production plan:\n\n"
-            "### 📽️ YouTube Long-form\n"
-            "- **Topic**: Local AI Sharding on Commodity Hardware\n"
-            "- **Angle**: Why you don't need a $2,000 GPU to run deep models. Show a demo sharding a model across two cheap mini-PCs.\n"
-            "- **Hook**: \"Two mini PCs. One model. Sharded locally with zero cloud dependencies. Let's bench it.\"\n"
-            "- **Niche Fit**: High dev resonance.\n\n"
-            "### 📱 YouTube Short\n"
-            "- **Topic**: Coding Agents vs. Coding Tools\n"
-            "- **Angle**: 45-second high-tempo comparison. Pit dynamic agents (which write files) against static autocomplete tools.\n"
-            "- **CTA**: \"Comment 'AGENT' for the sandbox setup.\"\n\n"
-            "### ✍️ Substack Newsletter\n"
-            "- **Topic**: The Rise of Autocomplete in Terminal\n"
-            "- **Angle**: Deep dive into command line LLM integrations, benchmarking open-source models (like Qwen-2.5-Coder) against proprietary tools.\n"
+            "## No active story clusters\n\n"
+            "Fetch sources before generating or approving a production plan.\n"
         )
+        briefing_status = "empty"
+        briefing_note = "No active clusters were available."
     else:
         try:
             import llm_summary
@@ -1039,28 +1108,33 @@ def generate_editorial_briefing(force=False):
             pass
 
     if not briefing_text:
-        briefing_text = (
-            "# Daily Production Briefing\n\n"
-            "## Strategic Focus: Local AI & Coding Agents\n"
-            "Today's momentum is heavily clustered around **Local AI** and **Coding Agents**. Here is your structured production plan:\n\n"
-            "### 📽️ YouTube Long-form\n"
-            "- **Topic**: Local AI Sharding on Commodity Hardware\n"
-            "- **Angle**: Why you don't need a $2,000 GPU to run deep models. Show a demo sharding a model across two cheap mini-PCs.\n"
-            "- **Hook**: \"Two mini PCs. One model. Sharded locally with zero cloud dependencies. Let's bench it.\"\n"
-            "- **Niche Fit**: High dev resonance.\n\n"
-            "### 📱 YouTube Short\n"
-            "- **Topic**: Coding Agents vs. Coding Tools\n"
-            "- **Angle**: 45-second high-tempo comparison. Pit dynamic agents (which write files) against static autocomplete tools.\n"
-            "- **CTA**: \"Comment 'AGENT' for the sandbox setup.\"\n\n"
-            "### ✍️ Substack Newsletter\n"
-            "- **Topic**: The Rise of Autocomplete in Terminal\n"
-            "- **Angle**: Deep dive into command line LLM integrations, benchmarking open-source models (like Qwen-2.5-Coder) against proprietary tools.\n"
-        )
+        formats = ["YouTube long-form", "YouTube Short", "Newsletter"]
+        lines = [
+            "# Daily Production Briefing",
+            "",
+            "## Model unavailable - grounded signal summary",
+            "",
+        ]
+        for index, cluster in enumerate(clusters):
+            lines.extend([
+                f"### {formats[index] if index < len(formats) else 'Content candidate'}",
+                f"- **Topic**: {cluster.get('topic', '')}",
+                f"- **Why now**: {cluster.get('why_this_is_a_story', '')}",
+                f"- **Angle**: {cluster.get('recommended_angle', '')}",
+                f"- **Evidence**: {cluster.get('source_count', 0)} source families",
+                "",
+            ])
+        briefing_text = "\n".join(lines)
+        briefing_status = "fallback"
+        briefing_note = "The configured model did not return a plan; this summary uses current cluster data only."
 
     result = {
         "briefing": briefing_text,
         "generated_at": time.time(),
-        "status": "ready"
+        "status": briefing_status,
+        "note": briefing_note,
+        "source_version": scored_data.get("last_updated") if isinstance(scored_data, dict) else None,
+        "plan_items": plan_items,
     }
     
     try:
@@ -1087,7 +1161,7 @@ def build_cockpit_data():
     for opp in opportunities:
         slug = opp.get("slug") or _ci_slug(opp.get("topic", ""))
         opp_by_slug.setdefault(slug, opp)
-    clusters = _cockpit_clusters(scored_data)
+    clusters = _cockpit_clusters(scored_data, clusters_raw)
     saved_items = intel_db.get_saved_items(pipeline_type="creator") if intel_db else []
     creator_brief = build_creator_brief(opportunities, clusters_raw, saved_items)
     profile = _load_creator_profile_safe()
@@ -1095,12 +1169,17 @@ def build_cockpit_data():
     cop_cfg = profile.get("copilot") or {}
     creator_identity = profile.get("creator_identity") or {"onboarding_completed": False}
 
-    tracked_count = 0
+    tracked_topics = []
     if intel_db:
         try:
-            tracked_count = len(intel_db.get_tracked_topics())
+            tracked_topics = intel_db.get_tracked_topics()
         except Exception:
             pass
+
+    source_health = _cockpit_source_health()
+    agents = _cockpit_agents()
+    factory_queue, factory_queue_count = _cockpit_factory_queue()
+    last_updated = scored_data.get("last_updated") if isinstance(scored_data, dict) else None
 
     return {
         "SOURCES": COCKPIT_SOURCES,
@@ -1108,11 +1187,13 @@ def build_cockpit_data():
         "persona": persona if persona in COCKPIT_PERSONAS else "multi",
         "copilotModel": cop_cfg.get("model", ""),
         "creator_identity": creator_identity,
+        "last_updated": last_updated,
+        "meta": {"last_updated": last_updated, "fetched_at": last_updated},
         "clusters": clusters,
         "compilations": build_weekly_compilations(scored_data),
         "titleSets": _cockpit_title_sets(clusters, opp_by_slug),
-        "sourceHealth": _cockpit_source_health(),
-        "agents": _cockpit_agents(),
+        "sourceHealth": source_health,
+        "agents": agents,
         "pipeline": _cockpit_pipeline(saved_items),
         "calendar": _cockpit_calendar(),
         "thumbnails": _cockpit_thumbnails(clusters, opp_by_slug),
@@ -1120,14 +1201,18 @@ def build_cockpit_data():
         "opportunities": opportunities,
         "creator_brief": creator_brief,
         "research_packs": list_research_packs(),
+        "editorial_briefing": _load_cached_editorial_briefing(),
+        "factory_queue": factory_queue,
         "stats": {
-            "tracked_topics_count": len([i for i in saved_items if i.get("pipeline_type") == "creator"]),
-            "active_agents_count": len(_cockpit_agents()),
+            "tracked_topics_count": len(tracked_topics),
+            "pipeline_items_count": len(saved_items),
+            "active_agents_count": len(agents),
             "avg_lead_time_days": _calculate_lead_time_days(saved_items),
             "saved_count": len([i for i in saved_items if i.get("status") in ("idea", "researching", "script_ready", "recording")]),
-            "tracked_count": tracked_count,
+            "tracked_count": len(tracked_topics),
             "in_pipe_count": len([i for i in saved_items if i.get("status") in ("researching", "script_ready", "recording")]),
             "drafts_count": len([i for i in saved_items if i.get("status") == "script_ready"]),
+            "approval_count": factory_queue_count,
         },
     }
 

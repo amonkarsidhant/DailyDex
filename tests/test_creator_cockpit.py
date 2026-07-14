@@ -279,3 +279,168 @@ def test_ignore_topic_endpoint(client):
     data = resp.get_json()
     assert data["success"] is True
     assert "ignored" in data["message"]
+
+
+# ── Audience feedback loop: topic performance multipliers ────────────────
+
+def _seed_publication(db, title, views):
+    slug = title.lower().replace(" ", "-")
+    item_id = db.save_item({
+        "title": title,
+        "url": f"https://example.com/{slug}",
+        "source": "GitHub Trending",
+        "source_type": "github",
+        "status": "published",
+        "signal_score": 80,
+    })
+    db.create_or_update_publication(item_id, "youtube", views=views)
+    return item_id
+
+
+def test_topic_performance_multipliers(tmp_path):
+    db = _db(tmp_path)
+    # "AI Agents" videos massively outperform; "Voice AI" underperforms.
+    _seed_publication(db, "My agent workflow automation video", 40000)
+    _seed_publication(db, "Autonomous agent demo gone wrong", 30000)
+    _seed_publication(db, "Voice AI speech assistant test", 1000)
+    _seed_publication(db, "A generic tech recap video xyz", 8000)
+    _seed_publication(db, "Another generic tech recap qrs", 8000)
+
+    perf = ci.build_topic_performance(db)
+    assert perf.get("AI Agents") == 1.15
+    assert perf.get("Voice AI") == 0.92
+
+
+def test_topic_performance_empty_without_data(tmp_path):
+    db = _db(tmp_path)
+    assert ci.build_topic_performance(db) == {}
+    assert ci.build_topic_performance(None) == {}
+
+
+def test_enrich_applies_audience_multiplier(tmp_path):
+    db = _db(tmp_path)
+    _seed_publication(db, "My agent workflow automation video", 40000)
+    _seed_publication(db, "Autonomous agent demo gone wrong", 30000)
+    _seed_publication(db, "Voice AI speech assistant test", 1000)
+    _seed_publication(db, "A generic tech recap video xyz", 8000)
+    _seed_publication(db, "Another generic tech recap qrs", 8000)
+
+    enriched = ci.enrich_scored_data_with_creator_fields(_scored(), intel_db=db)
+    agent_item = enriched["github"][0]
+    assert agent_item["creator_topic"] == "AI Agents"
+    assert agent_item["creator_score_breakdown"]["audience_multiplier"] == 1.15
+
+    baseline = ci.enrich_scored_data_with_creator_fields(_scored(), intel_db=None)
+    baseline_item = baseline["github"][0]
+    assert baseline_item["creator_score_breakdown"]["audience_multiplier"] == 1.0
+    assert agent_item["creator_score"] >= baseline_item["creator_score"]
+
+
+# ── Today cockpit payload contracts ──────────────────────────────────────
+
+def test_opportunities_carry_canonical_cluster_identity():
+    scored = ci.enrich_scored_data_with_creator_fields(_scored())
+    clusters = ci.build_topic_clusters(scored)
+    opportunities = ci.build_content_opportunities(scored, clusters)
+
+    assert opportunities
+    assert len({opportunity["id"] for opportunity in opportunities}) == len(opportunities)
+    for opportunity in opportunities:
+        assert opportunity["id"].endswith(opportunity["content_hash"][:12])
+        assert opportunity["creator_topic"] == opportunity["topic"]
+        assert opportunity["slug"]
+        assert opportunity["cluster_slug"] == opportunity["slug"]
+
+
+def test_cockpit_payload_exposes_truthful_today_state(app_env):
+    payload = app_env["module"].build_cockpit_data()
+
+    assert payload["meta"]["last_updated"] == payload["last_updated"]
+    assert payload["stats"]["avg_lead_time_days"] is None
+    assert payload["stats"]["tracked_topics_count"] == 0
+    assert payload["factory_queue"] == []
+    assert "editorial_briefing" in payload
+    assert payload["opportunities"]
+    assert all(row["cluster_slug"] for row in payload["opportunities"])
+    assert all(health["count_label"] in {"latest fetch", "cached snapshot", "not fetched"} for health in payload["sourceHealth"].values())
+    assert all(health["delta"] is None for health in payload["sourceHealth"].values())
+
+
+def test_cockpit_thumbnail_reads_use_original_content_hash(app_env):
+    module = app_env["module"]
+    initial = module.build_cockpit_data()
+    opportunity = initial["opportunities"][0]
+    ci.generate_thumbnail_variants(
+        module.intel_db,
+        opportunity["content_hash"],
+        topic=opportunity["topic"],
+        count=1,
+    )
+
+    payload = module.build_cockpit_data()
+    assert any(row["content_hash"] == opportunity["content_hash"] for row in payload["thumbnails"])
+
+
+def test_cockpit_thumbnail_reads_legacy_slug_key(app_env):
+    module = app_env["module"]
+    initial = module.build_cockpit_data()
+    cluster = initial["clusters"][0]
+    ci.generate_thumbnail_variants(module.intel_db, cluster["slug"], topic=cluster["topic"], count=1)
+
+    payload = module.build_cockpit_data()
+    assert any(row["content_hash"] == cluster["slug"] for row in payload["thumbnails"])
+
+
+def test_cockpit_factory_queue_reports_full_approval_count(app_env):
+    module = app_env["module"]
+    for index in range(6):
+        module.intel_db.factory_enqueue(
+            topic=f"Topic {index}",
+            title=f"Short {index}",
+            status="pending_review",
+        )
+
+    payload = module.build_cockpit_data()
+    assert len(payload["factory_queue"]) == 5
+    assert payload["stats"]["approval_count"] == 6
+
+
+def test_cached_editorial_briefing_expires(app_env):
+    module = app_env["module"]
+    path = app_env["data_dir"] / "editorial_briefing.json"
+    path.write_text(json.dumps({
+        "briefing": "Old plan",
+        "generated_at": time.time() - 3601,
+        "status": "ready",
+    }), encoding="utf-8")
+
+    assert module._load_cached_editorial_briefing() is None
+
+
+def test_editorial_approval_requires_current_verified_plan(client):
+    response = client.post("/api/editorial/approve")
+    assert response.status_code == 409
+    assert "verified editorial plan" in response.get_json()["error"]
+
+
+def test_editorial_approval_rejects_changed_source_version(app_env):
+    module = app_env["module"]
+    payload = module.build_cockpit_data()
+    cluster = payload["clusters"][0]
+    path = app_env["data_dir"] / "editorial_briefing.json"
+    path.write_text(json.dumps({
+        "briefing": "Verified plan",
+        "generated_at": time.time(),
+        "status": "ready",
+        "source_version": "older-version",
+        "plan_items": [{
+            "format": "YouTube long-form",
+            "cluster_slug": cluster["slug"],
+            "topic": cluster["topic"],
+            "agent_types": [],
+        }],
+    }), encoding="utf-8")
+
+    response = module.app.test_client().post("/api/editorial/approve")
+    assert response.status_code == 409
+    assert "Source data changed" in response.get_json()["error"]

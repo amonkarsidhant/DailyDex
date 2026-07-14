@@ -1055,7 +1055,7 @@ const StudioView = ({
       style: {
         fontSize: 11
       },
-      onClick: () => onJump && onJump("research")
+      onClick: () => onJump && onJump("research", story.story_key)
     }, "Research \u2197")), /*#__PURE__*/React.createElement("div", {
       style: {
         padding: 16,

@@ -417,6 +417,24 @@ class IntelligenceDB:
             )
         """)
 
+        # News-factory approval queue: rendered shorts awaiting review/publish
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS factory_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                topic TEXT NOT NULL,
+                title TEXT NOT NULL,
+                hook TEXT DEFAULT '',
+                script TEXT DEFAULT '',
+                video_path TEXT DEFAULT '',
+                virality_score REAL DEFAULT 0,
+                status TEXT DEFAULT 'pending_review',
+                error TEXT DEFAULT '',
+                published_url TEXT DEFAULT '',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         conn.commit()
         conn.close()
 
@@ -1508,6 +1526,93 @@ class IntelligenceDB:
         rows = cursor.fetchall()
         conn.close()
         return [r[0] for r in rows if r[0]]
+
+    # ── factory_queue helpers (autonomous news factory) ──
+
+    def factory_enqueue(self, topic: str, title: str, hook: str = "", script: str = "",
+                        video_path: str = "", virality_score: float = 0.0,
+                        status: str = "pending_review", error: str = "") -> int:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO factory_queue (topic, title, hook, script, video_path, virality_score, status, error)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (topic, title, hook, script, video_path, virality_score, status, error))
+        row_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return row_id
+
+    def factory_list(self, status: Optional[str] = None) -> List[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        if status:
+            cursor.execute("SELECT * FROM factory_queue WHERE status = ? ORDER BY created_at DESC", (status,))
+        else:
+            cursor.execute("SELECT * FROM factory_queue ORDER BY created_at DESC")
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    def factory_review_summary(self, limit: int = 5) -> Dict:
+        """Return a bounded pending-review preview and the untruncated total."""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM factory_queue WHERE status = 'pending_review'")
+        total = int(cursor.fetchone()[0])
+        cursor.execute("""
+            SELECT id, topic, title, hook, virality_score, status, error, created_at
+            FROM factory_queue
+            WHERE status = 'pending_review'
+            ORDER BY created_at DESC
+            LIMIT ?
+        """, (max(0, int(limit)),))
+        items = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return {"items": items, "total": total}
+
+    def factory_get(self, row_id: int) -> Optional[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM factory_queue WHERE id = ?", (row_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def factory_update_status(self, row_id: int, status: str,
+                              published_url: Optional[str] = None,
+                              error: Optional[str] = None) -> bool:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        sets = ["status = ?", "updated_at = CURRENT_TIMESTAMP"]
+        params: List = [status]
+        if published_url is not None:
+            sets.append("published_url = ?")
+            params.append(published_url)
+        if error is not None:
+            sets.append("error = ?")
+            params.append(error)
+        params.append(row_id)
+        cursor.execute(f"UPDATE factory_queue SET {', '.join(sets)} WHERE id = ?", params)
+        changed = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return changed
+
+    def factory_active_topics(self) -> List[str]:
+        """Topics already queued/approved/published — skip these on the next run."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT topic FROM factory_queue
+            WHERE status IN ('pending_review', 'approved', 'published')
+        """)
+        rows = [r[0] for r in cursor.fetchall()]
+        conn.close()
+        return rows
 
     # ── repurposed_clips database helpers ──
     def insert_repurposed_clip(self, clip: Dict) -> str:

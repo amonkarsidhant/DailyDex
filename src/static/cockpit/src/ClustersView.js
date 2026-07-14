@@ -521,7 +521,10 @@ const ClusterCard = ({
     style: {
       padding: "4px 8px"
     },
-    onClick: onToggle
+    onClick: event => {
+      event.stopPropagation();
+      onToggle();
+    }
   }, expanded ? "−" : "+", " details"))), expanded && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
@@ -871,7 +874,10 @@ const CompilationCard = ({
     style: {
       padding: "4px 8px"
     },
-    onClick: onToggle
+    onClick: event => {
+      event.stopPropagation();
+      onToggle();
+    }
   }, expanded ? "−" : "+", " details"))), expanded && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
@@ -1092,15 +1098,28 @@ const ActionTile = ({
 // ── ClustersView ──────────────────────────────────────────────────────────
 
 const ClustersView = ({
-  onJump
+  onJump,
+  selectedClusterSlug,
+  setSelectedClusterSlug
 }) => {
   const {
     clusters,
     compilations
   } = window.DD_DATA;
   const [activeTab, setActiveTab] = useState("single"); // "single" or "listicle"
-  const [expandedId, setExpandedId] = useState(clusters[0] ? clusters[0].slug : null);
+  const initialSlug = clusters.some(cluster => cluster.slug === selectedClusterSlug) ? selectedClusterSlug : clusters[0] ? clusters[0].slug : null;
+  const [expandedId, setExpandedId] = useState(initialSlug);
   const [sortMode, setSortMode] = useState("momentum");
+  const [viewMode, setViewMode] = useState("list");
+  useEffect(() => {
+    if (selectedClusterSlug && clusters.some(cluster => cluster.slug === selectedClusterSlug)) {
+      setExpandedId(selectedClusterSlug);
+    }
+  }, [selectedClusterSlug]);
+  const selectCluster = slug => {
+    setExpandedId(slug);
+    if (setSelectedClusterSlug) setSelectedClusterSlug(slug);
+  };
   if (!clusters.length) {
     return /*#__PURE__*/React.createElement("div", {
       className: "panel crosshair",
@@ -1175,8 +1194,10 @@ const ClustersView = ({
     }, /*#__PURE__*/React.createElement("button", {
       className: "btn ghost",
       onClick: () => {
+        const firstSlug = clusters[0] ? clusters[0].slug : null;
         setActiveTab("single");
-        setExpandedId(clusters[0] ? clusters[0].slug : null);
+        setExpandedId(firstSlug);
+        if (firstSlug && setSelectedClusterSlug) setSelectedClusterSlug(firstSlug);
       },
       style: {
         padding: "3px 8px",
@@ -1206,7 +1227,17 @@ const ClustersView = ({
         color: sortMode === m ? "var(--text-hi)" : "var(--text-mid)",
         borderColor: sortMode === m ? "var(--signal)" : "var(--line-2)"
       }
-    }, m)))
+    }, m)), activeTab === "single" && /*#__PURE__*/React.createElement("div", {
+      className: "discover-view-toggle"
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "btn ghost",
+      onClick: () => setViewMode("list"),
+      "aria-pressed": viewMode === "list"
+    }, "List"), /*#__PURE__*/React.createElement("button", {
+      className: "btn ghost",
+      onClick: () => setViewMode("radar"),
+      "aria-pressed": viewMode === "radar"
+    }, "Radar")))
   }, activeTab === "single" ? `Content clusters · ${clusters.length} active stories` : `Weekly themed listicles · ${(compilations || []).length} compilations`), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "16px 20px"
@@ -1239,11 +1270,39 @@ const ClustersView = ({
     style: {
       color: "var(--signal)"
     }
-  }, "high-demand YouTube themes"), ". Draft countdown script storyboards, setup commands, and CTR-optimized listicle layouts."))), activeTab === "single" ? sorted.map(c => /*#__PURE__*/React.createElement(ClusterCard, {
+  }, "high-demand YouTube themes"), ". Draft countdown script storyboards, setup commands, and CTR-optimized listicle layouts."))), activeTab === "single" && viewMode === "radar" ? /*#__PURE__*/React.createElement("div", {
+    className: "panel discover-radar-panel"
+  }, /*#__PURE__*/React.createElement(TrendRadar, {
+    clusters: sorted,
+    selectedSlug: expandedId,
+    onSelect: selectCluster
+  }), (() => {
+    const selected = clusters.find(cluster => cluster.slug === expandedId) || clusters[0];
+    if (!selected) return null;
+    return /*#__PURE__*/React.createElement("div", {
+      className: "discover-radar-detail"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "micro"
+    }, "Selected signal"), /*#__PURE__*/React.createElement("h2", null, selected.topic), /*#__PURE__*/React.createElement("p", null, selected.why_this_is_a_story), /*#__PURE__*/React.createElement("div", {
+      className: "discover-radar-detail__metrics"
+    }, /*#__PURE__*/React.createElement("span", null, "Creator ", /*#__PURE__*/React.createElement("strong", null, selected.creator_score)), /*#__PURE__*/React.createElement("span", null, "Signal ", /*#__PURE__*/React.createElement("strong", null, selected.average_signal_score)), /*#__PURE__*/React.createElement("span", null, "Sources ", /*#__PURE__*/React.createElement("strong", null, selected.source_count))), /*#__PURE__*/React.createElement("div", {
+      className: "discover-radar-detail__actions"
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "btn primary",
+      onClick: () => onJump("brief", selected.slug)
+    }, "Open brief"), /*#__PURE__*/React.createElement("button", {
+      className: "btn ghost",
+      onClick: () => setViewMode("list")
+    }, "View evidence")));
+  })()) : activeTab === "single" ? sorted.map(c => /*#__PURE__*/React.createElement(ClusterCard, {
     key: c.slug,
     c: c,
     expanded: expandedId === c.slug,
-    onToggle: () => setExpandedId(expandedId === c.slug ? null : c.slug)
+    onToggle: () => {
+      const next = expandedId === c.slug ? null : c.slug;
+      setExpandedId(next);
+      if (next && setSelectedClusterSlug) setSelectedClusterSlug(next);
+    }
   })) : !compilations || compilations.length === 0 ? /*#__PURE__*/React.createElement("div", {
     className: "panel",
     style: {

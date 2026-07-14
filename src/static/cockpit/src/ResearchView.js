@@ -2,34 +2,64 @@
 // React hooks come from AppShell's shared destructure (single source to avoid duplicate const in shared script scope).
 
 const ResearchView = ({
-  onJump
+  onJump,
+  selectedClusterSlug,
+  setSelectedClusterSlug
 }) => {
   const {
     clusters,
     research_packs
   } = window.DD_DATA;
   const packs = research_packs || [];
-  const [topic, setTopic] = useState(clusters[0] && clusters[0].slug || "");
+  const [topic, setTopic] = useState(selectedClusterSlug || clusters[0] && clusters[0].slug || "");
   const cluster = clusters.find(c => c.slug === topic) || clusters[0];
+  const streamRef = useRef(null);
+  const pollRef = useRef(null);
+  const stopWatchingRun = () => {
+    if (streamRef.current) streamRef.current.close();
+    if (pollRef.current) clearInterval(pollRef.current);
+    streamRef.current = null;
+    pollRef.current = null;
+  };
+  useEffect(() => {
+    if (selectedClusterSlug && clusters.some(item => item.slug === selectedClusterSlug)) {
+      setTopic(selectedClusterSlug);
+    }
+  }, [selectedClusterSlug]);
+  const selectTopic = slug => {
+    stopWatchingRun();
+    setTopic(slug);
+    setDispatched(false);
+    if (setSelectedClusterSlug) setSelectedClusterSlug(slug);
+  };
   const slugify = text => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-  const matchingPack = cluster ? packs.find(p => p.filename.includes(slugify(cluster.topic))) : null;
+  const matchingPack = cluster ? packs.find(p => {
+    const slug = slugify(cluster.topic);
+    return new RegExp(`^\\d{4}-\\d{2}-\\d{2}-${slug}\\.md$`).test(p.filename);
+  }) : null;
   const [packContent, setPackContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [dispatched, setDispatched] = useState(false);
+  useEffect(() => () => stopWatchingRun(), []);
   useEffect(() => {
     if (!matchingPack) {
       setPackContent("");
       return;
     }
     setLoading(true);
-    fetch(`/api/research-pack/${encodeURIComponent(matchingPack.filename)}`).then(res => res.json()).then(data => {
+    const controller = new AbortController();
+    fetch(`/api/research-pack/${encodeURIComponent(matchingPack.filename)}`, {
+      signal: controller.signal
+    }).then(res => res.json()).then(data => {
       setPackContent(data.content || "");
       setLoading(false);
-    }).catch(() => {
+    }).catch(error => {
+      if (error.name === "AbortError") return;
       setPackContent("");
       setLoading(false);
     });
-  }, [matchingPack?.filename]);
+    return () => controller.abort();
+  }, [matchingPack?.filename, matchingPack?.revision]);
   const parsed = useMemo(() => {
     if (!packContent) return null;
     try {
@@ -121,15 +151,37 @@ const ResearchView = ({
     });
     window.open(URL.createObjectURL(blob), "_blank");
   };
-  const runResearcher = () => {
+  const runResearcher = async () => {
     if (cluster && window.DDX) {
       setDispatched(true);
-      window.DDX.dispatch("topic_researcher", cluster.topic, cluster.slug).then(() => {
-        alert("Topic Researcher agent dispatched! Watch the status rail on the right side of the cockpit.");
-      }).catch(() => {
-        alert("Failed to dispatch Topic Researcher.");
+      try {
+        const result = await window.DDX.dispatch("topic_researcher", cluster.topic, cluster.slug);
+        if (!result?.run_id) throw new Error("No run identifier returned");
+        stopWatchingRun();
+        let completed = false;
+        const finish = () => {
+          if (completed) return;
+          completed = true;
+          stopWatchingRun();
+          setDispatched(false);
+          window.DDX.reload();
+        };
+        streamRef.current = window.DDX.agentStream(event => {
+          const runId = event.run_id || event.run?.id;
+          const finished = event.type === "done" || event.status === "done" || event.status === "error";
+          if (runId !== result.run_id || !finished) return;
+          finish();
+        });
+        pollRef.current = setInterval(async () => {
+          try {
+            const snapshot = await window.DDX.agents();
+            if ((snapshot.recent_done || []).some(run => run.id === result.run_id)) finish();
+          } catch (_) {}
+        }, 1000);
+      } catch (error) {
+        alert(`Failed to dispatch Topic Researcher: ${error.message}`);
         setDispatched(false);
-      });
+      }
     }
   };
   return /*#__PURE__*/React.createElement("div", {
@@ -188,10 +240,7 @@ const ResearchView = ({
       c: c,
       active: topic === c.slug,
       hasFile: hasFile,
-      onClick: () => {
-        setTopic(c.slug);
-        setDispatched(false);
-      }
+      onClick: () => selectTopic(c.slug)
     });
   }), /*#__PURE__*/React.createElement("div", {
     className: "micro",
@@ -205,10 +254,7 @@ const ResearchView = ({
       c: c,
       active: topic === c.slug,
       hasFile: hasFile,
-      onClick: () => {
-        setTopic(c.slug);
-        setDispatched(false);
-      }
+      onClick: () => selectTopic(c.slug)
     });
   })), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -414,7 +460,7 @@ const ResearchView = ({
     }
   }, /*#__PURE__*/React.createElement("button", {
     className: "btn primary",
-    onClick: () => onJump("brief")
+    onClick: () => onJump("brief", cluster.slug)
   }, /*#__PURE__*/React.createElement(I.Brief, {
     size: 12
   }), " Open in brief"), /*#__PURE__*/React.createElement("button", {
@@ -440,7 +486,7 @@ const ResearchView = ({
     size: 12
   }), " Send to pipeline"), /*#__PURE__*/React.createElement("button", {
     className: "btn ghost",
-    onClick: () => onJump("thumbs")
+    onClick: () => onJump("thumbs", cluster.slug)
   }, /*#__PURE__*/React.createElement(I.Thumb, {
     size: 12
   }), " Generate thumbnails"))) : /*#__PURE__*/React.createElement("div", {

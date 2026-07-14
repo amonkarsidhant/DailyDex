@@ -21,6 +21,7 @@ SOURCE_LABELS = {
     "blogs": "Blogs",
     "papers": "arXiv",
     "hackernews": "HackerNews",
+    "reddit": "Reddit",
 }
 
 CREATOR_STATUS_ORDER = [
@@ -141,7 +142,7 @@ def build_topic_clusters(scored_data: Dict, intel_db=None) -> List[Dict]:
     existing callers keep working unchanged.
     """
     topic_map = {}
-    for source_type in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews"]:
+    for source_type in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews", "reddit"]:
         for item in scored_data.get(source_type, []) or []:
             for topic in extract_topics(item):
                 cluster = topic_map.setdefault(topic, {
@@ -288,7 +289,7 @@ def snapshot_clusters(scored_data: Dict, intel_db, now_ts: Optional[float] = Non
     now_ts = now_ts or time.time()
     bucket = int(now_ts // 3600)
     by_topic = defaultdict(lambda: {"items": 0, "signal": 0, "sources": set()})
-    for source_type in ("github", "huggingface", "youtube", "blogs", "papers", "hackernews"):
+    for source_type in ("github", "huggingface", "youtube", "blogs", "papers", "hackernews", "reddit"):
         for item in scored_data.get(source_type, []) or []:
             topic = primary_topic(item)
             by_topic[topic]["items"] += 1
@@ -555,6 +556,48 @@ def enrich_with_llm_intelligence(item: Dict) -> Dict:
     return item
 
 
+def build_topic_performance(intel_db, min_views: int = 10) -> Dict[str, float]:
+    """Per-topic audience-performance multipliers from published video analytics.
+
+    Compares each topic's average views against the channel median and maps the
+    ratio onto a bounded multiplier so one viral outlier can't hijack scoring:
+    >=2x median -> 1.15, >=1.25x -> 1.08, <=0.5x -> 0.92, else 1.0.
+    """
+    if intel_db is None:
+        return {}
+    try:
+        pubs = intel_db.get_publication_analytics()
+    except Exception:
+        return {}
+
+    view_rows = [p for p in pubs if (p.get("views") or 0) >= min_views and p.get("title")]
+    if len(view_rows) < 2:
+        return {}
+
+    all_views = sorted(p["views"] for p in view_rows)
+    median_views = all_views[len(all_views) // 2]
+    if median_views <= 0:
+        return {}
+
+    topic_views: Dict[str, List[int]] = defaultdict(list)
+    for pub in view_rows:
+        for topic in extract_topics({"title": pub["title"]}):
+            topic_views[topic].append(pub["views"])
+
+    multipliers = {}
+    for topic, views in topic_views.items():
+        ratio = (sum(views) / len(views)) / median_views
+        if ratio >= 2.0:
+            multipliers[topic] = 1.15
+        elif ratio >= 1.25:
+            multipliers[topic] = 1.08
+        elif ratio <= 0.5:
+            multipliers[topic] = 0.92
+        else:
+            multipliers[topic] = 1.0
+    return multipliers
+
+
 def enrich_scored_data_with_creator_fields(scored_data: Dict, intel_db=None) -> Dict:
     """Add creator metadata to every scored item."""
     support_map = {}
@@ -567,8 +610,9 @@ def enrich_scored_data_with_creator_fields(scored_data: Dict, intel_db=None) -> 
             top_categories = intel_db.get_top_performing_categories(limit=3)
         except Exception:
             pass
+    topic_performance = build_topic_performance(intel_db)
 
-    for source_type in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews"]:
+    for source_type in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews", "reddit"]:
         enriched_items = []
         for item in scored_data.get(source_type, []) or []:
             topic = primary_topic(item)
@@ -587,8 +631,15 @@ def enrich_scored_data_with_creator_fields(scored_data: Dict, intel_db=None) -> 
             if any(cat in top_categories for cat in item_categories if cat):
                 affinity_bonus = 15
                 creator_score = min(100, creator_score + affinity_bonus)
-            
+
             factors["affinity_bonus"] = affinity_bonus
+
+            # Audience feedback loop: scale by how this topic actually performed
+            # on the channel (from publication_analytics views vs channel median).
+            audience_multiplier = topic_performance.get(topic, 1.0)
+            if audience_multiplier != 1.0:
+                creator_score = max(0, min(100, round(creator_score * audience_multiplier)))
+            factors["audience_multiplier"] = audience_multiplier
             best_format = _format_for_item(item, source_type, factors, support)
             effort_label = _production_effort_label(factors["production_effort"])
             titles = _title_ideas(topic, item, best_format)
@@ -672,14 +723,21 @@ def build_content_opportunities(scored_data: Dict, clusters: List[Dict], limit: 
     """Turn scored items into actionable creator cards."""
     cluster_map = {cluster["topic"]: cluster for cluster in clusters}
     opportunities = []
-    for source_type in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews"]:
+    for source_type in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews", "reddit"]:
         for item in scored_data.get(source_type, []) or []:
             if item.get("signal_score", 0) < 40 and item.get("creator_score", 0) < 55:
                 continue
             topic = item.get("creator_topic") or primary_topic(item)
             cluster = cluster_map.get(topic, {"topic": topic, "source_count": 1, "sources": [source_type], "related_items": item.get("source_evidence", [])})
+            cluster_slug = cluster.get("slug") or slugify_topic(topic)
+            content_hash = item.get("content_hash") or _content_hash(item)
             opportunities.append({
+                "id": f"{cluster_slug}:{source_type}:{content_hash[:12]}",
+                "content_hash": content_hash,
                 "topic": topic,
+                "creator_topic": topic,
+                "slug": cluster_slug,
+                "cluster_slug": cluster_slug,
                 "title": item.get("title", ""),
                 "url": item.get("url", ""),
                 "source": item.get("source", ""),
@@ -710,6 +768,8 @@ def build_content_opportunities(scored_data: Dict, clusters: List[Dict], limit: 
                 "short_script": item.get("short_script", ""),
                 "visual_idea": item.get("visual_idea", ""),
                 "cta": item.get("cta", ""),
+                "broll_list": item.get("broll_list", []),
+                "on_screen_cues": item.get("on_screen_cues", []),
                 "cluster_source_count": cluster.get("source_count", 1),
                 "cluster_sources": cluster.get("sources", [source_type]),
                 "enrichment_status": item.get("enrichment_status", "unenriched"),
@@ -756,7 +816,7 @@ def build_weekly_compilations(scored_data: Dict) -> List[Dict]:
     """Compile scored items into themed listicles for multi-item content delivery."""
     all_items = []
     seen_urls = set()
-    for source in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews"]:
+    for source in ["github", "huggingface", "youtube", "blogs", "papers", "hackernews", "reddit"]:
         for item in scored_data.get(source, []) or []:
             url = item.get("url")
             if url and url not in seen_urls:

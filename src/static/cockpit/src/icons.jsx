@@ -37,6 +37,7 @@ const I = {
   Pause:    (p) => <Icon {...p} fill="currentColor" stroke="none"><rect x="4" y="3" width="3" height="10"/><rect x="9" y="3" width="3" height="10"/></Icon>,
   Trend:    (p) => <Icon {...p}><path d="M2 12 6 7l3 3 5-7"/><path d="M10 3h4v4"/></Icon>,
   User:     (p) => <Icon {...p}><path d="M12 14a4 4 0 0 0-8 0"/><circle cx="8" cy="6" r="3"/></Icon>,
+  Menu:     (p) => <Icon {...p}><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></Icon>,
 };
 
 window.I = I;

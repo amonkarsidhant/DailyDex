@@ -72,42 +72,51 @@ const NavItem = ({
 }, hot));
 const Nav = ({
   view,
-  setView
+  setView,
+  onClose
 }) => {
   const freshCount = useMemo(() => {
     if (!window.DD_DATA || !window.DD_DATA.clusters) return 0;
     return window.DD_DATA.clusters.filter(c => c.first_seen_hrs <= 24).length;
   }, [window.DD_DATA?.clusters]);
-  const items = [{
-    key: "pulse",
+  const workflowItems = [{
+    key: "today",
     icon: /*#__PURE__*/React.createElement(I.Pulse, {
       size: 15
     }),
-    label: "Pulse",
-    sub: "trend radar",
+    label: "Today",
+    sub: "decide and act",
     hot: freshCount > 0 ? `${freshCount} new` : null
-  }, {
-    key: "brief",
-    icon: /*#__PURE__*/React.createElement(I.Brief, {
-      size: 15
-    }),
-    label: "Brief",
-    sub: "today's pick"
   }, {
     key: "clusters",
     icon: /*#__PURE__*/React.createElement(I.Cluster, {
       size: 15
     }),
-    label: "Clusters",
-    sub: "cross-source stories"
+    label: "Discover",
+    sub: "signals and stories"
   }, {
-    key: "thumbs",
-    icon: /*#__PURE__*/React.createElement(I.Thumb, {
+    key: "studio",
+    icon: /*#__PURE__*/React.createElement(I.Studio, {
       size: 15
     }),
-    label: "Thumb Lab",
-    sub: "title × thumb"
+    label: "Produce",
+    sub: "multi-format drafts"
   }, {
+    key: "pipeline",
+    icon: /*#__PURE__*/React.createElement(I.Pipeline, {
+      size: 15
+    }),
+    label: "Publish",
+    sub: "pipeline and calendar"
+  }, {
+    key: "benchmarks",
+    icon: /*#__PURE__*/React.createElement(I.Trend, {
+      size: 15
+    }),
+    label: "Insights",
+    sub: "AI model benchmarks"
+  }];
+  const toolItems = [{
     key: "research",
     icon: /*#__PURE__*/React.createElement(I.Research, {
       size: 15
@@ -115,42 +124,15 @@ const Nav = ({
     label: "Research",
     sub: "evidence packs"
   }, {
-    key: "pipeline",
-    icon: /*#__PURE__*/React.createElement(I.Pipeline, {
+    key: "thumbs",
+    icon: /*#__PURE__*/React.createElement(I.Thumb, {
       size: 15
     }),
-    label: "Pipeline",
-    sub: "+ calendar"
-  }, {
-    key: "studio",
-    icon: /*#__PURE__*/React.createElement(I.Studio, {
-      size: 15
-    }),
-    label: "Creator Central",
-    sub: "autonomous content"
-  }, {
-    key: "benchmarks",
-    icon: /*#__PURE__*/React.createElement(I.Spark, {
-      size: 15
-    }),
-    label: "AI Benchmarks",
-    sub: "speed vs cost"
-  }, {
-    key: "profile",
-    icon: /*#__PURE__*/React.createElement(I.User, {
-      size: 15
-    }),
-    label: "Profile",
-    sub: "tone & voice"
-  }, {
-    key: "copilot",
-    icon: /*#__PURE__*/React.createElement(I.Spark, {
-      size: 15
-    }),
-    label: "Copilot Chat",
-    sub: "AI strategist"
+    label: "Thumb Lab",
+    sub: "title and thumbnail"
   }];
   return /*#__PURE__*/React.createElement("nav", {
+    id: "primary-navigation",
     className: "nav",
     style: {
       display: "flex",
@@ -183,7 +165,8 @@ const Nav = ({
     d: "M2 13 L7 3 L9 7 L12 7 L14 13 Z"
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
-      lineHeight: 1.1
+      lineHeight: 1.1,
+      flex: 1
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -200,7 +183,15 @@ const Nav = ({
       letterSpacing: "0.12em",
       marginTop: 2
     }
-  }, "CREATOR \xB7 COCKPIT"))), /*#__PURE__*/React.createElement(PersonaBadge, null), /*#__PURE__*/React.createElement("div", {
+  }, "CREATOR \xB7 COCKPIT")), /*#__PURE__*/React.createElement("button", {
+    className: "nav-mobile-close",
+    "aria-label": "Close navigation",
+    onClick: onClose
+  }, /*#__PURE__*/React.createElement(I.X, {
+    size: 14
+  }))), /*#__PURE__*/React.createElement(PersonaBadge, {
+    onClick: () => setView("settings")
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "8px 0",
       display: "flex",
@@ -212,7 +203,17 @@ const Nav = ({
     style: {
       padding: "8px 16px 4px"
     }
-  }, "Workspace"), items.map(it => /*#__PURE__*/React.createElement(NavItem, _extends({
+  }, "Workflow"), workflowItems.map(it => /*#__PURE__*/React.createElement(NavItem, _extends({
+    key: it.key
+  }, it, {
+    active: view === it.key,
+    onClick: () => setView(it.key)
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "micro",
+    style: {
+      padding: "14px 16px 4px"
+    }
+  }, "Tools"), toolItems.map(it => /*#__PURE__*/React.createElement(NavItem, _extends({
     key: it.key
   }, it, {
     active: view === it.key,
@@ -237,71 +238,29 @@ const Nav = ({
     active: view === "settings",
     onClick: () => setView("settings")
   })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: "auto",
-      padding: 14,
-      borderTop: "1px solid var(--line)"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "micro",
-    style: {
-      marginBottom: 8
-    }
-  }, "State"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement(MiniStat, {
-    label: "Saved",
-    value: window.DD_DATA?.stats?.saved_count ?? 0
-  }), /*#__PURE__*/React.createElement(MiniStat, {
-    label: "Tracked",
-    value: window.DD_DATA?.stats?.tracked_count ?? 0
-  }), /*#__PURE__*/React.createElement(MiniStat, {
-    label: "In pipe",
-    value: window.DD_DATA?.stats?.in_pipe_count ?? 0
-  }), /*#__PURE__*/React.createElement(MiniStat, {
-    label: "Drafts",
-    value: window.DD_DATA?.stats?.drafts_count ?? 0,
-    color: "var(--signal)"
-  }))));
+    className: "nav-footnote"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "micro"
+  }, "Private workspace"), /*#__PURE__*/React.createElement("span", null, "Actions and source state now live on Today.")));
 };
-const MiniStat = ({
-  label,
-  value,
-  color
-}) => /*#__PURE__*/React.createElement("div", {
-  style: {
-    padding: "6px 8px",
-    background: "var(--bg-2)",
-    border: "1px solid var(--line)",
-    borderRadius: 4
-  }
-}, /*#__PURE__*/React.createElement("div", {
-  className: "mono tnum",
-  style: {
-    color: color || "var(--text-hi)",
-    fontWeight: 600,
-    fontSize: 16
-  }
-}, value), /*#__PURE__*/React.createElement("div", {
-  className: "micro",
-  style: {
-    marginTop: 2
-  }
-}, label));
-const PersonaBadge = () => {
+const PersonaBadge = ({
+  onClick
+}) => {
   const persona = window.__tweaks?.persona || "multi";
-  const p = window.DD_DATA.personas[persona];
-  return /*#__PURE__*/React.createElement("div", {
+  const p = window.DD_DATA.personas[persona] || window.DD_DATA.personas.multi || Object.values(window.DD_DATA.personas)[0];
+  if (!p) return null;
+  return /*#__PURE__*/React.createElement("button", {
+    className: "persona-badge",
+    onClick: onClick,
     style: {
       margin: "12px 12px 4px",
       padding: "10px 12px",
       background: "var(--bg-2)",
       border: "1px solid var(--line)",
-      borderRadius: 6
+      borderRadius: 6,
+      textAlign: "left",
+      cursor: "pointer",
+      fontFamily: "var(--font-sans)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "micro"
@@ -326,14 +285,30 @@ const PersonaBadge = () => {
 // ─── Topbar ─────────────────────────────────────────────────────────────────
 const Topbar = ({
   now,
-  onOpenTweaks,
+  onOpenSettings,
   onRefresh,
-  refreshing
+  refreshing,
+  onToggleAgents,
+  railOpen,
+  onToggleNav,
+  navOpen
 }) => {
   const {
-    sourceHealth,
-    SOURCES
+    sourceHealth = {},
+    SOURCES = {}
   } = window.DD_DATA;
+  const sourceKeys = Object.keys(SOURCES || {});
+  const issueCount = sourceKeys.filter(key => {
+    const health = sourceHealth[key] || {};
+    return health.error || health.status === "failed" || health.using_cache;
+  }).length;
+  const knownCount = sourceKeys.filter(key => sourceHealth[key]?.last_fetch_min != null).length;
+  const staleCount = sourceKeys.filter(key => sourceHealth[key]?.last_fetch_min != null && !sourceHealth[key]?.fresh).length;
+  const allCurrent = sourceKeys.length > 0 && knownCount === sourceKeys.length && staleCount === 0 && issueCount === 0;
+  const statusLabel = issueCount > 0 ? `${issueCount} source issue${issueCount === 1 ? "" : "s"}` : staleCount > 0 ? `${staleCount} source${staleCount === 1 ? "" : "s"} stale` : allCurrent ? "Sources current" : knownCount > 0 ? `${knownCount}/${sourceKeys.length} sources reporting` : "Awaiting first fetch";
+  const identity = window.DD_DATA.creator_identity || {};
+  const initials = (identity.name || identity.email || "DD").split(/\s|@/).filter(Boolean).slice(0, 2).map(part => part[0].toUpperCase()).join("") || "DD";
+  const activeAgents = window.DD_DATA.stats?.active_agents_count || 0;
   return /*#__PURE__*/React.createElement("header", {
     className: "topbar",
     style: {
@@ -344,34 +319,41 @@ const Topbar = ({
       gap: 16
     }
   }, /*#__PURE__*/React.createElement("div", {
+    className: "topbar-left",
     style: {
       display: "flex",
       alignItems: "center",
       gap: 14
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn ghost icon topbar-menu",
+    "aria-label": "Open navigation",
+    "aria-controls": "primary-navigation",
+    "aria-expanded": navOpen,
+    onClick: onToggleNav
+  }, /*#__PURE__*/React.createElement(I.Menu, {
+    size: 15
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
       gap: 8
     }
   }, /*#__PURE__*/React.createElement("span", {
-    className: "blink",
     style: {
       width: 7,
       height: 7,
       borderRadius: 999,
-      background: "var(--signal-up)",
-      boxShadow: "0 0 6px var(--signal-up)"
+      background: issueCount ? "var(--signal-down)" : allCurrent ? "var(--signal-up)" : knownCount ? "var(--signal)" : "var(--text-lo)"
     }
   }), /*#__PURE__*/React.createElement("span", {
     className: "mono",
     style: {
       fontSize: 11,
-      color: "var(--text-mid)",
-      letterSpacing: "0.06em"
+      color: issueCount ? "var(--signal-down)" : allCurrent ? "var(--text-mid)" : knownCount ? "var(--signal)" : "var(--text-mid)",
+      letterSpacing: "0.04em"
     }
-  }, "LIVE")), /*#__PURE__*/React.createElement("span", {
+  }, statusLabel)), /*#__PURE__*/React.createElement("span", {
     style: {
       width: 1,
       height: 18,
@@ -383,21 +365,21 @@ const Topbar = ({
       fontSize: 12,
       color: "var(--text)"
     }
-  }, now), /*#__PURE__*/React.createElement("span", {
-    className: "micro"
-  }, new Date().toDateString().slice(4))), /*#__PURE__*/React.createElement("div", {
+  }, now)), /*#__PURE__*/React.createElement("div", {
+    className: "topbar-sources",
     style: {
       display: "flex",
       alignItems: "center",
       gap: 14,
       justifySelf: "center"
     }
-  }, ["github", "huggingface", "youtube", "blogs", "papers", "hackernews"].map(k => {
-    const h = sourceHealth[k];
+  }, sourceKeys.map(k => {
+    const h = sourceHealth[k] || {};
     const S = SOURCES[k];
+    const age = h.last_fetch_min == null ? "--" : `${h.last_fetch_min}m`;
     return /*#__PURE__*/React.createElement("div", {
       key: k,
-      title: `${S.label} · last fetch ${h.last_fetch_min}m ago · ${h.items_24h} items / 24h`,
+      title: `${S.label} - ${h.item_count || 0} items in latest fetch${h.error ? ` - ${h.error}` : ""}`,
       style: {
         display: "flex",
         alignItems: "center",
@@ -408,8 +390,7 @@ const Topbar = ({
         width: 6,
         height: 6,
         borderRadius: 999,
-        background: h.fresh ? S.color : "var(--text-lo)",
-        boxShadow: h.fresh ? `0 0 4px ${S.color}` : "none"
+        background: h.error ? "var(--signal-down)" : h.fresh ? S.color : "var(--text-lo)"
       }
     }), /*#__PURE__*/React.createElement("span", {
       className: "mono",
@@ -425,10 +406,9 @@ const Topbar = ({
         fontSize: 10,
         color: "var(--text-lo)"
       }
-    }, h.last_fetch_min, "m"), /*#__PURE__*/React.createElement(Momentum, {
-      delta: h.delta
-    }));
+    }, age));
   })), /*#__PURE__*/React.createElement("div", {
+    className: "topbar-actions",
     style: {
       display: "flex",
       alignItems: "center",
@@ -444,19 +424,15 @@ const Topbar = ({
   }, /*#__PURE__*/React.createElement(I.Refresh, {
     size: 13
   }), " ", refreshing ? "Refreshing…" : "Refresh"), /*#__PURE__*/React.createElement("button", {
+    className: `btn ghost${railOpen ? " is-active" : ""}`,
+    onClick: onToggleAgents,
+    "aria-expanded": railOpen
+  }, /*#__PURE__*/React.createElement(I.Spark, {
+    size: 13
+  }), " Agents", activeAgents ? ` ${activeAgents}` : ""), /*#__PURE__*/React.createElement("button", {
     className: "btn ghost icon",
-    "aria-label": "notifications",
-    onClick: () => {
-      const sh = window.DD_DATA.sourceHealth || {};
-      const lines = Object.entries(sh).map(([k, v]) => `${k}: ${v.items_24h} items${v.error ? " ⚠ " + v.error : ""}`);
-      alert("Fetch status (24h):\n\n" + lines.join("\n"));
-    }
-  }, /*#__PURE__*/React.createElement(I.Bell, {
-    size: 14
-  })), /*#__PURE__*/React.createElement("button", {
-    className: "btn ghost icon",
-    onClick: onOpenTweaks,
-    "aria-label": "settings"
+    onClick: onOpenSettings,
+    "aria-label": "Open settings"
   }, /*#__PURE__*/React.createElement(I.Settings, {
     size: 14
   })), /*#__PURE__*/React.createElement("span", {
@@ -467,18 +443,20 @@ const Topbar = ({
       margin: "0 4px"
     }
   }), /*#__PURE__*/React.createElement("div", {
+    className: "topbar-avatar",
+    title: identity.name || identity.email || "DailyDex creator",
     style: {
       width: 28,
       height: 28,
       borderRadius: 999,
-      background: "linear-gradient(135deg, var(--signal), var(--src-youtube))",
+      background: identity.avatar ? `url(${identity.avatar}) center/cover` : "linear-gradient(135deg, var(--signal), var(--src-youtube))",
       display: "grid",
       placeItems: "center",
       color: "#1A1100",
       fontWeight: 700,
       fontSize: 11
     }
-  }, "JM")));
+  }, identity.avatar ? "" : initials)));
 };
 
 // ─── Agent rail ─────────────────────────────────────────────────────────────
@@ -617,15 +595,20 @@ const AgentCard = ({
       fontSize: 10,
       color: "var(--text-lo)"
     }
-  }, "~", a.eta_sec, "s")));
+  }, a.eta_sec != null ? `~${a.eta_sec}s` : "")));
 };
 const EditorialBoard = () => {
-  const briefing = window.DD_DATA?.editorial_briefing;
+  const [briefing, setBriefing] = useState(window.DD_DATA?.editorial_briefing || null);
   const [loading, setLoading] = useState(false);
   const [approving, setApproving] = useState(false);
   const [msg, setMsg] = useState("");
   const [expanded, setExpanded] = useState(false);
   const briefingRef = useRef(null);
+  const verified = briefing?.status === "ready";
+  const approved = briefing?.status === "approved";
+  useEffect(() => {
+    setBriefing(window.DD_DATA?.editorial_briefing || null);
+  }, [window.DD_DATA?.editorial_briefing?.generated_at]);
 
   // Use a ref to manage innerHTML lifecycle and prevent detached DOM leaks
   useEffect(() => {
@@ -644,8 +627,10 @@ const EditorialBoard = () => {
         method: "POST"
       });
       if (res.ok) {
+        const result = await res.json();
+        setBriefing(result);
         if (window.DDX) await window.DDX.reload();
-        setMsg("Briefing regenerated.");
+        setMsg(result.status === "ready" ? "Editorial plan regenerated." : result.note || "No verified plan was generated.");
       } else {
         setMsg("Failed to regenerate.");
       }
@@ -656,6 +641,7 @@ const EditorialBoard = () => {
     }
   };
   const handleApprove = async () => {
+    if (!verified) return;
     setApproving(true);
     setMsg("");
     try {
@@ -676,16 +662,36 @@ const EditorialBoard = () => {
       setApproving(false);
     }
   };
-  if (!briefing || !briefing.briefing) return null;
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      margin: "12px 14px 6px",
-      padding: "12px",
-      background: "linear-gradient(135deg, rgba(240, 183, 47, 0.08) 0%, rgba(20, 15, 10, 0.4) 100%)",
-      border: "1px solid rgba(240, 183, 47, 0.25)",
-      borderRadius: 8,
-      boxShadow: "0 4px 20px rgba(0,0,0,0.15)"
-    }
+  if (!briefing || !briefing.briefing) {
+    return /*#__PURE__*/React.createElement("section", {
+      className: "panel today-editorial",
+      "aria-labelledby": "editorial-title"
+    }, /*#__PURE__*/React.createElement(PanelHeader, {
+      no: "PLAN"
+    }, /*#__PURE__*/React.createElement("span", {
+      id: "editorial-title"
+    }, "Editorial plan")), /*#__PURE__*/React.createElement("div", {
+      className: "today-editorial__empty"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "micro"
+    }, "Optional strategy pass"), /*#__PURE__*/React.createElement("strong", null, "Turn the top signals into a cross-format production plan."), /*#__PURE__*/React.createElement("p", null, "Generate this only when you want an LLM synthesis. Opening Today never invokes a model."), /*#__PURE__*/React.createElement("button", {
+      className: "btn ghost",
+      onClick: handleRegen,
+      disabled: loading
+    }, loading ? "Generating..." : "Generate editorial plan"), msg && /*#__PURE__*/React.createElement("span", {
+      className: "today-inline-message",
+      role: "status"
+    }, msg)));
+  }
+  return /*#__PURE__*/React.createElement("section", {
+    className: "panel today-editorial",
+    "aria-labelledby": "editorial-title"
+  }, /*#__PURE__*/React.createElement(PanelHeader, {
+    no: "PLAN"
+  }, /*#__PURE__*/React.createElement("span", {
+    id: "editorial-title"
+  }, "Editorial plan")), /*#__PURE__*/React.createElement("div", {
+    className: "today-editorial__body"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -713,13 +719,16 @@ const EditorialBoard = () => {
       color: "var(--text-hi)",
       fontWeight: 600
     }
-  }, "Editorial Board")), /*#__PURE__*/React.createElement("span", {
+  }, "Cross-format strategy")), /*#__PURE__*/React.createElement("span", {
     className: "mono",
     style: {
       fontSize: 9,
-      color: "var(--text-lo)"
+      color: verified ? "var(--signal-up)" : "var(--signal)",
+      textTransform: "uppercase"
     }
-  }, "Proactive Strategy")), /*#__PURE__*/React.createElement("div", {
+  }, verified ? "Verified synthesis" : briefing.status || "Unverified")), !verified && briefing.note && /*#__PURE__*/React.createElement("div", {
+    className: "today-editorial__note"
+  }, briefing.note), /*#__PURE__*/React.createElement("div", {
     style: {
       maxHeight: expanded ? "300px" : "110px",
       overflowY: "auto",
@@ -778,23 +787,27 @@ const EditorialBoard = () => {
       fontWeight: 600
     },
     onClick: handleApprove,
-    disabled: approving
-  }, approving ? "Queuing..." : "Approve & Queue All"))), msg && /*#__PURE__*/React.createElement("div", {
+    disabled: approving || !verified
+  }, approving ? "Queuing..." : verified ? "Approve & Queue All" : approved ? "Plan queued" : "Approval unavailable"))), msg && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 8,
       fontSize: 10,
       color: msg.includes("Approved") || msg.includes("regenerated") ? "var(--signal-up)" : "var(--signal-down)",
       textAlign: "right"
     }
-  }, msg));
+  }, msg)));
 };
 const AGENT_OPTIONS = [["topic_researcher", "Topic Researcher"], ["script_writer", "Script Writer"], ["thumbnail_director", "Thumbnail Director"], ["cross_poster", "Cross-Poster"]];
-const AgentRail = () => {
+const AgentRail = ({
+  selectedClusterSlug,
+  onClose
+}) => {
   const [active, setActive] = useState(window.DD_DATA.agents || []);
   const [recent, setRecent] = useState([]);
   const [picking, setPicking] = useState(false);
   const [enrichStatus, setEnrichStatus] = useState(null);
   const lastActiveRef = useRef(false);
+  const dispatchTarget = window.DD_DATA.clusters.find(cluster => cluster.slug === selectedClusterSlug) || window.DD_DATA.clusters[0] || {};
   const pull = useCallback(async () => {
     if (!window.DDX) return;
     try {
@@ -830,9 +843,8 @@ const AgentRail = () => {
   }, []);
   const dispatch = async agent_type => {
     setPicking(false);
-    const top = window.DD_DATA.clusters[0] || {};
     try {
-      await window.DDX.dispatch(agent_type, top.topic, top.slug);
+      await window.DDX.dispatch(agent_type, dispatchTarget.topic, dispatchTarget.slug);
     } catch (e) {}
     pull();
   };
@@ -841,7 +853,8 @@ const AgentRail = () => {
     style: {
       display: "flex",
       flexDirection: "column"
-    }
+    },
+    "aria-label": "Agent activity"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "12px 14px",
@@ -876,13 +889,24 @@ const AgentRail = () => {
       borderRadius: 999,
       background: "var(--signal-up)"
     }
-  }), active.length, " active")), /*#__PURE__*/React.createElement("button", {
+  }), active.length, " active")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("button", {
     className: "btn ghost icon",
-    "aria-label": "dispatch",
+    "aria-label": "Dispatch agent",
     onClick: () => setPicking(p => !p)
   }, /*#__PURE__*/React.createElement(I.Plus, {
     size: 12
-  }))), picking && /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("button", {
+    className: "btn ghost icon",
+    "aria-label": "Close agents",
+    onClick: onClose
+  }, /*#__PURE__*/React.createElement(I.X, {
+    size: 12
+  })))), picking && /*#__PURE__*/React.createElement("div", {
     key: "agent-picker",
     style: {
       padding: "8px 14px",
@@ -891,7 +915,14 @@ const AgentRail = () => {
       flexWrap: "wrap",
       gap: 6
     }
-  }, AGENT_OPTIONS.map(([type, label]) => /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "mono",
+    style: {
+      width: "100%",
+      color: "var(--text-lo)",
+      fontSize: 9.5
+    }
+  }, "Target: ", dispatchTarget.topic || "No selected story"), AGENT_OPTIONS.map(([type, label]) => /*#__PURE__*/React.createElement("button", {
     key: type,
     className: "btn ghost",
     style: {
@@ -904,7 +935,7 @@ const AgentRail = () => {
       flex: 1,
       overflowY: "auto"
     }
-  }, /*#__PURE__*/React.createElement(EditorialBoard, null), enrichStatus && enrichStatus.enabled && /*#__PURE__*/React.createElement("div", {
+  }, enrichStatus && enrichStatus.enabled && /*#__PURE__*/React.createElement("div", {
     style: {
       margin: "12px 14px",
       padding: "10px 12px",
@@ -1108,32 +1139,46 @@ const cleanMarkdownForTicker = txt => {
   return clean.replace(/\s+/g, " ").trim();
 };
 const CopilotDock = ({
-  context
+  context,
+  selectedClusterSlug
 }) => {
+  const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [answer, setAnswer] = useState("");
   const [model, setModel] = useState("");
+  const requestVersion = useRef(0);
+  useEffect(() => {
+    requestVersion.current += 1;
+    setQ("");
+    setAnswer("");
+    setModel("");
+    setBusy(false);
+  }, [context, selectedClusterSlug]);
   const submit = async () => {
     if (!q.trim()) return;
+    const version = ++requestVersion.current;
     setBusy(true);
     setAnswer("");
     try {
-      const focused = (window.DD_DATA.clusters[0] || {}).slug;
       const r = await window.DDX.copilot(context, q, {
-        focused_cluster: focused
+        focused_cluster: selectedClusterSlug
       });
+      if (version !== requestVersion.current) return;
       setAnswer(r.answer || "No answer.");
       if (r.model) setModel(r.model);
     } catch (e) {
-      setAnswer("Copilot is offline — check the LLM provider on the server.");
+      if (version !== requestVersion.current) return;
+      setAnswer("Copilot is offline. Check the LLM provider in Settings.");
     } finally {
-      setBusy(false);
+      if (version === requestVersion.current) setBusy(false);
     }
   };
-  const modelLabel = (model || window.DD_DATA.copilotModel || "minimaxai/minimax-m2.7").split("/").pop().replace(/-/g, " ").toUpperCase();
+  const configuredModel = model || window.DD_DATA.copilotModel || "";
+  const modelLabel = configuredModel ? configuredModel.split("/").pop().replace(/-/g, " ").toUpperCase() : "AUTO";
   const suggestions = {
-    pulse: ["rank clusters by momentum", "which topic peaks tonight?", "what did I miss yesterday?"],
+    today: ["why is this the best pick?", "what should I make first?", "what changed today?"],
+    pulse: ["why is this the best pick?", "what should I make first?", "what changed today?"],
     brief: ["rewrite the hook punchier", "generate 3 contrarian titles", "what's the strongest counterpoint?"],
     clusters: ["which cluster has best demo value?", "draft a comparison outline", "what would Karpathy cover?"],
     thumbs: ["pick the winning thumbnail", "generate a variant with a face", "what colors maximize CTR?"],
@@ -1141,15 +1186,23 @@ const CopilotDock = ({
     pipeline: ["what should I publish first?", "reschedule based on momentum", "any stale items?"]
   };
   const sugs = suggestions[context] || suggestions.pulse;
-  return /*#__PURE__*/React.createElement("div", {
-    className: "dock",
-    style: {
-      display: "grid",
-      gridTemplateColumns: "auto 1fr auto",
-      alignItems: "center",
-      gap: 12,
-      padding: "0 16px"
-    }
+  if (!open) {
+    return /*#__PURE__*/React.createElement("button", {
+      className: "copilot-launcher",
+      onClick: () => setOpen(true),
+      "aria-label": "Open creator copilot"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "copilot-launcher__icon"
+    }, /*#__PURE__*/React.createElement(I.Spark, {
+      size: 14,
+      stroke: "#1A1100"
+    })), /*#__PURE__*/React.createElement("span", null, "Ask Copilot"));
+  }
+  return /*#__PURE__*/React.createElement("aside", {
+    className: "dock dock--open",
+    "aria-label": "Creator copilot"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "dock__header"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -1187,54 +1240,33 @@ const CopilotDock = ({
       color: "var(--text-lo)",
       letterSpacing: "0.06em"
     }
-  }, "CONTEXT \xB7 ", context.toUpperCase()))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8
-    }
+  }, "CONTEXT \xB7 ", context.toUpperCase()))), /*#__PURE__*/React.createElement("span", {
+    className: "dock__model mono"
+  }, modelLabel), /*#__PURE__*/React.createElement("button", {
+    className: "btn ghost icon",
+    onClick: () => setOpen(false),
+    "aria-label": "Close copilot"
+  }, /*#__PURE__*/React.createElement(I.X, {
+    size: 12
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "dock__body"
   }, answer ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1,
-      padding: "8px 12px",
-      background: "var(--bg-2)",
-      border: "1px solid var(--line)",
-      borderRadius: 6,
-      color: "var(--text-hi)",
-      fontSize: 12.5,
-      lineHeight: 1.4,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
-    }
-  }, cleanMarkdownForTicker(answer)) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      overflow: "hidden"
-    }
+    className: "dock__answer"
+  }, cleanMarkdownForTicker(answer)) : /*#__PURE__*/React.createElement("div", {
+    className: "dock__suggestions"
   }, sugs.map((s, i) => /*#__PURE__*/React.createElement("button", {
     key: i,
-    className: "btn ghost",
-    style: {
-      textTransform: "none",
-      letterSpacing: "0"
-    },
-    onClick: () => {
-      setQ(s);
-    }
-  }, s)))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1,
-      position: "relative"
-    }
+    className: "text-button",
+    onClick: () => setQ(s)
+  }, s))), /*#__PURE__*/React.createElement("div", {
+    className: "dock__input"
   }, /*#__PURE__*/React.createElement("input", {
     value: q,
     onChange: e => setQ(e.target.value),
     onKeyDown: e => {
       if (e.key === "Enter") submit();
     },
-    placeholder: "Ask the copilot about this view\u2026",
+    placeholder: "Ask about the selected story...",
     style: {
       width: "100%",
       height: 36,
@@ -1271,28 +1303,7 @@ const CopilotDock = ({
     size: 13,
     stroke: "#1A1100",
     strokeWidth: 1.8
-  })))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "mono",
-    style: {
-      fontSize: 10,
-      color: "var(--text-lo)",
-      letterSpacing: "0.06em"
-    }
-  }, modelLabel), /*#__PURE__*/React.createElement("span", {
-    style: {
-      width: 6,
-      height: 6,
-      borderRadius: 999,
-      background: "var(--signal-up)",
-      boxShadow: "0 0 4px var(--signal-up)"
-    }
-  })));
+  })))));
 };
 Object.assign(window, {
   Nav,

@@ -739,7 +739,7 @@ const StudioView = ({ onJump }) => {
                   </div>
                 </div>
                 <button className="btn ghost" style={{ fontSize: 11 }}
-                  onClick={() => onJump && onJump("research")}>
+                  onClick={() => onJump && onJump("research", story.story_key)}>
                   Research ↗
                 </button>
               </div>

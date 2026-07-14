@@ -165,7 +165,7 @@ def test_dashboard_meta_snapshot(client, app_env):
 def test_editorial_and_publishing_routes(client, app_env, monkeypatch):
     module = app_env["module"]
     import llm_summary
-    monkeypatch.setattr(llm_summary, "query_llm", lambda *args, **kwargs: "Mock Briefing Content")
+    monkeypatch.setattr(llm_summary, "query_llm", lambda *args, **kwargs: "Mock briefing grounded in current clusters. " * 4)
 
     # Mock agent runner dispatch to avoid running actual agent worker threads/processes
     if hasattr(module, "agent_runner") and module.agent_runner:
@@ -203,7 +203,7 @@ def test_editorial_and_publishing_routes(client, app_env, monkeypatch):
     assert approve_resp.status_code == 200
     approve_data = approve_resp.get_json()
     assert approve_data["ok"] is True
-    assert approve_data["saved_count"] > 0
+    assert approve_data["saved_count"] == 3
     assert "scheduled_days" in approve_data
 
     # Let's verify that the items were saved to DB
@@ -212,6 +212,12 @@ def test_editorial_and_publishing_routes(client, app_env, monkeypatch):
     saved_topic = next((item for item in saved_items if "Local AI" in item.get("title")), None)
     assert saved_topic is not None
     assert saved_topic["pipeline_type"] == "creator"
+    approved_items = [item for item in saved_items if item.get("pipeline_type") == "creator"]
+    assert len(approved_items) == 3
+    assert len({item["url"] for item in approved_items}) == 3
+    assert all(item["status"] == "researching" for item in approved_items)
+    assert len(module.build_cockpit_data()["pipeline"]["researching"]) == 3
+    assert client.post("/api/editorial/approve").status_code == 409
 
     # 4. Publish
     publish_resp = client.post("/api/publish", json={
@@ -538,8 +544,6 @@ def test_codebase_graph_routes(client, app_env):
     # 7. Path traversal prevention check
     bad_path_resp = client.get("/file-content.json?token=daily-dex-code-graph&path=../../etc/passwd")
     assert bad_path_resp.status_code == 403
-
-
 
 
 

@@ -3,7 +3,11 @@
 // LLM provider configuration (gemini / claude / ollama / openai / nvidia).
 // Keys are stored locally on the server (never shipped to any cloud).
 
-const SettingsView = () => {
+const SettingsView = ({
+  tweaks,
+  setTweak,
+  onJump
+}) => {
   const [schema, setSchema] = React.useState({});
   const [values, setValues] = React.useState({});
   const [draft, setDraft] = React.useState({});
@@ -291,21 +295,14 @@ const SettingsView = () => {
       fontSize: 20,
       letterSpacing: "-0.02em"
     }
-  }, "\uD83D\uDD11 Creator Settings"), /*#__PURE__*/React.createElement("div", {
+  }, "Creator workspace settings"), /*#__PURE__*/React.createElement("div", {
     style: {
       color: "var(--text-lo)",
       fontSize: 13,
       marginTop: 4,
       lineHeight: 1.4
     }
-  }, "Bring your own keys. Stored locally in ", /*#__PURE__*/React.createElement("code", {
-    style: {
-      background: "var(--bg-2)",
-      padding: "1px 5px",
-      borderRadius: 3,
-      fontSize: 11
-    }
-  }, "~/.dailydex/settings.json"), " \u2014 never sent to any cloud.")), hasDraft && /*#__PURE__*/React.createElement("button", {
+  }, "Appearance, creator profile, and private provider configuration in one place.")), hasDraft && /*#__PURE__*/React.createElement("button", {
     className: "btn primary",
     onClick: handleSave,
     disabled: saving,
@@ -316,7 +313,39 @@ const SettingsView = () => {
       color: "#1a1100",
       fontWeight: 700
     }
-  }, saving ? "Saving…" : "💾 Save Changes")), msg.text && /*#__PURE__*/React.createElement("div", {
+  }, saving ? "Saving…" : "💾 Save Changes")), /*#__PURE__*/React.createElement("div", {
+    className: "settings-workspace-card"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "micro"
+  }, "Appearance"), /*#__PURE__*/React.createElement("strong", null, "Workspace theme"), /*#__PURE__*/React.createElement("div", {
+    className: "settings-choice-row"
+  }, ["dark", "light", "editorial"].map(theme => /*#__PURE__*/React.createElement("button", {
+    key: theme,
+    className: `btn ghost${tweaks?.theme === theme ? " is-active" : ""}`,
+    onClick: () => setTweak && setTweak("theme", theme)
+  }, theme))), /*#__PURE__*/React.createElement("span", {
+    className: "settings-local-note"
+  }, "Saved in this browser.")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "micro"
+  }, "Creator mode"), /*#__PURE__*/React.createElement("strong", null, "Default production persona"), /*#__PURE__*/React.createElement("select", {
+    value: tweaks?.persona || "multi",
+    onChange: event => setTweak && setTweak("persona", event.target.value)
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "multi"
+  }, "Multi-format"), /*#__PURE__*/React.createElement("option", {
+    value: "shorts"
+  }, "Shorts-first"), /*#__PURE__*/React.createElement("option", {
+    value: "newsletter"
+  }, "Newsletter writer"), /*#__PURE__*/React.createElement("option", {
+    value: "educator"
+  }, "Educator")), /*#__PURE__*/React.createElement("span", {
+    className: "settings-local-note"
+  }, "Saved in this browser.")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "micro"
+  }, "Voice and audience"), /*#__PURE__*/React.createElement("strong", null, "Creator profile"), /*#__PURE__*/React.createElement("button", {
+    className: "btn ghost",
+    onClick: () => onJump && onJump("profile")
+  }, "Edit brand profile"))), msg.text && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "10px 14px",
       borderRadius: 6,
@@ -470,6 +499,9 @@ const SettingsView = () => {
       justifyContent: "flex-end"
     }
   }, /*#__PURE__*/React.createElement("button", {
+    className: "btn ghost",
+    onClick: () => onJump && onJump("profile")
+  }, "Edit voice and audience"), /*#__PURE__*/React.createElement("button", {
     className: "btn ghost",
     onClick: handleResetOnboarding
   }, "Reset creator setup"), /*#__PURE__*/React.createElement("button", {
@@ -939,18 +971,14 @@ const SettingsView = () => {
       color: "var(--text-mid)",
       marginBottom: 4
     }
-  }, "\uD83D\uDD12 Privacy Note"), "Keys are stored at ", /*#__PURE__*/React.createElement("code", {
+  }, "Provider key handling"), "Keys are stored at ", /*#__PURE__*/React.createElement("code", {
     style: {
       background: "var(--bg-0)",
       padding: "1px 4px",
       borderRadius: 3,
       fontSize: 11
     }
-  }, "~/.dailydex/settings.json"), " on your local machine. They are ", /*#__PURE__*/React.createElement("strong", {
-    style: {
-      color: "var(--text-hi)"
-    }
-  }, "never"), " sent to any cloud or third-party server by DailyDex itself. Environment variables in ", /*#__PURE__*/React.createElement("code", {
+  }, "~/.dailydex/settings.json"), " on the DailyDex host. DailyDex sends a configured provider's key only to that provider when making an API request. Environment variables in ", /*#__PURE__*/React.createElement("code", {
     style: {
       background: "var(--bg-0)",
       padding: "1px 4px",
