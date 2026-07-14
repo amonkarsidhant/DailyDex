@@ -41,4 +41,4 @@ ENV CREATOR_ENRICHER_PRIMARY=1
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8888/health || exit 1
 
-CMD ["sh", "-c", "gunicorn -b 0.0.0.0:8888 -w ${GUNICORN_WORKERS:-1} --timeout ${GUNICORN_TIMEOUT:-180} src.dashboard_new:app"]
+CMD ["sh", "-c", "gunicorn -b 0.0.0.0:8888 -w ${GUNICORN_WORKERS:-2} --timeout ${GUNICORN_TIMEOUT:-180} --worker-class gthread --threads 4 src.dashboard_new:app"]
