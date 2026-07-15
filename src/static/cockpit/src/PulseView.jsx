@@ -90,8 +90,14 @@ const TodayActionQueue = ({ onJump }) => {
               <span className="today-action__type">Review ready</span>
               <strong>{item.title || item.topic}</strong>
               <span>{item.virality_score ? `Virality score ${Math.round(item.virality_score)}` : "Rendered short awaiting a decision"}</span>
+              <video controls preload="metadata" src={`/api/videos/${item.topic ? item.topic.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase() : item.id}.mp4`}
+                   style={{ width: "100%", maxHeight: 200, borderRadius: 6, marginTop: 6 }}
+                   onError={(e) => { e.target.style.display = "none"; }}/>
             </div>
             <div className="today-action__controls">
+              <a className="btn ghost" href={`/api/videos/${item.topic ? item.topic.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase() : item.id}.mp4`}
+                 target="_blank" rel="noopener noreferrer" download
+                 style={{ textDecoration: "none" }}>Download</a>
               <button className="btn ghost" disabled={busyId != null}
                       onClick={() => reviewFactoryItem(item, "reject")}>Reject</button>
               <button className="btn primary" disabled={busyId != null}
@@ -234,6 +240,8 @@ const TodayView = ({ onJump, selectedClusterSlug, setSelectedClusterSlug }) => {
   );
   const [saving, setSaving] = useState(false);
   const [researching, setResearching] = useState(false);
+  const [rendering, setRendering] = useState(false);
+  const [renderMsg, setRenderMsg] = useState("");
 
   const selectCluster = slug => {
     if (setSelectedClusterSlug) setSelectedClusterSlug(slug);
@@ -268,6 +276,35 @@ const TodayView = ({ onJump, selectedClusterSlug, setSelectedClusterSlug }) => {
       onJump("research", cluster.slug);
     } finally {
       setResearching(false);
+    }
+  };
+
+  const renderShort = async () => {
+    if (!cluster || !window.DDX || rendering) return;
+    setRendering(true);
+    setRenderMsg("Rendering vertical short with Remotion...");
+    try {
+      const res = await window.DDX.factoryRun(1);
+      if (res.started) {
+        setRenderMsg("Factory started. The short will appear in Needs attention when ready.");
+        const poll = setInterval(async () => {
+          try {
+            const status = await window.DDX.factoryStatus();
+            if (!status.running) {
+              clearInterval(poll);
+              setRendering(false);
+              setRenderMsg(status.result?.queued?.length ? "Short rendered! Review it in Needs attention." : "Factory finished. Check the queue.");
+              if (window.DDX) await window.DDX.reload();
+            }
+          } catch (_) { clearInterval(poll); setRendering(false); }
+        }, 3000);
+      } else {
+        setRenderMsg("Factory is already running.");
+        setRendering(false);
+      }
+    } catch (e) {
+      setRenderMsg("Failed to start render: " + (e.message || "unknown error"));
+      setRendering(false);
     }
   };
 
@@ -314,6 +351,10 @@ const TodayView = ({ onJump, selectedClusterSlug, setSelectedClusterSlug }) => {
               <button className="btn primary today-primary-action" onClick={() => onJump("brief", cluster.slug)}>
                 Open production brief <I.ArrowR size={13}/>
               </button>
+              <button className="btn ghost" disabled={rendering} onClick={renderShort}
+                      style={rendering ? { borderColor: "var(--signal)", color: "var(--signal)" } : {}}>
+                {rendering ? "Rendering..." : "Render short"}
+              </button>
               <button className="btn ghost" disabled={researching} onClick={startResearch}>
                 {researching ? "Dispatching..." : "Build research pack"}
               </button>
@@ -321,6 +362,7 @@ const TodayView = ({ onJump, selectedClusterSlug, setSelectedClusterSlug }) => {
                 {saved ? "In pipeline" : saving ? "Saving..." : "Save idea"}
               </button>
             </div>
+            {renderMsg && <div className="today-inline-message" role="status">{renderMsg}</div>}
           </div>
 
           <aside className="today-evidence" aria-label="Recommendation evidence">

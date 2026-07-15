@@ -71,6 +71,11 @@
     // Creator Central
     studio() { return jget("/api/studio"); },
     studioRun(topN, slugs) { return jpost("/api/studio/run", { top_n: topN || 0, slugs: slugs || null }); },
+    factoryRun(limit) { return jpost("/api/factory/run", { limit: limit || 3 }); },
+    factoryStatus() { return jget("/api/factory/status"); },
+    factoryQueue(status) { return jget("/api/factory/queue" + (status ? `?status=${status}` : "")); },
+    factoryApprove(id) { return jpost(`/api/factory/${id}/approve`, {}); },
+    factoryReject(id) { return jpost(`/api/factory/${id}/reject`, {}); },
     studioRegenerate(storyKey, fmt, provider) {
       return jpost(`/api/studio/${encodeURIComponent(storyKey)}/${fmt}/regenerate`,
                    provider ? { provider } : {});
