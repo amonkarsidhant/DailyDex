@@ -353,6 +353,7 @@ def render_short_video(
                 "npx", "remotion", "render", "BreakoutShort",
                 container_output_path,
                 f"--props={container_props_path}",
+                "--browser-executable=/usr/bin/chromium",
             ]
             subprocess.run(cmd, check=True, capture_output=True, timeout=300, cwd=engine_dir)
             output_path = shared_output
