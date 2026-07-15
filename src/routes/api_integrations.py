@@ -227,6 +227,7 @@ def api_integrations_ab_test_active():
 
 @integrations_bp.route("/api/videos/<filename>", methods=["GET"])
 def serve_rendered_video(filename):
-    videos_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "videos")
+    data_dir = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "data"))
+    videos_dir = os.path.join(data_dir, "videos")
     return send_from_directory(videos_dir, filename)
 
