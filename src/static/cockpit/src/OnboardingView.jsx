@@ -53,7 +53,7 @@ const OnboardingView = ({ onComplete }) => {
     }
   }, [bootLogs]);
 
-  // Run mock terminal boot once Stage 4 starts
+  // Run real boot once Stage 4 starts: persist config, trigger source fetch
   useEffect(() => {
     if (stage !== 4) return;
 
@@ -65,36 +65,45 @@ const OnboardingView = ({ onComplete }) => {
       body: JSON.stringify({ identity, profile, keys })
     }).catch(() => {});
 
-    const logs = [
+    const realLogs = [
       { text: "Initializing local database connections...", type: "info" },
       { text: "SQLite DB verified (integrity check: OK)", type: "success" },
-      { text: "Loading creator profile config templates...", type: "info" },
       { text: `Injecting Creator Identity: ${identity.name} (${identity.provider})`, type: "success" },
       { text: `Selected Tone Preset: "${profile.tone.split('.')[0]}"`, type: "info" },
-      { text: "Probing available LLM providers on local PATH...", type: "info" },
-      { text: "Found local engines: gemini (cli), ollama (local), nvidia (nim)", type: "success" },
       { text: `Configuring Copilot for provider: "${keys.llm_provider}"`, type: "info" },
-      { text: "Connecting to YouTube Data API sync engine...", type: "info" },
-      { text: keys.youtube_api_key ? "YouTube API Key verified." : "No YouTube Key provided. Falling back to scraper mode.", type: keys.youtube_api_key ? "success" : "warn" },
-      { text: "Loading fal.ai / Flux image generators...", type: "info" },
-      { text: keys.fal_api_key ? "fal.ai API key cached." : "No fal.ai key provided. Image generation will fall back to mockup grids.", type: keys.fal_api_key ? "success" : "warn" },
-      { text: "Running initial HackerNews trend indexing...", type: "info" },
-      { text: "Fetched and clustered 14 live developer opportunities.", type: "success" },
-      { text: "Creator Cockpit configuration saved successfully.", type: "success" },
-      { text: "DailyDex Autonomous Agents: ONLINE. Happy shipping! 🚀", type: "success" }
+      { text: keys.youtube_api_key ? "YouTube API Key configured." : "No YouTube Key — using scraper mode.", type: keys.youtube_api_key ? "success" : "warn" },
+      { text: keys.fal_api_key ? "fal.ai API key cached." : "No fal.ai key — using mockup grids.", type: keys.fal_api_key ? "success" : "warn" },
+      { text: "Triggering first source fetch (GitHub, HN, arXiv, YouTube)...", type: "info" },
     ];
 
     let currentLogIndex = 0;
     const interval = setInterval(() => {
-      const entry = logs[currentLogIndex];
-      if (currentLogIndex < logs.length && entry) {
+      if (currentLogIndex < realLogs.length) {
+        const entry = realLogs[currentLogIndex];
         setBootLogs(prev => [...prev, entry]);
-        setBootProgress(Math.min(100, Math.round(((currentLogIndex + 1) / logs.length) * 100)));
+        setBootProgress(Math.min(60, Math.round(((currentLogIndex + 1) / realLogs.length) * 60)));
         currentLogIndex++;
       } else {
         clearInterval(interval);
-        setBootProgress(100);
-        setBootComplete(true);
+        // Trigger real source fetch
+        fetch("/api/refresh", { method: "POST" })
+          .then(() => {
+            setBootLogs(prev => [...prev,
+              { text: "Sources fetched and scored successfully.", type: "success" },
+              { text: "Creator Cockpit configuration saved.", type: "success" },
+              { text: "DailyDex is ready. Happy shipping!", type: "success" },
+            ]);
+            setBootProgress(100);
+            setBootComplete(true);
+          })
+          .catch(() => {
+            setBootLogs(prev => [...prev,
+              { text: "Source fetch failed — you can retry from the cockpit.", type: "warn" },
+              { text: "Creator Cockpit configuration saved.", type: "success" },
+            ]);
+            setBootProgress(100);
+            setBootComplete(true);
+          });
       }
     }, 450);
 

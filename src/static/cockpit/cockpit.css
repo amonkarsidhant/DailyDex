@@ -341,6 +341,13 @@
   .today-evidence__angle { margin-top: auto; padding-top: 20px; }
   .today-evidence__angle p { margin: 7px 0 0; color: var(--text); font-size: 12.5px; line-height: 1.5; }
   .today-work-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr); gap: 16px; align-items: stretch; }
+  .today-golden-path { overflow: hidden; }
+  .today-golden-path__body { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .today-golden-path__step { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-2); }
+  .today-golden-path__step--done { opacity: 0.55; border-color: rgba(124,255,178,0.2); }
+  .today-golden-path__check { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; font: 600 11px/1 var(--font-mono); }
+  .today-golden-path__step:not(.today-golden-path__step--done) .today-golden-path__check { background: var(--signal); color: #1A1100; }
+  .today-golden-path__step--done .today-golden-path__check { background: rgba(124,255,178,0.15); color: var(--signal-up); border: 1px solid rgba(124,255,178,0.3); }
   .today-attention__body { display: flex; flex-direction: column; }
   .today-count { color: var(--text-lo); font: 10px/1 var(--font-mono); }
   .today-action {

@@ -248,6 +248,58 @@ const TodayProduction = ({
     className: "micro"
   }, "Agents"), agents.length ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, agents.length, " active"), /*#__PURE__*/React.createElement("span", null, agents.slice(0, 2).map(agent => agent.name).join(" + "))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, "Idle"), /*#__PURE__*/React.createElement("span", null, "Dispatch work from the recommendation when you are ready.")))));
 };
+const TodayGoldenPath = ({
+  onJump,
+  clusters,
+  pipeline,
+  factory_queue
+}) => {
+  const hasClusters = clusters.length > 0;
+  const hasPipeline = Object.values(pipeline || {}).flat().length > 0;
+  const hasFactory = (factory_queue || []).length > 0;
+  if (hasFactory) return null;
+  const steps = [{
+    done: hasClusters,
+    label: "Sources fetched",
+    action: "Refresh sources",
+    onAction: () => window.DDX && window.DDX.refresh()
+  }, {
+    done: hasPipeline,
+    label: "Story saved to pipeline",
+    action: "Save a story",
+    onAction: null
+  }, {
+    done: false,
+    label: "Render your first short",
+    action: "Click Render short",
+    onAction: null
+  }, {
+    done: false,
+    label: "Review and approve",
+    action: "Check Needs attention",
+    onAction: null
+  }];
+  const completed = steps.filter(s => s.done).length;
+  if (completed >= 2) return null;
+  return /*#__PURE__*/React.createElement("section", {
+    className: "panel today-golden-path",
+    "aria-labelledby": "golden-path-title"
+  }, /*#__PURE__*/React.createElement(PanelHeader, {
+    no: "01"
+  }, /*#__PURE__*/React.createElement("span", {
+    id: "golden-path-title"
+  }, "Get started")), /*#__PURE__*/React.createElement("div", {
+    className: "today-golden-path__body"
+  }, steps.map((step, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    className: `today-golden-path__step${step.done ? " today-golden-path__step--done" : ""}`
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "today-golden-path__check"
+  }, step.done ? "\u2713" : i + 1), /*#__PURE__*/React.createElement("span", null, step.label), !step.done && step.onAction && /*#__PURE__*/React.createElement("button", {
+    className: "btn ghost",
+    onClick: step.onAction
+  }, step.action)))));
+};
 const TodayView = ({
   onJump,
   selectedClusterSlug,
@@ -258,7 +310,8 @@ const TodayView = ({
     opportunities = [],
     titleSets = {},
     meta = {},
-    pipeline = {}
+    pipeline = {},
+    factory_queue = []
   } = window.DD_DATA;
   const fallbackSlug = clusters[0]?.slug || null;
   const selectedSlug = clusters.some(cluster => cluster.slug === selectedClusterSlug) ? selectedClusterSlug : fallbackSlug;
@@ -433,7 +486,12 @@ const TodayView = ({
     className: "today-evidence__angle"
   }, /*#__PURE__*/React.createElement("span", {
     className: "micro"
-  }, "Recommended angle"), /*#__PURE__*/React.createElement("p", null, cluster.recommended_angle))))), /*#__PURE__*/React.createElement("div", {
+  }, "Recommended angle"), /*#__PURE__*/React.createElement("p", null, cluster.recommended_angle))))), /*#__PURE__*/React.createElement(TodayGoldenPath, {
+    onJump: onJump,
+    clusters: clusters,
+    pipeline: pipeline,
+    factory_queue: factory_queue
+  }), /*#__PURE__*/React.createElement("div", {
     className: "today-work-grid"
   }, /*#__PURE__*/React.createElement(TodayActionQueue, {
     onJump: onJump

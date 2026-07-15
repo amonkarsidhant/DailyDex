@@ -223,8 +223,43 @@ const TodayProduction = ({ onJump }) => {
   );
 };
 
+const TodayGoldenPath = ({ onJump, clusters, pipeline, factory_queue }) => {
+  const hasClusters = clusters.length > 0;
+  const hasPipeline = Object.values(pipeline || {}).flat().length > 0;
+  const hasFactory = (factory_queue || []).length > 0;
+
+  if (hasFactory) return null;
+
+  const steps = [
+    { done: hasClusters, label: "Sources fetched", action: "Refresh sources", onAction: () => window.DDX && window.DDX.refresh() },
+    { done: hasPipeline, label: "Story saved to pipeline", action: "Save a story", onAction: null },
+    { done: false, label: "Render your first short", action: "Click Render short", onAction: null },
+    { done: false, label: "Review and approve", action: "Check Needs attention", onAction: null },
+  ];
+  const completed = steps.filter(s => s.done).length;
+
+  if (completed >= 2) return null;
+
+  return (
+    <section className="panel today-golden-path" aria-labelledby="golden-path-title">
+      <PanelHeader no="01"><span id="golden-path-title">Get started</span></PanelHeader>
+      <div className="today-golden-path__body">
+        {steps.map((step, i) => (
+          <div key={i} className={`today-golden-path__step${step.done ? " today-golden-path__step--done" : ""}`}>
+            <span className="today-golden-path__check">{step.done ? "\u2713" : i + 1}</span>
+            <span>{step.label}</span>
+            {!step.done && step.onAction && (
+              <button className="btn ghost" onClick={step.onAction}>{step.action}</button>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+};
+
 const TodayView = ({ onJump, selectedClusterSlug, setSelectedClusterSlug }) => {
-  const { clusters = [], opportunities = [], titleSets = {}, meta = {}, pipeline = {} } = window.DD_DATA;
+  const { clusters = [], opportunities = [], titleSets = {}, meta = {}, pipeline = {}, factory_queue = [] } = window.DD_DATA;
   const fallbackSlug = clusters[0]?.slug || null;
   const selectedSlug = clusters.some(cluster => cluster.slug === selectedClusterSlug)
     ? selectedClusterSlug
@@ -389,6 +424,7 @@ const TodayView = ({ onJump, selectedClusterSlug, setSelectedClusterSlug }) => {
         </div>
       </section>
 
+      <TodayGoldenPath onJump={onJump} clusters={clusters} pipeline={pipeline} factory_queue={factory_queue}/>
       <div className="today-work-grid">
         <TodayActionQueue onJump={onJump}/>
         <EditorialBoard/>
