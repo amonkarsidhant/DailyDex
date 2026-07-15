@@ -1,0 +1,38 @@
+FROM node:20-slim
+
+# Chromium for Remotion headless rendering, ffmpeg for audio/video muxing
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       chromium \
+       ffmpeg \
+       ca-certificates \
+       fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/*
+
+# Tell Remotion to use the system Chromium instead of downloading its own
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV REMOTION_BROWSER_EXECUTABLE=/usr/bin/chromium
+
+WORKDIR /engine
+
+# Install deps first (cache layer)
+COPY video-engine/package.json video-engine/package-lock.json ./
+RUN npm ci --omit=dev
+
+# Copy the Remotion source
+COPY video-engine/src ./src
+COPY video-engine/remotion.config.ts ./
+COPY video-engine/tsconfig.json ./
+
+# Copy static assets (bg music, images)
+COPY video-engine/public ./public
+
+# The data volume is mounted at /app/data at runtime (via docker-compose).
+# Remotion's staticFile() resolves from public/, so symlink render_tmp there
+# so voice audio and demo videos written by the Flask container are visible.
+RUN ln -s /app/data/render_tmp /engine/public/render_tmp
+
+# Render output lands here; the Flask container reads from the shared volume
+RUN mkdir -p /output
+
+CMD ["echo", "video-engine ready — invoked via npx remotion render"]

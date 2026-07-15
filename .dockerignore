@@ -10,3 +10,7 @@ frontend/node_modules
 __pycache__
 .pytest_cache
 .coverage
+video-engine/node_modules
+video-engine/out
+video-engine/public/render_tmp
+video-engine/*.mp4

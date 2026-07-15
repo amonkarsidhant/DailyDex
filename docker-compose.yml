@@ -1,4 +1,20 @@
 services:
+  # ── Video engine (Remotion render worker) ──────────────────────────────────
+  # Headless Chromium + Node + Remotion. Renders vertical shorts on demand.
+  # Shares the data volume so Flask can write props/audio and read back MP4s.
+  video:
+    build:
+      context: .
+      dockerfile: Dockerfile.video
+    volumes:
+      - dailydex-data:/app/data
+    environment:
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+      - REMOTION_BROWSER_EXECUTABLE=/usr/bin/chromium
+    restart: "no"
+    profiles:
+      - video
+
   # ── Web app (Flask + gunicorn) ─────────────────────────────────────────────
   web:
     build: .
