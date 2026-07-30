@@ -1,6 +1,9 @@
 """Factory approval-queue routes: run, review, publish."""
 
+import uuid
+
 from flask import Blueprint, current_app, jsonify, request
+from creator_intelligence import build_topic_clusters
 
 factory_bp = Blueprint("factory", __name__)
 
@@ -21,19 +24,31 @@ def _scored_data():
 
 @factory_bp.route("/api/factory/run", methods=["POST"])
 def api_factory_run():
-    import factory
-
     payload = request.get_json(silent=True) or {}
-    limit = int(payload.get("limit", 3))
-    started = factory.start_factory_run(_db(), _scored_data(), limit=limit)
-    return jsonify({"status": "running", "started": started})
+    cluster_slug = str(payload.get("cluster_slug") or "").strip()
+    scored_data = _scored_data()
+    clusters = build_topic_clusters(scored_data, intel_db=_db())
+    if not cluster_slug and clusters:
+        cluster_slug = clusters[0].get("slug", "")
+    if not any(cluster.get("slug") == cluster_slug for cluster in clusters):
+        return jsonify({"error": "unknown_cluster"}), 404
+
+    active = _db().factory_job_active_for_cluster(cluster_slug)
+    if active:
+        return jsonify({"status": active["status"], "started": False,
+                        "job_id": active["id"], "cluster_slug": cluster_slug}), 202
+
+    job_id = uuid.uuid4().hex
+    _db().factory_job_enqueue(job_id, cluster_slug, scored_data=scored_data)
+    return jsonify({"status": "queued", "started": True,
+                    "job_id": job_id, "cluster_slug": cluster_slug}), 202
 
 
 @factory_bp.route("/api/factory/status", methods=["GET"])
 def api_factory_status():
-    import factory
-
-    return jsonify(factory.factory_status())
+    job_id = request.args.get("job_id", "").strip()
+    job = _db().factory_job_get(job_id) if job_id else _db().factory_job_latest()
+    return jsonify(job or {"status": "idle", "running": False, "result": None})
 
 
 @factory_bp.route("/api/factory/queue", methods=["GET"])

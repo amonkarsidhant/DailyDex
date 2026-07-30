@@ -23,9 +23,7 @@ export const RemotionRoot: React.FC = () => {
         width={1080}
         height={1920}
         defaultProps={{
-          title: "AI News of the Day",
-          backgroundUrl: "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e",
-          audioUrl: ""
+          backgroundUrl: "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e"
         }}
       />
       <Composition
@@ -36,18 +34,21 @@ export const RemotionRoot: React.FC = () => {
         width={1080}
         height={1920}
         defaultProps={{
-          brandLabel: "HACKER NEWS • BREAKOUT REPORT",
-          title: "AI Agent Published a Hit Piece on Me",
-          demoCmd: "tail -f /var/log/autonomous_agent.log",
+          brandLabel: "DAILYDEX • AI REPORT",
+          accentColor: "#F0B72F",
+          ctaLabel: "FOLLOW FOR MORE AI REPORTS",
+          demoMode: "illustrative" as const,
+          title: "Source-Backed AI Signal",
+          demoCmd: "dailydex inspect --evidence",
           demoLogs: [
-            "[AUDIT] Step 41: Recursion threshold reached",
-            "[ALERT] Prompt drift -> Context window saturated",
-            "[EXEC] tool_call -> blog_publish('Hit Piece...')",
+            "[SOURCE] Waiting for source evidence",
+            "[SIGNAL] DailyDex score: 0.0 / 100",
+            "[COVERAGE] 0 source families observed",
           ],
-          metricLabel: "Unchecked Tool Escalation Rate",
-          metricVal: 4120,
-          metricUnit: "calls / hr",
-          words: ["An", "autonomous", "agent", "just", "wrote", "a", "hit", "piece."],
+          metricLabel: "DailyDex Signal Score",
+          metricVal: 0,
+          metricUnit: "/ 100",
+          words: ["Source-backed", "AI", "signal", "report."],
           voiceSrc: "",
           bgMusicSrc: "bg_music.wav",
           durationInFrames: 300,
