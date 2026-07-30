@@ -108,7 +108,7 @@ const AgentOutputPanel = ({ state, agentLabel, onClose }) => {
         {/* Error */}
         {state.status === "error" && (
           <div style={{ color: "var(--signal-down)", fontSize: 12 }}>
-            Agent failed — ensure ANTHROPIC_API_KEY is set and restart the server.
+            Agent failed. Check the configured provider, model, and credentials in Settings.
           </div>
         )}
         {/* Full result */}
@@ -279,7 +279,13 @@ const ClusterCard = ({ c, expanded, onToggle }) => {
       <div style={{
         display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 16, padding: "16px 18px",
         cursor: "pointer",
-      }} onClick={onToggle}>
+      }} role="button" tabIndex="0" aria-expanded={expanded} onClick={onToggle}
+         onKeyDown={event => {
+           if (event.key === "Enter" || event.key === " ") {
+             event.preventDefault();
+             event.currentTarget.click();
+           }
+         }}>
         <div style={{
           width: 64, height: 64, borderRadius: 8, display: "grid", placeItems: "center",
           background: `radial-gradient(circle at 30% 30%, ${primarySrc.color}33, ${primarySrc.color}08)`,

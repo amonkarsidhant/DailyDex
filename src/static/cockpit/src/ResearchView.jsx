@@ -69,19 +69,19 @@ const ResearchView = ({ onJump, selectedClusterSlug, setSelectedClusterSlug }) =
       const markdown = packContent;
       const sections = {};
       
-      const leadsMatch = markdown.match(/## Leads\s*([\s\S]*?)(?=\n##|$)/);
+      const leadsMatch = markdown.match(/## (?:Research )?Leads\s*([\s\S]*?)(?=\n##|$)/);
       sections.leads = leadsMatch ? leadsMatch[1].trim() : "";
       
-      const titleMatch = markdown.match(/\*\*Strategic title:\*\*\s*(.*?)\n/);
+      const titleMatch = markdown.match(/\*\*(?:Strategic title|Title):\*\*\s*(.*?)\n/i);
       sections.strategicTitle = titleMatch ? titleMatch[1].trim() : "";
       
-      const shiftMatch = markdown.match(/\*\*Shift:\*\*\s*(.*?)\n/);
+      const shiftMatch = markdown.match(/\*\*(?:The )?Shift:\*\*\s*(.*?)\n/i);
       sections.shift = shiftMatch ? shiftMatch[1].trim() : "";
       
       const superpowerMatch = markdown.match(/\*\*Superpower:\*\*\s*(.*?)\n/);
       sections.superpower = superpowerMatch ? superpowerMatch[1].trim() : "";
       
-      const inversionMatch = markdown.match(/\*\*Munger Inversion:\*\*\s*(.*?)\n/);
+      const inversionMatch = markdown.match(/\*\*(?:Operational Reality Check|Munger Inversion):\*\*\s*(.*?)\n/i);
       sections.inversion = inversionMatch ? inversionMatch[1].trim() : "";
       
       const contrarianMatch = markdown.match(/- Contrarian:\s*(.*?)\n/);
@@ -90,7 +90,7 @@ const ResearchView = ({ onJump, selectedClusterSlug, setSelectedClusterSlug }) =
       const speedMatch = markdown.match(/- Speed-to-Value:\s*(.*?)\n/);
       sections.hookSpeed = speedMatch ? speedMatch[1].trim() : "";
       
-      const beatsMatch = markdown.match(/## Narrative Beats:\s*([\s\S]*?)(?=\n##|$)/);
+      const beatsMatch = markdown.match(/(?:## |\*\*)Narrative Beats(?::|:\*\*)\s*([\s\S]*?)(?=\n##|\n\*\*Thumbnail|$)/i);
       if (beatsMatch) {
         sections.beats = beatsMatch[1]
           .split("\n")
@@ -100,7 +100,7 @@ const ResearchView = ({ onJump, selectedClusterSlug, setSelectedClusterSlug }) =
         sections.beats = [];
       }
       
-      const thumbsMatch = markdown.match(/## Thumbnail Visuals:\s*([\s\S]*?)(?=\n##|$)/);
+      const thumbsMatch = markdown.match(/(?:## |\*\*)Thumbnail (?:Visuals|Concepts)(?::|:\*\*)\s*([\s\S]*?)(?=\n##|$)/i);
       if (thumbsMatch) {
         sections.thumbs = thumbsMatch[1]
           .split("\n")
@@ -146,7 +146,7 @@ const ResearchView = ({ onJump, selectedClusterSlug, setSelectedClusterSlug }) =
       pData ? `## Strategic Title\n${pData.strategicTitle}\n` : "",
       pData ? `## Shift\n${pData.shift}\n` : "",
       pData ? `## Superpower\n${pData.superpower}\n` : "",
-      pData ? `## Munger Inversion\n${pData.inversion}\n` : "",
+      pData ? `## Operational Reality Check\n${pData.inversion}\n` : "",
       `## Source evidence`, ev || "_none_", "",
     ].join("\n");
   };
@@ -294,9 +294,9 @@ const ResearchView = ({ onJump, selectedClusterSlug, setSelectedClusterSlug }) =
                 </Section>
 
                 {parsed.inversion && (
-                  <Section title="Counterpoints & Munger Inversion" no="03">
+                  <Section title="Operational Reality Check" no="03">
                     <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
-                      <Counter pt={parsed.inversion} src="Inversion Analysis" />
+                      <Counter pt={parsed.inversion} src="Failure-boundary analysis" />
                     </ul>
                   </Section>
                 )}

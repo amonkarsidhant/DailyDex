@@ -1,6 +1,14 @@
 // AppShell — nav, topbar, agent rail, copilot dock
 const { useState, useEffect, useMemo, useRef, useCallback } = React;
 
+const sourceAgeLabel = minutes => {
+  if (minutes == null || !Number.isFinite(Number(minutes))) return "--";
+  const value = Math.max(0, Number(minutes));
+  if (value < 60) return `${Math.round(value)}m`;
+  if (value < 1440) return `${Math.round(value / 60)}h`;
+  return `${Math.round(value / 1440)}d`;
+};
+
 // ─── Left nav ───────────────────────────────────────────────────────────────
 const NavItem = ({ icon, label, sub, active, hot, onClick }) => (
   <button onClick={onClick} className={`nav-item${active ? " nav-item--active" : ""}`} style={{
@@ -161,7 +169,7 @@ const Topbar = ({ now, onOpenSettings, onRefresh, refreshing, onToggleAgents, ra
       <div className="topbar-sources" style={{ display: "flex", alignItems: "center", gap: 14, justifySelf: "center" }}>
         {sourceKeys.map(k => {
           const h = sourceHealth[k] || {}; const S = SOURCES[k];
-          const age = h.last_fetch_min == null ? "--" : `${h.last_fetch_min}m`;
+           const age = sourceAgeLabel(h.last_fetch_min);
           return (
             <div key={k} title={`${S.label} - ${h.item_count || 0} items in latest fetch${h.error ? ` - ${h.error}` : ""}`}
                  style={{ display: "flex", alignItems: "center", gap: 6 }}>

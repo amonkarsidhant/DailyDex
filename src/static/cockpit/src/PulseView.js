@@ -1,508 +1,420 @@
-// TodayView - the action-first home for deciding what to make next.
+// TodayView - a live research desk that compiles only after creator selection.
 
-const todayOpportunityFor = (opportunities, cluster) => {
-  if (!cluster) return null;
-  return (opportunities || []).find(o => o.cluster_slug === cluster.slug || o.slug === cluster.slug || o.creator_topic === cluster.topic || o.topic === cluster.topic) || null;
-};
-const todayRelativeTime = value => {
+const deskRelativeTime = value => {
   if (!value) return "Not fetched yet";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "Fetch time unavailable";
   const minutes = Math.max(0, Math.floor((Date.now() - parsed.getTime()) / 60000));
-  if (minutes < 1) return "Updated just now";
-  if (minutes < 60) return `Updated ${minutes}m ago`;
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `Updated ${hours}h ago`;
-  return `Updated ${Math.floor(hours / 24)}d ago`;
+  return hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`;
 };
-const TodaySourceStrip = () => {
+const DeskSourceStrip = () => {
   const {
     SOURCES = {},
     sourceHealth = {}
   } = window.DD_DATA;
   return /*#__PURE__*/React.createElement("div", {
-    className: "today-source-strip",
+    className: "desk-source-strip",
     "aria-label": "Source freshness"
   }, Object.keys(SOURCES).map(key => {
     const source = SOURCES[key];
     const health = sourceHealth[key] || {};
-    const hasIssue = !!health.error || health.status === "failed" || health.using_cache || health.last_fetch_min != null && !health.fresh;
-    const age = health.last_fetch_min == null ? "not fetched" : `${health.last_fetch_min}m ago`;
-    return /*#__PURE__*/React.createElement("div", {
-      className: `today-source${hasIssue ? " today-source--issue" : ""}`,
+    const issue = !!health.error || health.status === "failed" || health.using_cache;
+    return /*#__PURE__*/React.createElement("span", {
+      className: `desk-source${issue ? " desk-source--issue" : ""}`,
       key: key,
-      title: health.error || `${health.item_count || 0} items in latest fetch`
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "today-source__dot",
+      title: health.error || `${health.item_count || 0} current items`
+    }, /*#__PURE__*/React.createElement("i", {
       style: {
-        background: hasIssue ? "var(--signal-down)" : health.last_fetch_min == null ? "var(--text-lo)" : source.color
+        background: issue ? "var(--signal-down)" : source.color
       }
-    }), /*#__PURE__*/React.createElement("span", {
-      className: "today-source__abbr"
-    }, source.abbr), /*#__PURE__*/React.createElement("span", {
-      className: "today-source__age"
-    }, age));
+    }), source.abbr);
   }));
 };
-const TodayActionQueue = ({
-  onJump
-}) => {
-  const {
-    factory_queue = [],
-    pipeline = {},
-    sourceHealth = {},
-    SOURCES = {},
-    stats = {}
-  } = window.DD_DATA;
-  const [busyId, setBusyId] = useState(null);
-  const [message, setMessage] = useState("");
-  const allScripts = pipeline.script_ready || [];
-  const scripts = allScripts.slice(0, 3);
-  const allSourceIssues = Object.entries(sourceHealth).filter(([, health]) => health.error || health.status === "failed" || health.using_cache || health.last_fetch_min != null && !health.fresh);
-  const sourceIssues = allSourceIssues.slice(0, 3);
-  const sourceValues = Object.values(sourceHealth);
-  const hasKnownSources = sourceValues.some(health => health.last_fetch_min != null);
-  const allSourcesCurrent = Object.keys(SOURCES).length > 0 && Object.keys(SOURCES).every(key => sourceHealth[key]?.fresh === true);
-  const reviewFactoryItem = async (item, action) => {
-    setBusyId(`${item.id}:${action}`);
-    setMessage("");
-    try {
-      const response = await fetch(`/api/factory/${item.id}/${action}`, {
-        method: "POST"
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || `${action} failed`);
-      setMessage(action === "approve" ? "Short approved for publishing." : "Short rejected.");
-      if (window.DDX) await window.DDX.reload();
-    } catch (error) {
-      setMessage(error.message || "Could not update the review item.");
-    } finally {
-      setBusyId(null);
-    }
-  };
-  const count = (stats.approval_count ?? factory_queue.length) + allScripts.length + allSourceIssues.length;
-  return /*#__PURE__*/React.createElement("section", {
-    className: "panel today-attention",
-    "aria-labelledby": "attention-title"
-  }, /*#__PURE__*/React.createElement(PanelHeader, {
-    no: "02",
-    actions: /*#__PURE__*/React.createElement("span", {
-      className: "today-count"
-    }, count, " open")
-  }, /*#__PURE__*/React.createElement("span", {
-    id: "attention-title"
-  }, "Needs attention")), /*#__PURE__*/React.createElement("div", {
-    className: "today-attention__body"
-  }, factory_queue.map(item => /*#__PURE__*/React.createElement("div", {
-    className: "today-action",
-    key: `review-${item.id}`
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "today-action__marker today-action__marker--review"
-  }), /*#__PURE__*/React.createElement("div", {
-    className: "today-action__copy"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "today-action__type"
-  }, "Review ready"), /*#__PURE__*/React.createElement("strong", null, item.title || item.topic), /*#__PURE__*/React.createElement("span", null, item.virality_score ? `Virality score ${Math.round(item.virality_score)}` : "Rendered short awaiting a decision"), /*#__PURE__*/React.createElement("video", {
-    controls: true,
-    preload: "metadata",
-    src: `/api/videos/${item.topic ? item.topic.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase() : item.id}.mp4`,
-    style: {
-      width: "100%",
-      maxHeight: 200,
-      borderRadius: 6,
-      marginTop: 6
-    },
-    onError: e => {
-      e.target.style.display = "none";
-    }
-  })), /*#__PURE__*/React.createElement("div", {
-    className: "today-action__controls"
-  }, /*#__PURE__*/React.createElement("a", {
-    className: "btn ghost",
-    href: `/api/videos/${item.topic ? item.topic.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase() : item.id}.mp4`,
-    target: "_blank",
-    rel: "noopener noreferrer",
-    download: true,
-    style: {
-      textDecoration: "none"
-    }
-  }, "Download"), /*#__PURE__*/React.createElement("button", {
-    className: "btn ghost",
-    disabled: busyId != null,
-    onClick: () => reviewFactoryItem(item, "reject")
-  }, "Reject"), /*#__PURE__*/React.createElement("button", {
-    className: "btn primary",
-    disabled: busyId != null,
-    onClick: () => reviewFactoryItem(item, "approve")
-  }, busyId === `${item.id}:approve` ? "Approving..." : "Approve")))), scripts.map(item => /*#__PURE__*/React.createElement("button", {
-    className: "today-action today-action--button",
-    key: `script-${item.id}`,
-    onClick: () => onJump("pipeline")
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "today-action__marker today-action__marker--ready"
-  }), /*#__PURE__*/React.createElement("span", {
-    className: "today-action__copy"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "today-action__type"
-  }, "Ready to record"), /*#__PURE__*/React.createElement("strong", null, item.working_title || item.topic || "Untitled script"), /*#__PURE__*/React.createElement("span", null, item.format || "Script ready")), /*#__PURE__*/React.createElement(I.ArrowR, {
-    size: 13
-  }))), sourceIssues.map(([key, health]) => {
-    const source = window.DD_DATA.SOURCES[key];
-    return /*#__PURE__*/React.createElement("div", {
-      className: "today-action",
-      key: `source-${key}`
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "today-action__marker today-action__marker--issue"
-    }), /*#__PURE__*/React.createElement("div", {
-      className: "today-action__copy"
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "today-action__type"
-    }, health.error || health.using_cache ? "Source issue" : "Source stale"), /*#__PURE__*/React.createElement("strong", null, source?.label || key), /*#__PURE__*/React.createElement("span", null, health.error || (health.using_cache ? "Using cached data" : `Last fetched ${health.last_fetch_min}m ago`))), /*#__PURE__*/React.createElement("button", {
-      className: "btn ghost",
-      onClick: () => window.DDX && window.DDX.refresh()
-    }, "Retry"));
-  }), count > factory_queue.length + scripts.length + sourceIssues.length && /*#__PURE__*/React.createElement("div", {
-    className: "today-inline-message"
-  }, "Additional review or source items are not shown in this compact list."), count === 0 && /*#__PURE__*/React.createElement("div", {
-    className: "today-clear"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "today-clear__mark"
-  }, "OK"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "No queued actions"), /*#__PURE__*/React.createElement("span", null, allSourcesCurrent ? "Nothing needs review and all sources are current." : hasKnownSources ? "No review items are queued; some sources are still awaiting a current fetch." : "Source status will appear after the first fetch."))), message && /*#__PURE__*/React.createElement("div", {
-    className: "today-inline-message",
-    role: "status"
-  }, message)));
-};
-const TodayChanges = ({
+const SignalQueue = ({
   clusters,
   selectedSlug,
-  onSelect,
-  onJump
+  onSelect
+}) => /*#__PURE__*/React.createElement("aside", {
+  className: "signal-queue",
+  "aria-label": "Current story signals"
+}, /*#__PURE__*/React.createElement("div", {
+  className: "signal-queue__header"
+}, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+  className: "micro"
+}, "Current signals"), /*#__PURE__*/React.createElement("strong", null, "Pick what deserves a desk")), /*#__PURE__*/React.createElement("span", {
+  className: "signal-queue__count mono"
+}, clusters.length)), /*#__PURE__*/React.createElement("div", {
+  className: "signal-queue__list"
+}, clusters.map((cluster, index) => /*#__PURE__*/React.createElement("button", {
+  key: cluster.slug,
+  className: `signal-row${selectedSlug === cluster.slug ? " signal-row--selected" : ""}`,
+  onClick: () => onSelect(cluster.slug),
+  "aria-pressed": selectedSlug === cluster.slug
+}, /*#__PURE__*/React.createElement("span", {
+  className: "signal-row__rank mono"
+}, String(index + 1).padStart(2, "0")), /*#__PURE__*/React.createElement("span", {
+  className: "signal-row__body"
+}, /*#__PURE__*/React.createElement("strong", null, cluster.topic), /*#__PURE__*/React.createElement("span", {
+  className: "signal-row__sources"
+}, (cluster.sources || []).slice(0, 4).map(source => /*#__PURE__*/React.createElement(SourceChip, {
+  key: source,
+  src: source
+})))), /*#__PURE__*/React.createElement("span", {
+  className: "signal-row__metrics"
+}, /*#__PURE__*/React.createElement("b", null, Math.round(cluster.creator_score || cluster.average_signal_score || 0)), /*#__PURE__*/React.createElement(Momentum, {
+  delta: cluster.momentum
+}), /*#__PURE__*/React.createElement("small", null, cluster.source_count, " families"))))));
+const EvidenceCitation = ({
+  ids,
+  evidence
+}) => /*#__PURE__*/React.createElement("span", {
+  className: "desk-citations"
+}, (ids || []).map(id => {
+  const source = evidence.find(record => record.id === id);
+  return source?.url ? /*#__PURE__*/React.createElement("a", {
+    key: id,
+    href: source.url,
+    target: "_blank",
+    rel: "noopener noreferrer",
+    title: source.title
+  }, id) : /*#__PURE__*/React.createElement("span", {
+    key: id
+  }, id);
+}));
+const CompiledBrief = ({
+  result,
+  evidence,
+  onSteer
+}) => /*#__PURE__*/React.createElement("div", {
+  className: "desk-brief"
+}, /*#__PURE__*/React.createElement("header", {
+  className: "desk-brief__header"
+}, /*#__PURE__*/React.createElement("span", {
+  className: "micro"
+}, "Fresh editorial brief"), /*#__PURE__*/React.createElement("h1", null, result.story_title, " ", /*#__PURE__*/React.createElement(EvidenceCitation, {
+  ids: result.story_title_evidence_ids,
+  evidence: evidence
+})), /*#__PURE__*/React.createElement("p", null, result.editorial_thesis, " ", /*#__PURE__*/React.createElement(EvidenceCitation, {
+  ids: result.editorial_thesis_evidence_ids,
+  evidence: evidence
+}))), /*#__PURE__*/React.createElement("div", {
+  className: "desk-brief__lead"
+}, /*#__PURE__*/React.createElement("div", {
+  className: "desk-hook-card"
+}, /*#__PURE__*/React.createElement("span", null, "Opening line"), /*#__PURE__*/React.createElement("blockquote", null, result.hook, " ", /*#__PURE__*/React.createElement(EvidenceCitation, {
+  ids: result.hook_evidence_ids,
+  evidence: evidence
+}))), /*#__PURE__*/React.createElement("div", {
+  className: "desk-payoff-card"
+}, /*#__PURE__*/React.createElement("span", null, "Audience payoff"), /*#__PURE__*/React.createElement("p", null, result.audience_payoff, " ", /*#__PURE__*/React.createElement(EvidenceCitation, {
+  ids: result.audience_payoff_evidence_ids,
+  evidence: evidence
+})))), /*#__PURE__*/React.createElement("section", {
+  className: "desk-section"
+}, /*#__PURE__*/React.createElement("div", {
+  className: "desk-section__heading"
+}, /*#__PURE__*/React.createElement("span", {
+  className: "micro"
+}, "Three ways into the story"), /*#__PURE__*/React.createElement("small", null, "Choose one to brief the desk again")), /*#__PURE__*/React.createElement("div", {
+  className: "desk-angle-grid"
+}, (result.angles || []).map((angle, index) => /*#__PURE__*/React.createElement("button", {
+  key: `${angle.name}-${index}`,
+  className: "desk-angle",
+  onClick: () => onSteer(`Develop the ${angle.name} angle. Keep it evidence-led and make the editorial take sharper.`)
+}, /*#__PURE__*/React.createElement("span", {
+  className: "mono"
+}, "0", index + 1), /*#__PURE__*/React.createElement("strong", null, angle.name), /*#__PURE__*/React.createElement("p", null, angle.take), /*#__PURE__*/React.createElement(EvidenceCitation, {
+  ids: angle.evidence_ids,
+  evidence: evidence
+}))))), /*#__PURE__*/React.createElement("div", {
+  className: "desk-brief__split"
+}, /*#__PURE__*/React.createElement("section", {
+  className: "desk-section desk-format-card"
+}, /*#__PURE__*/React.createElement("span", {
+  className: "micro"
+}, "Best treatment"), /*#__PURE__*/React.createElement("strong", null, result.recommended_format), /*#__PURE__*/React.createElement("p", null, result.format_reason, " ", /*#__PURE__*/React.createElement(EvidenceCitation, {
+  ids: result.format_reason_evidence_ids,
+  evidence: evidence
+})), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", null, "Concrete demo"), /*#__PURE__*/React.createElement("p", null, result.demo_idea, " ", /*#__PURE__*/React.createElement(EvidenceCitation, {
+  ids: result.demo_evidence_ids,
+  evidence: evidence
+})))), /*#__PURE__*/React.createElement("section", {
+  className: "desk-section desk-titles-card"
+}, /*#__PURE__*/React.createElement("span", {
+  className: "micro"
+}, "Working titles"), (result.titles || []).map((title, index) => /*#__PURE__*/React.createElement("button", {
+  key: index,
+  onClick: () => navigator.clipboard?.writeText(title)
+}, /*#__PURE__*/React.createElement("span", {
+  className: "mono"
+}, index + 1), title)), /*#__PURE__*/React.createElement(EvidenceCitation, {
+  ids: result.titles_evidence_ids,
+  evidence: evidence
+}))), /*#__PURE__*/React.createElement("section", {
+  className: "desk-section desk-facts"
+}, /*#__PURE__*/React.createElement("div", {
+  className: "desk-section__heading"
+}, /*#__PURE__*/React.createElement("span", {
+  className: "micro"
+}, "Claims the sources support"), /*#__PURE__*/React.createElement("small", null, "Every claim links back to evidence")), (result.key_facts || []).map((fact, index) => /*#__PURE__*/React.createElement("div", {
+  key: index
+}, /*#__PURE__*/React.createElement("span", {
+  className: "desk-facts__mark"
+}, "+"), /*#__PURE__*/React.createElement("p", null, fact.claim), /*#__PURE__*/React.createElement(EvidenceCitation, {
+  ids: fact.evidence_ids,
+  evidence: evidence
+})))), !!result.caveats?.length && /*#__PURE__*/React.createElement("section", {
+  className: "desk-caveats"
+}, /*#__PURE__*/React.createElement("span", {
+  className: "micro"
+}, "What the desk would not claim yet ", /*#__PURE__*/React.createElement(EvidenceCitation, {
+  ids: result.caveats_evidence_ids,
+  evidence: evidence
+})), result.caveats.map((caveat, index) => /*#__PURE__*/React.createElement("p", {
+  key: index
+}, caveat))));
+const LiveResearchDesk = ({
+  cluster
 }) => {
-  const changed = [...clusters].sort((a, b) => Math.abs(b.momentum || 0) - Math.abs(a.momentum || 0) || b.source_count - a.source_count).slice(0, 4);
-  return /*#__PURE__*/React.createElement("section", {
-    className: "panel today-changes",
-    "aria-labelledby": "changes-title"
-  }, /*#__PURE__*/React.createElement(PanelHeader, {
-    no: "03",
-    actions: /*#__PURE__*/React.createElement("button", {
-      className: "btn ghost",
-      onClick: () => onJump("clusters", selectedSlug)
-    }, "Open Discover")
-  }, /*#__PURE__*/React.createElement("span", {
-    id: "changes-title"
-  }, "What changed")), /*#__PURE__*/React.createElement("div", {
-    className: "today-changes__list"
-  }, changed.map(cluster => {
-    const note = cluster.changelog?.[0]?.message || "No measured change since the previous snapshot.";
-    return /*#__PURE__*/React.createElement("button", {
-      key: cluster.slug,
-      className: `today-change${selectedSlug === cluster.slug ? " today-change--active" : ""}`,
-      onClick: () => onSelect(cluster.slug)
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "today-change__topic"
-    }, cluster.topic), /*#__PURE__*/React.createElement(Momentum, {
-      delta: cluster.momentum
-    }), /*#__PURE__*/React.createElement("span", {
-      className: "today-change__note"
-    }, note), /*#__PURE__*/React.createElement("span", {
-      className: "today-change__sources"
-    }, cluster.source_count, " sources"));
-  })));
-};
-const TodayProduction = ({
-  onJump
-}) => {
-  const {
-    pipeline = {},
-    calendar = [],
-    agents = []
-  } = window.DD_DATA;
-  const lanes = [["researching", "Researching"], ["script_ready", "Script ready"], ["recording", "Recording"]];
-  const nextDay = calendar.find(day => (day.items || []).length > 0);
-  return /*#__PURE__*/React.createElement("section", {
-    className: "panel today-production",
-    "aria-labelledby": "production-title"
-  }, /*#__PURE__*/React.createElement(PanelHeader, {
-    no: "04",
-    actions: /*#__PURE__*/React.createElement("button", {
-      className: "btn ghost",
-      onClick: () => onJump("pipeline")
-    }, "Open Publish")
-  }, /*#__PURE__*/React.createElement("span", {
-    id: "production-title"
-  }, "Production now")), /*#__PURE__*/React.createElement("div", {
-    className: "today-production__body"
+  const [desk, setDesk] = useState({
+    phase: "idle",
+    message: "",
+    evidence: [],
+    draft: "",
+    result: null,
+    error: "",
+    cacheHit: false,
+    model: "",
+    generatedAt: null,
+    lockedUntil: null
+  });
+  const [instruction, setInstruction] = useState("");
+  const requestRef = useRef(0);
+  const abortRef = useRef(null);
+  const compile = requestInstruction => {
+    if (!cluster || !window.DDX) return;
+    const requestId = ++requestRef.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setDesk({
+      phase: "starting",
+      message: "Opening the live research desk...",
+      evidence: [],
+      draft: "",
+      result: null,
+      error: "",
+      cacheHit: false,
+      model: "",
+      generatedAt: null,
+      lockedUntil: null
+    });
+    window.DDX.compile(cluster.slug, requestInstruction || "", event => {
+      if (requestRef.current !== requestId) return;
+      if (event.type === "status") {
+        setDesk(current => ({
+          ...current,
+          phase: event.phase,
+          message: event.message || current.message
+        }));
+      } else if (event.type === "cache") {
+        setDesk(current => ({
+          ...current,
+          phase: "cached",
+          cacheHit: true,
+          model: event.model || "",
+          generatedAt: event.generated_at,
+          lockedUntil: event.locked_until,
+          message: "Today's desk brief is already compiled. Replaying the cited work."
+        }));
+      } else if (event.type === "evidence") {
+        setDesk(current => {
+          const remaining = current.evidence.filter(record => record.id !== event.record.id);
+          return {
+            ...current,
+            evidence: [...remaining, event.record].sort((a, b) => a.id.localeCompare(b.id))
+          };
+        });
+      } else if (event.type === "draft_reset") {
+        setDesk(current => ({
+          ...current,
+          draft: ""
+        }));
+      } else if (event.type === "token") {
+        setDesk(current => ({
+          ...current,
+          phase: "compiling",
+          draft: (current.draft + event.token).slice(-50000)
+        }));
+      } else if (event.type === "result") {
+        setDesk(current => ({
+          ...current,
+          phase: "done",
+          result: event.result,
+          draft: "",
+          error: "",
+          cacheHit: !!event.cache_hit,
+          model: event.model || "",
+          generatedAt: event.generated_at,
+          lockedUntil: event.locked_until,
+          message: event.cache_hit ? "Replayed today's compiled desk brief." : "Fresh desk brief compiled from live evidence."
+        }));
+      } else if (event.type === "error") {
+        setDesk(current => ({
+          ...current,
+          phase: "error",
+          error: event.message || "The desk could not compile this story."
+        }));
+      }
+    }, controller.signal).catch(error => {
+      if (requestRef.current !== requestId || error.name === "AbortError") return;
+      setDesk(current => ({
+        ...current,
+        phase: "error",
+        error: error.message || "The research desk is unavailable."
+      }));
+    });
+  };
+  useEffect(() => {
+    setInstruction("");
+    compile("");
+    return () => abortRef.current?.abort();
+  }, [cluster?.slug]);
+  const submit = event => {
+    event.preventDefault();
+    if (!instruction.trim()) return;
+    compile(instruction.trim());
+  };
+  const isWorking = ["starting", "waiting", "evidence", "compiling", "repairing"].includes(desk.phase);
+  const lockText = desk.lockedUntil ? `Daily brief locked until ${new Date(desk.lockedUntil * 1000).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  })}` : "One fresh default brief per signal every 24 hours";
+  return /*#__PURE__*/React.createElement("main", {
+    className: "research-desk",
+    "aria-live": "polite"
+  }, /*#__PURE__*/React.createElement("header", {
+    className: "research-desk__topbar"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "micro"
+  }, "Live research desk"), /*#__PURE__*/React.createElement("strong", null, cluster.topic)), /*#__PURE__*/React.createElement("div", {
+    className: "research-desk__meta"
+  }, /*#__PURE__*/React.createElement("span", null, desk.cacheHit ? "24H REPLAY" : isWorking ? "COMPILING LIVE" : "SOURCE-BACKED"), /*#__PURE__*/React.createElement("small", null, lockText))), /*#__PURE__*/React.createElement("div", {
+    className: "research-desk__signal"
+  }, /*#__PURE__*/React.createElement("span", null, "Creator fit ", /*#__PURE__*/React.createElement("b", null, Math.round(cluster.creator_score || 0))), /*#__PURE__*/React.createElement("span", null, "Signal ", /*#__PURE__*/React.createElement("b", null, Math.round(cluster.average_signal_score || 0))), /*#__PURE__*/React.createElement("span", null, "Coverage ", /*#__PURE__*/React.createElement("b", null, cluster.source_count)), /*#__PURE__*/React.createElement(Momentum, {
+    delta: cluster.momentum,
+    big: true
+  })), isWorking && /*#__PURE__*/React.createElement("section", {
+    className: "desk-working"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "today-production__lanes"
-  }, lanes.map(([key, label]) => /*#__PURE__*/React.createElement("button", {
-    key: key,
-    onClick: () => onJump("pipeline"),
-    className: "today-lane"
-  }, /*#__PURE__*/React.createElement("span", null, label), /*#__PURE__*/React.createElement("strong", null, (pipeline[key] || []).length)))), /*#__PURE__*/React.createElement("div", {
-    className: "today-production__next"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "micro"
-  }, "Next scheduled"), nextDay ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, nextDay.day, " ", nextDay.date), /*#__PURE__*/React.createElement("span", null, nextDay.items.length, " production event", nextDay.items.length === 1 ? "" : "s")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, "Calendar open"), /*#__PURE__*/React.createElement("span", null, "No production events scheduled in the next seven days."))), /*#__PURE__*/React.createElement("div", {
-    className: "today-production__agents"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "micro"
-  }, "Agents"), agents.length ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, agents.length, " active"), /*#__PURE__*/React.createElement("span", null, agents.slice(0, 2).map(agent => agent.name).join(" + "))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, "Idle"), /*#__PURE__*/React.createElement("span", null, "Dispatch work from the recommendation when you are ready.")))));
-};
-const TodayGoldenPath = ({
-  onJump,
-  clusters,
-  pipeline,
-  factory_queue
-}) => {
-  const hasClusters = clusters.length > 0;
-  const hasPipeline = Object.values(pipeline || {}).flat().length > 0;
-  const hasFactory = (factory_queue || []).length > 0;
-  if (hasFactory) return null;
-  const steps = [{
-    done: hasClusters,
-    label: "Sources fetched",
-    action: "Refresh sources",
-    onAction: () => window.DDX && window.DDX.refresh()
-  }, {
-    done: hasPipeline,
-    label: "Story saved to pipeline",
-    action: "Save a story",
-    onAction: null
-  }, {
-    done: false,
-    label: "Render your first short",
-    action: "Click Render short",
-    onAction: null
-  }, {
-    done: false,
-    label: "Review and approve",
-    action: "Check Needs attention",
-    onAction: null
-  }];
-  const completed = steps.filter(s => s.done).length;
-  if (completed >= 2) return null;
-  return /*#__PURE__*/React.createElement("section", {
-    className: "panel today-golden-path",
-    "aria-labelledby": "golden-path-title"
-  }, /*#__PURE__*/React.createElement(PanelHeader, {
-    no: "01"
-  }, /*#__PURE__*/React.createElement("span", {
-    id: "golden-path-title"
-  }, "Get started")), /*#__PURE__*/React.createElement("div", {
-    className: "today-golden-path__body"
-  }, steps.map((step, i) => /*#__PURE__*/React.createElement("div", {
-    key: i,
-    className: `today-golden-path__step${step.done ? " today-golden-path__step--done" : ""}`
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "today-golden-path__check"
-  }, step.done ? "\u2713" : i + 1), /*#__PURE__*/React.createElement("span", null, step.label), !step.done && step.onAction && /*#__PURE__*/React.createElement("button", {
+    className: "desk-working__pulse"
+  }, /*#__PURE__*/React.createElement("i", null), /*#__PURE__*/React.createElement("i", null), /*#__PURE__*/React.createElement("i", null)), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, desk.message), /*#__PURE__*/React.createElement("span", null, desk.evidence.length, " source", desk.evidence.length === 1 ? "" : "s", " read")), desk.phase === "compiling" && desk.draft && /*#__PURE__*/React.createElement("pre", null, desk.draft.slice(-900))), desk.error && /*#__PURE__*/React.createElement("div", {
+    className: "desk-error"
+  }, /*#__PURE__*/React.createElement("strong", null, "Compile stopped"), /*#__PURE__*/React.createElement("span", null, desk.error), /*#__PURE__*/React.createElement("button", {
     className: "btn ghost",
-    onClick: step.onAction
-  }, step.action)))));
+    onClick: () => compile(instruction)
+  }, "Try again")), desk.result && /*#__PURE__*/React.createElement(CompiledBrief, {
+    result: desk.result,
+    evidence: desk.evidence,
+    onSteer: value => {
+      setInstruction(value);
+      compile(value);
+    }
+  }), !!desk.evidence.length && /*#__PURE__*/React.createElement("section", {
+    className: "desk-evidence-ledger"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "desk-section__heading"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "micro"
+  }, "Evidence ledger"), /*#__PURE__*/React.createElement("small", null, "Read live when this brief was compiled")), /*#__PURE__*/React.createElement("div", null, desk.evidence.map(record => /*#__PURE__*/React.createElement("a", {
+    key: record.id,
+    href: record.url || undefined,
+    target: record.url ? "_blank" : undefined,
+    rel: "noopener noreferrer"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "mono"
+  }, record.id), /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("strong", null, record.title), /*#__PURE__*/React.createElement("small", null, record.source_type, " \xB7 ", record.facts?.length || 0, " facts \xB7 ", record.quotes?.length || 0, " quotes")), /*#__PURE__*/React.createElement(I.ArrowR, {
+    size: 12
+  }))))), /*#__PURE__*/React.createElement("form", {
+    className: "desk-prompt",
+    onSubmit: submit
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "micro"
+  }, "Direct the desk"), /*#__PURE__*/React.createElement("small", null, "Each distinct request gets its own 24-hour cited brief.")), /*#__PURE__*/React.createElement("div", {
+    className: "desk-prompt__input"
+  }, /*#__PURE__*/React.createElement("input", {
+    value: instruction,
+    onChange: event => setInstruction(event.target.value),
+    placeholder: "Focus on the cost, the technical trade-off, or the audience debate...",
+    maxLength: 500
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "btn primary",
+    disabled: isWorking || !instruction.trim()
+  }, isWorking ? "Working..." : "Compile")), /*#__PURE__*/React.createElement("div", {
+    className: "desk-prompt__suggestions"
+  }, ["Find the skeptical angle", "Make this practical for builders", "Focus on what the sources disagree about"].map(value => /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    key: value,
+    onClick: () => {
+      setInstruction(value);
+      compile(value);
+    },
+    disabled: isWorking
+  }, value)))));
 };
 const TodayView = ({
-  onJump,
   selectedClusterSlug,
   setSelectedClusterSlug
 }) => {
   const {
     clusters = [],
-    opportunities = [],
-    titleSets = {},
-    meta = {},
-    pipeline = {},
-    factory_queue = []
+    meta = {}
   } = window.DD_DATA;
-  const fallbackSlug = clusters[0]?.slug || null;
-  const selectedSlug = clusters.some(cluster => cluster.slug === selectedClusterSlug) ? selectedClusterSlug : fallbackSlug;
-  const cluster = clusters.find(item => item.slug === selectedSlug) || clusters[0] || null;
-  const opportunity = todayOpportunityFor(opportunities, cluster);
-  const titles = cluster ? titleSets[cluster.slug] || opportunity?.suggested_titles || {} : {};
-  const recommendationTitle = titles.practical || titles.curiosity || opportunity?.title || cluster?.topic || "";
-  const isTopRecommendation = cluster.slug === clusters[0]?.slug;
-  const hook = opportunity?.opening_hook || opportunity?.hook_line || cluster?.recommended_angle || "";
-  const saved = Object.values(pipeline).flat().some(item => item.topic === cluster?.topic || item.working_title === recommendationTitle);
-  const [saving, setSaving] = useState(false);
-  const [researching, setResearching] = useState(false);
-  const [rendering, setRendering] = useState(false);
-  const [renderMsg, setRenderMsg] = useState("");
-  const selectCluster = slug => {
-    if (setSelectedClusterSlug) setSelectedClusterSlug(slug);
-  };
-  const saveRecommendation = async () => {
-    if (!cluster || !window.DDX || saved || saving) return;
-    setSaving(true);
-    try {
-      await window.DDX.saveToPipeline({
-        title: recommendationTitle,
-        working_title: recommendationTitle,
-        topic: cluster.topic,
-        category: cluster.topic,
-        format: opportunity?.best_format || cluster.best_content_format || "YouTube long-form",
-        creator_score: cluster.creator_score,
-        signal_score: cluster.average_signal_score,
-        pipeline_type: "creator",
-        status: "idea"
-      });
-      await window.DDX.reload();
-    } finally {
-      setSaving(false);
-    }
-  };
-  const startResearch = async () => {
-    if (!cluster || !window.DDX || researching) return;
-    setResearching(true);
-    try {
-      await window.DDX.dispatch("topic_researcher", cluster.topic, cluster.slug);
-      onJump("research", cluster.slug);
-    } finally {
-      setResearching(false);
-    }
-  };
-  const renderShort = async () => {
-    if (!cluster || !window.DDX || rendering) return;
-    setRendering(true);
-    setRenderMsg("Rendering vertical short with Remotion...");
-    try {
-      const res = await window.DDX.factoryRun(1);
-      if (res.started) {
-        setRenderMsg("Factory started. The short will appear in Needs attention when ready.");
-        const poll = setInterval(async () => {
-          try {
-            const status = await window.DDX.factoryStatus();
-            if (!status.running) {
-              clearInterval(poll);
-              setRendering(false);
-              setRenderMsg(status.result?.queued?.length ? "Short rendered! Review it in Needs attention." : "Factory finished. Check the queue.");
-              if (window.DDX) await window.DDX.reload();
-            }
-          } catch (_) {
-            clearInterval(poll);
-            setRendering(false);
-          }
-        }, 3000);
-      } else {
-        setRenderMsg("Factory is already running.");
-        setRendering(false);
-      }
-    } catch (e) {
-      setRenderMsg("Failed to start render: " + (e.message || "unknown error"));
-      setRendering(false);
-    }
-  };
-  if (!cluster) {
+  const [activeSlug, setActiveSlug] = useState(null);
+  const cluster = clusters.find(item => item.slug === activeSlug) || null;
+  useEffect(() => {
+    if (activeSlug && !clusters.some(item => item.slug === activeSlug)) setActiveSlug(null);
+  }, [activeSlug, clusters]);
+  if (!clusters.length) {
     return /*#__PURE__*/React.createElement("div", {
       className: "panel today-empty"
     }, /*#__PURE__*/React.createElement("span", {
       className: "micro"
-    }, "Today"), /*#__PURE__*/React.createElement("h1", null, "No recommendation yet"), /*#__PURE__*/React.createElement("p", null, "Fetch sources to build the first cross-source story recommendation."), /*#__PURE__*/React.createElement("button", {
+    }, "Research desk"), /*#__PURE__*/React.createElement("h1", null, "No current signals"), /*#__PURE__*/React.createElement("p", null, "Fetch sources, then select a signal for a fresh creator-specific compile."), /*#__PURE__*/React.createElement("button", {
       className: "btn primary",
-      onClick: () => window.DDX && window.DDX.refresh()
+      onClick: () => window.DDX?.refresh()
     }, "Fetch sources"));
   }
   return /*#__PURE__*/React.createElement("div", {
-    className: "today-view"
-  }, /*#__PURE__*/React.createElement("section", {
-    className: "panel crosshair today-hero",
-    "aria-labelledby": "today-title"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "ch-bl"
-  }), /*#__PURE__*/React.createElement("span", {
-    className: "ch-br"
-  }), /*#__PURE__*/React.createElement("div", {
-    className: "today-hero__topline"
+    className: "today-view live-desk-view"
+  }, /*#__PURE__*/React.createElement("header", {
+    className: "live-desk-header"
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
-    className: "today-eyebrow"
-  }, isTopRecommendation ? "Make this next" : "Selected story"), /*#__PURE__*/React.createElement("span", {
-    className: "today-freshness"
-  }, todayRelativeTime(meta.last_updated || meta.fetched_at))), /*#__PURE__*/React.createElement(TodaySourceStrip, null)), /*#__PURE__*/React.createElement("div", {
-    className: "today-hero__grid"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "today-recommendation"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "today-recommendation__meta"
-  }, /*#__PURE__*/React.createElement(FormatBadge, {
-    format: opportunity?.best_format || cluster.best_content_format
-  }), /*#__PURE__*/React.createElement("span", {
-    className: "chip"
-  }, "Creator score ", cluster.creator_score), /*#__PURE__*/React.createElement("span", {
-    className: "chip"
-  }, cluster.source_count, " source families"), /*#__PURE__*/React.createElement(Momentum, {
-    delta: cluster.momentum,
-    big: true
-  })), /*#__PURE__*/React.createElement("h1", {
-    id: "today-title"
-  }, recommendationTitle), /*#__PURE__*/React.createElement("p", {
-    className: "today-recommendation__why"
-  }, cluster.why_this_is_a_story), hook && /*#__PURE__*/React.createElement("div", {
-    className: "today-hook"
-  }, /*#__PURE__*/React.createElement("span", null, "Opening angle"), /*#__PURE__*/React.createElement("p", null, hook)), /*#__PURE__*/React.createElement("div", {
-    className: "today-recommendation__actions"
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "btn primary today-primary-action",
-    onClick: () => onJump("brief", cluster.slug)
-  }, "Open production brief ", /*#__PURE__*/React.createElement(I.ArrowR, {
-    size: 13
-  })), /*#__PURE__*/React.createElement("button", {
-    className: "btn ghost",
-    disabled: rendering,
-    onClick: renderShort,
-    style: rendering ? {
-      borderColor: "var(--signal)",
-      color: "var(--signal)"
-    } : {}
-  }, rendering ? "Rendering..." : "Render short"), /*#__PURE__*/React.createElement("button", {
-    className: "btn ghost",
-    disabled: researching,
-    onClick: startResearch
-  }, researching ? "Dispatching..." : "Build research pack"), /*#__PURE__*/React.createElement("button", {
-    className: "btn ghost",
-    disabled: saved || saving,
-    onClick: saveRecommendation
-  }, saved ? "In pipeline" : saving ? "Saving..." : "Save idea")), renderMsg && /*#__PURE__*/React.createElement("div", {
-    className: "today-inline-message",
-    role: "status"
-  }, renderMsg)), /*#__PURE__*/React.createElement("aside", {
-    className: "today-evidence",
-    "aria-label": "Recommendation evidence"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "today-evidence__header"
+    className: "micro"
+  }, "DailyDex research room"), /*#__PURE__*/React.createElement("h1", null, "Choose a signal. Get a fresh desk brief."), /*#__PURE__*/React.createElement("p", null, "No generic angles. The desk reads the sources and writes for your audience when you select.")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(DeskSourceStrip, null), /*#__PURE__*/React.createElement("span", {
+    className: "mono"
+  }, "signals updated ", deskRelativeTime(meta.last_updated || meta.fetched_at)))), /*#__PURE__*/React.createElement("div", {
+    className: "live-desk-layout"
+  }, /*#__PURE__*/React.createElement(SignalQueue, {
+    clusters: clusters,
+    selectedSlug: activeSlug,
+    onSelect: slug => {
+      setActiveSlug(slug);
+      setSelectedClusterSlug?.(slug);
+    }
+  }), cluster ? /*#__PURE__*/React.createElement(LiveResearchDesk, {
+    key: cluster.slug,
+    cluster: cluster
+  }) : /*#__PURE__*/React.createElement("main", {
+    className: "research-desk desk-unselected"
   }, /*#__PURE__*/React.createElement("span", {
     className: "micro"
-  }, "Evidence behind the pick"), /*#__PURE__*/React.createElement("button", {
-    className: "text-button",
-    onClick: () => onJump("clusters", cluster.slug)
-  }, "Inspect cluster")), /*#__PURE__*/React.createElement("div", {
-    className: "today-evidence__list"
-  }, (cluster.related_items || []).slice(0, 4).map((item, index) => /*#__PURE__*/React.createElement("a", {
-    key: `${item.url || item.title}-${index}`,
-    href: item.url || undefined,
-    target: item.url ? "_blank" : undefined,
-    rel: "noopener noreferrer",
-    className: "today-evidence__item"
-  }, /*#__PURE__*/React.createElement(SourceChip, {
-    src: item.source_type
-  }), /*#__PURE__*/React.createElement("span", null, item.title), /*#__PURE__*/React.createElement("strong", null, item.signal_score)))), /*#__PURE__*/React.createElement("div", {
-    className: "today-evidence__angle"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "micro"
-  }, "Recommended angle"), /*#__PURE__*/React.createElement("p", null, cluster.recommended_angle))))), /*#__PURE__*/React.createElement(TodayGoldenPath, {
-    onJump: onJump,
-    clusters: clusters,
-    pipeline: pipeline,
-    factory_queue: factory_queue
-  }), /*#__PURE__*/React.createElement("div", {
-    className: "today-work-grid"
-  }, /*#__PURE__*/React.createElement(TodayActionQueue, {
-    onJump: onJump
-  }), /*#__PURE__*/React.createElement(EditorialBoard, null)), /*#__PURE__*/React.createElement(TodayChanges, {
-    clusters: clusters,
-    selectedSlug: selectedSlug,
-    onSelect: selectCluster,
-    onJump: onJump
-  }), /*#__PURE__*/React.createElement(TodayProduction, {
-    onJump: onJump
-  }));
+  }, "Desk closed"), /*#__PURE__*/React.createElement("h2", null, "Select a current signal"), /*#__PURE__*/React.createElement("p", null, "Nothing compiles until you choose the story that deserves deeper research."))));
 };
 window.TodayView = TodayView;
 window.PulseView = TodayView;

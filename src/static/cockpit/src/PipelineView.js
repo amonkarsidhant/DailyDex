@@ -605,6 +605,7 @@ const PublishedRow = ({
   const [altTitle, setAltTitle] = useState("");
   const [submittingAB, setSubmittingAB] = useState(false);
   const [showShortsModal, setShowShortsModal] = useState(false);
+  const [showRescueModal, setShowRescueModal] = useState(false);
   const [clips, setClips] = useState([]);
   const [loadingClips, setLoadingClips] = useState(false);
   const [publishingClipId, setPublishingClipId] = useState(null);
@@ -677,13 +678,13 @@ const PublishedRow = ({
       setPublishingClipId(null);
     }
   };
-  const retention = typeof p.retention === "number" ? p.retention : 0.5;
+  const retention = typeof p.retention === "number" ? p.retention : null;
   const views = p.views != null ? p.views : "—";
   const curve = Array.from({
     length: 24
   }, (_, i) => {
     const t = i / 23;
-    return Math.max(0.15, retention * Math.pow(1 - t, 0.35) + Math.sin(i * 0.6) * 0.04);
+    return retention == null ? 0 : Math.max(0.15, retention * Math.pow(1 - t, 0.35) + Math.sin(i * 0.6) * 0.04);
   });
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -715,6 +716,12 @@ const PublishedRow = ({
   }, /*#__PURE__*/React.createElement(FormatBadge, {
     format: p.format
   }), /*#__PURE__*/React.createElement("span", {
+    className: "chip mono",
+    style: {
+      fontSize: 9,
+      color: p.rescue_status === "low_ctr" ? "var(--signal-down)" : p.rescue_status === "outlier" ? "var(--signal-up)" : "var(--text-lo)"
+    }
+  }, p.rescue_status === "low_ctr" ? "LOW CTR" : p.rescue_status === "outlier" ? "OUTLIER" : p.rescue_status === "healthy" ? "HEALTHY" : "AWAITING TELEMETRY"), /*#__PURE__*/React.createElement("span", {
     className: "mono",
     style: {
       fontSize: 10,
@@ -743,13 +750,13 @@ const PublishedRow = ({
     }
   }, views)), /*#__PURE__*/React.createElement("span", null, "retention ", /*#__PURE__*/React.createElement("span", {
     style: {
-      color: retention > 0.6 ? "var(--signal-up)" : "var(--signal)"
+      color: retention != null && retention > 0.6 ? "var(--signal-up)" : "var(--signal)"
     }
-  }, Math.round(retention * 100), "%")), /*#__PURE__*/React.createElement("span", null, "score ", /*#__PURE__*/React.createElement("span", {
+  }, retention == null ? "—" : `${Math.round(retention * 100)}%`)), /*#__PURE__*/React.createElement("span", null, "score ", /*#__PURE__*/React.createElement("span", {
     style: {
       color: "var(--text-hi)"
     }
-  }, p.creator_score || "—")))), /*#__PURE__*/React.createElement(Sparkline, {
+  }, p.creator_score || "—")))), retention != null && /*#__PURE__*/React.createElement(Sparkline, {
     data: curve,
     w: 160,
     h: 48,
@@ -942,7 +949,15 @@ const PublishedRow = ({
       display: "flex",
       gap: 8
     }
-  }, /*#__PURE__*/React.createElement("button", {
+  }, p.rescue_status === "low_ctr" && /*#__PURE__*/React.createElement("button", {
+    className: "btn ghost",
+    style: {
+      fontSize: 11,
+      padding: "4px 10px",
+      color: "var(--signal-down)"
+    },
+    onClick: () => setShowRescueModal(true)
+  }, "Low CTR \xB7 Rescue available"), /*#__PURE__*/React.createElement("button", {
     className: "btn ghost",
     style: {
       fontSize: 11,
@@ -1172,7 +1187,173 @@ const PublishedRow = ({
       padding: "6px 14px"
     },
     onClick: () => setShowShortsModal(false)
-  }, "Close")))));
+  }, "Close")))), showRescueModal && /*#__PURE__*/React.createElement(RescuePackModal, {
+    p: p,
+    onClose: () => setShowRescueModal(false)
+  }));
+};
+const RescuePackModal = ({
+  p,
+  onClose
+}) => {
+  const [loading, setLoading] = useState(true);
+  const [titles, setTitles] = useState([]);
+  const [prompts, setPrompts] = useState([]);
+  const [selectedTitle, setSelectedTitle] = useState("");
+  const [syncToYouTube, setSyncToYouTube] = useState(Boolean(p.video_id || p.published_url));
+  const [error, setError] = useState("");
+  const [applying, setApplying] = useState(false);
+  useEffect(() => {
+    fetch("/api/studio/rescue-pack", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        item_id: p.id
+      })
+    }).then(async response => {
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "Could not generate rescue pack");
+      setTitles(data.titles || []);
+      setPrompts(data.thumbnail_prompts || []);
+      setSelectedTitle((data.titles || [])[0] || "");
+    }).catch(err => setError(err.message)).finally(() => setLoading(false));
+  }, [p.id]);
+  const applyTitle = async () => {
+    if (!selectedTitle) return;
+    setApplying(true);
+    setError("");
+    try {
+      const response = await fetch("/api/studio/rescue-apply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          item_id: p.id,
+          new_title: selectedTitle,
+          push_to_youtube: syncToYouTube
+        })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "Could not apply rescue title");
+      if (window.DDX?.reload) await window.DDX.reload();
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setApplying(false);
+    }
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    role: "dialog",
+    "aria-modal": "true",
+    "aria-label": "Video rescue pack",
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(5,7,10,.85)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1100,
+      padding: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "panel",
+    style: {
+      width: 620,
+      maxWidth: "100%",
+      maxHeight: "88vh",
+      overflowY: "auto",
+      padding: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      gap: 12,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "var(--signal-down)",
+      fontWeight: 700
+    }
+  }, "48-hour video rescue"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "var(--text-lo)",
+      fontSize: 12,
+      marginTop: 4
+    }
+  }, p.working_title || p.topic)), /*#__PURE__*/React.createElement("button", {
+    className: "btn ghost",
+    onClick: onClose
+  }, "Close")), loading && /*#__PURE__*/React.createElement("div", {
+    className: "mono",
+    style: {
+      color: "var(--text-lo)"
+    }
+  }, "Generating grounded alternatives\u2026"), error && /*#__PURE__*/React.createElement("div", {
+    role: "alert",
+    style: {
+      color: "var(--signal-down)",
+      marginBottom: 12
+    }
+  }, error), !loading && !error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 12
+    }
+  }, titles.map(title => /*#__PURE__*/React.createElement("label", {
+    key: title,
+    style: {
+      display: "flex",
+      gap: 10,
+      padding: 10,
+      border: "1px solid var(--line)",
+      borderRadius: 6
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "radio",
+    name: `rescue-${p.id}`,
+    checked: selectedTitle === title,
+    onChange: () => setSelectedTitle(title)
+  }), /*#__PURE__*/React.createElement("span", null, title))), /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: "flex",
+      gap: 8,
+      color: "var(--text-mid)",
+      fontSize: 12
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: syncToYouTube,
+    onChange: event => setSyncToYouTube(event.target.checked)
+  }), "Update the connected YouTube video after preserving its metadata"), /*#__PURE__*/React.createElement("button", {
+    className: "btn primary",
+    disabled: applying || !selectedTitle,
+    onClick: applyTitle
+  }, applying ? "Applying…" : "Apply selected title"), prompts.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderTop: "1px solid var(--line)",
+      paddingTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "mono",
+    style: {
+      color: "var(--text-lo)",
+      marginBottom: 8
+    }
+  }, "THUMBNAIL CONCEPTS"), prompts.map(prompt => /*#__PURE__*/React.createElement("div", {
+    key: prompt,
+    style: {
+      color: "var(--text-mid)",
+      marginBottom: 6
+    }
+  }, prompt))))));
 };
 const OptimizedSlotRow = ({
   platform,

@@ -346,6 +346,7 @@ const PublishedRow = ({ p }) => {
   const [submittingAB, setSubmittingAB] = useState(false);
 
   const [showShortsModal, setShowShortsModal] = useState(false);
+  const [showRescueModal, setShowRescueModal] = useState(false);
   const [clips, setClips] = useState([]);
   const [loadingClips, setLoadingClips] = useState(false);
   const [publishingClipId, setPublishingClipId] = useState(null);
@@ -425,11 +426,11 @@ const PublishedRow = ({ p }) => {
     }
   };
 
-  const retention = typeof p.retention === "number" ? p.retention : 0.5;
+  const retention = typeof p.retention === "number" ? p.retention : null;
   const views = p.views != null ? p.views : "—";
   const curve = Array.from({ length: 24 }, (_, i) => {
     const t = i / 23;
-    return Math.max(0.15, retention * Math.pow(1 - t, 0.35) + (Math.sin(i * 0.6) * 0.04));
+    return retention == null ? 0 : Math.max(0.15, retention * Math.pow(1 - t, 0.35) + (Math.sin(i * 0.6) * 0.04));
   });
 
   return (
@@ -438,6 +439,12 @@ const PublishedRow = ({ p }) => {
         <div style={{ minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <FormatBadge format={p.format}/>
+            <span className="chip mono" style={{
+              fontSize: 9,
+              color: p.rescue_status === "low_ctr" ? "var(--signal-down)" : p.rescue_status === "outlier" ? "var(--signal-up)" : "var(--text-lo)",
+            }}>
+              {p.rescue_status === "low_ctr" ? "LOW CTR" : p.rescue_status === "outlier" ? "OUTLIER" : p.rescue_status === "healthy" ? "HEALTHY" : "AWAITING TELEMETRY"}
+            </span>
             <span className="mono" style={{ fontSize: 10, color: "var(--text-lo)" }}>{p.published_at || "—"}</span>
           </div>
           <div style={{ color: "var(--text-hi)", fontSize: 14, fontWeight: 600, lineHeight: 1.3, marginBottom: 6, textWrap: "balance" }}>
@@ -445,11 +452,11 @@ const PublishedRow = ({ p }) => {
           </div>
           <div style={{ display: "flex", gap: 14, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-mid)" }}>
             <span>▶ <span style={{ color: "var(--text-hi)" }}>{views}</span></span>
-            <span>retention <span style={{ color: retention > 0.6 ? "var(--signal-up)" : "var(--signal)" }}>{Math.round(retention * 100)}%</span></span>
+            <span>retention <span style={{ color: retention != null && retention > 0.6 ? "var(--signal-up)" : "var(--signal)" }}>{retention == null ? "—" : `${Math.round(retention * 100)}%`}</span></span>
             <span>score <span style={{ color: "var(--text-hi)" }}>{p.creator_score || "—"}</span></span>
           </div>
         </div>
-        <Sparkline data={curve} w={160} h={48} color="var(--src-youtube)" />
+        {retention != null && <Sparkline data={curve} w={160} h={48} color="var(--src-youtube)" />}
       </div>
 
       {activeTest && (
@@ -538,6 +545,12 @@ const PublishedRow = ({ p }) => {
       )}
 
       <div style={{ display: "flex", gap: 8 }}>
+        {p.rescue_status === "low_ctr" && (
+          <button className="btn ghost" style={{ fontSize: 11, padding: "4px 10px", color: "var(--signal-down)" }}
+                  onClick={() => setShowRescueModal(true)}>
+            Low CTR · Rescue available
+          </button>
+        )}
         <button className="btn ghost" style={{ fontSize: 11, padding: "4px 10px" }}
                 onClick={() => setShowShortsModal(true)}>
           📱 Slice 9:16 Shorts
@@ -659,6 +672,95 @@ const PublishedRow = ({ p }) => {
           </div>
         </div>
       )}
+      {showRescueModal && <RescuePackModal p={p} onClose={() => setShowRescueModal(false)} />}
+    </div>
+  );
+};
+
+const RescuePackModal = ({ p, onClose }) => {
+  const [loading, setLoading] = useState(true);
+  const [titles, setTitles] = useState([]);
+  const [prompts, setPrompts] = useState([]);
+  const [selectedTitle, setSelectedTitle] = useState("");
+  const [syncToYouTube, setSyncToYouTube] = useState(Boolean(p.video_id || p.published_url));
+  const [error, setError] = useState("");
+  const [applying, setApplying] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/studio/rescue-pack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ item_id: p.id }),
+    })
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Could not generate rescue pack");
+        setTitles(data.titles || []);
+        setPrompts(data.thumbnail_prompts || []);
+        setSelectedTitle((data.titles || [])[0] || "");
+      })
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [p.id]);
+
+  const applyTitle = async () => {
+    if (!selectedTitle) return;
+    setApplying(true);
+    setError("");
+    try {
+      const response = await fetch("/api/studio/rescue-apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_id: p.id, new_title: selectedTitle, push_to_youtube: syncToYouTube }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "Could not apply rescue title");
+      if (window.DDX?.reload) await window.DDX.reload();
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Video rescue pack" style={{
+      position: "fixed", inset: 0, background: "rgba(5,7,10,.85)", display: "flex",
+      alignItems: "center", justifyContent: "center", zIndex: 1100, padding: 16,
+    }}>
+      <div className="panel" style={{ width: 620, maxWidth: "100%", maxHeight: "88vh", overflowY: "auto", padding: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
+          <div>
+            <div style={{ color: "var(--signal-down)", fontWeight: 700 }}>48-hour video rescue</div>
+            <div style={{ color: "var(--text-lo)", fontSize: 12, marginTop: 4 }}>{p.working_title || p.topic}</div>
+          </div>
+          <button className="btn ghost" onClick={onClose}>Close</button>
+        </div>
+        {loading && <div className="mono" style={{ color: "var(--text-lo)" }}>Generating grounded alternatives…</div>}
+        {error && <div role="alert" style={{ color: "var(--signal-down)", marginBottom: 12 }}>{error}</div>}
+        {!loading && !error && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {titles.map(title => (
+              <label key={title} style={{ display: "flex", gap: 10, padding: 10, border: "1px solid var(--line)", borderRadius: 6 }}>
+                <input type="radio" name={`rescue-${p.id}`} checked={selectedTitle === title} onChange={() => setSelectedTitle(title)} />
+                <span>{title}</span>
+              </label>
+            ))}
+            <label style={{ display: "flex", gap: 8, color: "var(--text-mid)", fontSize: 12 }}>
+              <input type="checkbox" checked={syncToYouTube} onChange={event => setSyncToYouTube(event.target.checked)} />
+              Update the connected YouTube video after preserving its metadata
+            </label>
+            <button className="btn primary" disabled={applying || !selectedTitle} onClick={applyTitle}>
+              {applying ? "Applying…" : "Apply selected title"}
+            </button>
+            {prompts.length > 0 && <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+              <div className="mono" style={{ color: "var(--text-lo)", marginBottom: 8 }}>THUMBNAIL CONCEPTS</div>
+              {prompts.map(prompt => <div key={prompt} style={{ color: "var(--text-mid)", marginBottom: 6 }}>{prompt}</div>)}
+            </div>}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

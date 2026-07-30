@@ -153,7 +153,7 @@ const AgentOutputPanel = ({
       color: "var(--signal-down)",
       fontSize: 12
     }
-  }, "Agent failed \u2014 ensure ANTHROPIC_API_KEY is set and restart the server."), state.result && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("pre", {
+  }, "Agent failed. Check the configured provider, model, and credentials in Settings."), state.result && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("pre", {
     className: "mono",
     style: {
       whiteSpace: "pre-wrap",
@@ -411,7 +411,16 @@ const ClusterCard = ({
       padding: "16px 18px",
       cursor: "pointer"
     },
-    onClick: onToggle
+    role: "button",
+    tabIndex: "0",
+    "aria-expanded": expanded,
+    onClick: onToggle,
+    onKeyDown: event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        event.currentTarget.click();
+      }
+    }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       width: 64,

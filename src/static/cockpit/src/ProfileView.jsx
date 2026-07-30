@@ -44,6 +44,7 @@ const ProfileView = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(profile),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setMsg({ text: "✓ Brand profile updated and saved successfully", ok: true });
         // Also reload global window data if available
@@ -51,7 +52,7 @@ const ProfileView = () => {
           window.DD_DATA.profile = profile;
         }
       } else {
-        setMsg({ text: "Failed to update profile", ok: false });
+        setMsg({ text: data.error || "Failed to update profile", ok: false });
       }
     } catch (e) {
       setMsg({ text: `Error saving: ${e.message}`, ok: false });
@@ -131,9 +132,9 @@ const ProfileView = () => {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <div style={{ color: "var(--text-hi)", fontWeight: 700, fontSize: 20, letterSpacing: "-0.02em" }}>
+          <h1 style={{ margin: 0, color: "var(--text-hi)", fontWeight: 700, fontSize: 20, letterSpacing: "-0.02em" }}>
             👤 Brand Identity & Profile
-          </div>
+          </h1>
           <div style={{ color: "var(--text-lo)", fontSize: 13, marginTop: 4, lineHeight: 1.4 }}>
             Fine-tune your channel identity, style templates, formatting guidelines, and scheduling rules. This configuration controls the tone and structure of all generated scripts.
           </div>
@@ -167,14 +168,15 @@ const ProfileView = () => {
         {/* Component 1: Brand & Bio */}
         <div className="panel" style={{ background: "var(--bg-1)", border: "1px solid var(--line)" }}>
           <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", background: "var(--bg-2)" }}>
-            <div style={{ color: "var(--text-hi)", fontWeight: 700, fontSize: 14 }}>📡 Core Channel Meta</div>
+            <h2 style={{ margin: 0, color: "var(--text-hi)", fontWeight: 700, fontSize: 14 }}>📡 Core Channel Meta</h2>
             <div style={{ color: "var(--text-lo)", fontSize: 11.5, marginTop: 2 }}>Define the main name, target audience, and style positioning.</div>
           </div>
           <div style={{ padding: "18px", display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div>
-                <label style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Channel Name</label>
+                <label htmlFor="profile-channel-name" style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Channel Name</label>
                 <input
+                  id="profile-channel-name"
                   type="text"
                   value={profile.channel_name || ""}
                   onChange={e => updateField("channel_name", e.target.value)}
@@ -182,8 +184,9 @@ const ProfileView = () => {
                 />
               </div>
               <div>
-                <label style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Niche Focus</label>
+                <label htmlFor="profile-niche" style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Niche Focus</label>
                 <input
+                  id="profile-niche"
                   type="text"
                   value={profile.niche || ""}
                   onChange={e => updateField("niche", e.target.value)}
@@ -192,8 +195,9 @@ const ProfileView = () => {
               </div>
             </div>
             <div>
-              <label style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Target Audience Description</label>
+              <label htmlFor="profile-audience" style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Target Audience Description</label>
               <textarea
+                id="profile-audience"
                 value={profile.audience || ""}
                 onChange={e => updateField("audience", e.target.value)}
                 rows={3}
@@ -201,8 +205,9 @@ const ProfileView = () => {
               />
             </div>
             <div>
-              <label style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Channel Tone & Personality</label>
+              <label htmlFor="profile-tone" style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Channel Tone & Personality</label>
               <textarea
+                id="profile-tone"
                 value={profile.tone || ""}
                 onChange={e => updateField("tone", e.target.value)}
                 rows={2}
@@ -210,8 +215,9 @@ const ProfileView = () => {
               />
             </div>
             <div>
-              <label style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Perspective (POV Structure)</label>
+              <label htmlFor="profile-perspective" style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Perspective (POV Structure)</label>
               <textarea
+                id="profile-perspective"
                 value={profile.perspective || ""}
                 onChange={e => updateField("perspective", e.target.value)}
                 rows={2}
@@ -224,16 +230,17 @@ const ProfileView = () => {
         {/* Component 2: Tone & Words filter */}
         <div className="panel" style={{ background: "var(--bg-1)", border: "1px solid var(--line)" }}>
           <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", background: "var(--bg-2)" }}>
-            <div style={{ color: "var(--text-hi)", fontWeight: 700, fontSize: 14 }}>🛑 Word Filters & Vocabulary</div>
+            <h2 style={{ margin: 0, color: "var(--text-hi)", fontWeight: 700, fontSize: 14 }}>🛑 Word Filters & Vocabulary</h2>
             <div style={{ color: "var(--text-lo)", fontSize: 11.5, marginTop: 2 }}>Keep scripts aligned with your brand vocabulary and ban generic marketing hype.</div>
           </div>
           <div style={{ padding: "18px", display: "flex", flexDirection: "column", gap: 16 }}>
             
             {/* Preferred Words */}
             <div>
-              <label style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Preferred Brand Words</label>
+              <label htmlFor="profile-preferred-word" style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Preferred Brand Words</label>
               <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                 <input
+                  id="profile-preferred-word"
                   type="text"
                   placeholder="e.g. ship, local, self-host"
                   value={newPreferred}
@@ -247,7 +254,7 @@ const ProfileView = () => {
                 {(profile.preferred_words || []).map(word => (
                   <span key={word} className="chip" style={{ color: "var(--signal-up)", borderColor: "rgba(124,255,178,0.2)", padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: 6 }}>
                     {word}
-                    <span onClick={() => removeTag("preferred_words", word)} style={{ cursor: "pointer", color: "var(--text-lo)", fontWeight: "bold" }}>×</span>
+                    <button type="button" aria-label={`Remove preferred word ${word}`} onClick={() => removeTag("preferred_words", word)} style={{ padding: 0, border: 0, background: "transparent", cursor: "pointer", color: "var(--text-lo)", fontWeight: "bold" }}>×</button>
                   </span>
                 ))}
                 {(!profile.preferred_words || profile.preferred_words.length === 0) && (
@@ -258,9 +265,10 @@ const ProfileView = () => {
 
             {/* Banned Phrases */}
             <div>
-              <label style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Banned Phrases (Hype Filter)</label>
+              <label htmlFor="profile-banned-phrase" style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Banned Phrases (Hype Filter)</label>
               <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                 <input
+                  id="profile-banned-phrase"
                   type="text"
                   placeholder="e.g. game changer, mind-blowing, AI is taking over"
                   value={newBanned}
@@ -274,7 +282,7 @@ const ProfileView = () => {
                 {(profile.banned_phrases || []).map(phrase => (
                   <span key={phrase} className="chip" style={{ color: "var(--signal-down)", borderColor: "rgba(255,107,107,0.2)", padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: 6 }}>
                     {phrase}
-                    <span onClick={() => removeTag("banned_phrases", phrase)} style={{ cursor: "pointer", color: "var(--text-lo)", fontWeight: "bold" }}>×</span>
+                    <button type="button" aria-label={`Remove banned phrase ${phrase}`} onClick={() => removeTag("banned_phrases", phrase)} style={{ padding: 0, border: 0, background: "transparent", cursor: "pointer", color: "var(--text-lo)", fontWeight: "bold" }}>×</button>
                   </span>
                 ))}
                 {(!profile.banned_phrases || profile.banned_phrases.length === 0) && (
@@ -289,12 +297,13 @@ const ProfileView = () => {
         {/* Component 3: Signature Angles */}
         <div className="panel" style={{ background: "var(--bg-1)", border: "1px solid var(--line)" }}>
           <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", background: "var(--bg-2)" }}>
-            <div style={{ color: "var(--text-hi)", fontWeight: 700, fontSize: 14 }}>📐 Signature Editorial Angles</div>
+            <h2 style={{ margin: 0, color: "var(--text-hi)", fontWeight: 700, fontSize: 14 }}>📐 Signature Editorial Angles</h2>
             <div style={{ color: "var(--text-lo)", fontSize: 11.5, marginTop: 2 }}>Core structural lenses used to analyze stories and form script scripts.</div>
           </div>
           <div style={{ padding: "18px", display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ display: "flex", gap: 8 }}>
               <input
+                aria-label="New signature angle"
                 type="text"
                 placeholder="e.g. Does it actually run on a Pi 4? or Hype vs Real Benchmark"
                 value={newAngle}
@@ -308,7 +317,7 @@ const ProfileView = () => {
               {(profile.signature_angles || []).map((angle, index) => (
                 <div key={index} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "center", padding: "8px 12px", background: "var(--bg-0)", border: "1px solid var(--line-2)", borderRadius: 5 }}>
                   <span style={{ fontSize: 12.5, color: "var(--text-hi)" }}>{angle}</span>
-                  <button className="btn ghost" onClick={() => removeAngle(angle)} style={{ padding: "2px 6px", border: "none", color: "var(--text-lo)" }}>✕</button>
+                  <button type="button" className="btn ghost" aria-label={`Remove angle ${angle}`} onClick={() => removeAngle(angle)} style={{ padding: "2px 6px", border: "none", color: "var(--text-lo)" }}>✕</button>
                 </div>
               ))}
               {(!profile.signature_angles || profile.signature_angles.length === 0) && (
@@ -323,13 +332,14 @@ const ProfileView = () => {
           
           <div className="panel" style={{ background: "var(--bg-1)", border: "1px solid var(--line)" }}>
             <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", background: "var(--bg-2)" }}>
-              <div style={{ color: "var(--text-hi)", fontWeight: 700, fontSize: 14 }}>⚙ Format Boundaries</div>
+              <h2 style={{ margin: 0, color: "var(--text-hi)", fontWeight: 700, fontSize: 14 }}>⚙ Format Boundaries</h2>
             </div>
             <div style={{ padding: "18px", display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
                 <label style={{ display: "block", color: "var(--text-mid)", fontSize: 11, marginBottom: 4 }}>Title characters (Min / Max)</label>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <input
+                    aria-label="Minimum title characters"
                     type="number"
                     value={profile.format_rules?.title_min_chars || 30}
                     onChange={e => updateNestedField("format_rules", "title_min_chars", parseInt(e.target.value) || 0)}
@@ -337,6 +347,7 @@ const ProfileView = () => {
                   />
                   <span style={{ color: "var(--text-lo)" }}>—</span>
                   <input
+                    aria-label="Maximum title characters"
                     type="number"
                     value={profile.format_rules?.title_max_chars || 60}
                     onChange={e => updateNestedField("format_rules", "title_max_chars", parseInt(e.target.value) || 0)}
@@ -345,8 +356,9 @@ const ProfileView = () => {
                 </div>
               </div>
               <div>
-                <label style={{ display: "block", color: "var(--text-mid)", fontSize: 11, marginBottom: 4 }}>Hook character length (Max)</label>
+                <label htmlFor="profile-hook-max" style={{ display: "block", color: "var(--text-mid)", fontSize: 11, marginBottom: 4 }}>Hook character length (Max)</label>
                 <input
+                  id="profile-hook-max"
                   type="number"
                   value={profile.format_rules?.hook_max_chars || 140}
                   onChange={e => updateNestedField("format_rules", "hook_max_chars", parseInt(e.target.value) || 0)}
@@ -357,6 +369,7 @@ const ProfileView = () => {
                 <label style={{ display: "block", color: "var(--text-mid)", fontSize: 11, marginBottom: 4 }}>Short Script seconds (Min / Max)</label>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <input
+                    aria-label="Minimum short script seconds"
                     type="number"
                     value={profile.format_rules?.short_script_min_seconds || 25}
                     onChange={e => updateNestedField("format_rules", "short_script_min_seconds", parseInt(e.target.value) || 0)}
@@ -364,6 +377,7 @@ const ProfileView = () => {
                   />
                   <span style={{ color: "var(--text-lo)" }}>—</span>
                   <input
+                    aria-label="Maximum short script seconds"
                     type="number"
                     value={profile.format_rules?.short_script_max_seconds || 60}
                     onChange={e => updateNestedField("format_rules", "short_script_max_seconds", parseInt(e.target.value) || 0)}
@@ -376,7 +390,7 @@ const ProfileView = () => {
 
           <div className="panel" style={{ background: "var(--bg-1)", border: "1px solid var(--line)" }}>
             <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", background: "var(--bg-2)" }}>
-              <div style={{ color: "var(--text-hi)", fontWeight: 700, fontSize: 14 }}>📅 Publishing Calendar</div>
+              <h2 style={{ margin: 0, color: "var(--text-hi)", fontWeight: 700, fontSize: 14 }}>📅 Publishing Calendar</h2>
             </div>
             <div style={{ padding: "18px", display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
@@ -387,6 +401,8 @@ const ProfileView = () => {
                     return (
                       <button
                         key={day}
+                        type="button"
+                        aria-pressed={isSelected}
                         onClick={() => togglePublishDay(day)}
                         style={{
                           padding: "6px 10px", borderRadius: 4,
@@ -404,8 +420,9 @@ const ProfileView = () => {
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 4 }}>
                 <div>
-                  <label style={{ display: "block", color: "var(--text-mid)", fontSize: 11, marginBottom: 4 }}>Recording Window</label>
+                  <label htmlFor="profile-recording-window" style={{ display: "block", color: "var(--text-mid)", fontSize: 11, marginBottom: 4 }}>Recording Window</label>
                   <input
+                    id="profile-recording-window"
                     type="text"
                     placeholder="e.g. 10:00-12:00"
                     value={profile.schedule?.preferred_record_window || ""}
@@ -414,8 +431,9 @@ const ProfileView = () => {
                   />
                 </div>
                 <div>
-                  <label style={{ display: "block", color: "var(--text-mid)", fontSize: 11, marginBottom: 4 }}>Social Posting Time</label>
+                  <label htmlFor="profile-social-time" style={{ display: "block", color: "var(--text-mid)", fontSize: 11, marginBottom: 4 }}>Social Posting Time</label>
                   <input
+                    id="profile-social-time"
                     type="text"
                     placeholder="e.g. 10:00"
                     value={profile.schedule?.linkedin_time || ""}
@@ -432,14 +450,15 @@ const ProfileView = () => {
         {/* Component 5: AI Providers Unification */}
         <div className="panel" style={{ background: "var(--bg-1)", border: "1px solid var(--line)" }}>
           <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", background: "var(--bg-2)" }}>
-            <div style={{ color: "var(--text-hi)", fontWeight: 700, fontSize: 14 }}>🤖 Unified AI Copilot & Generation Provider</div>
-            <div style={{ color: "var(--text-lo)", fontSize: 11.5, marginTop: 2 }}>Specify the provider and models used by both your Copilot strategist and content Factory script-writers.</div>
+            <h2 style={{ margin: 0, color: "var(--text-hi)", fontWeight: 700, fontSize: 14 }}>🤖 Unified AI Copilot & Generation Provider</h2>
+            <div style={{ color: "var(--text-lo)", fontSize: 11.5, marginTop: 2 }}>Choose the general generation model and a structured-output model for cited research briefs.</div>
           </div>
           <div style={{ padding: "18px", display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div>
-                <label style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Primary Provider</label>
+                <label htmlFor="profile-provider" style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Primary Provider</label>
                 <select
+                  id="profile-provider"
                   value={profile.copilot?.provider || ""}
                   onChange={e => updateNestedField("copilot", "provider", e.target.value)}
                   style={{ width: "100%", height: 36, padding: "0 10px", background: "var(--bg-0)", border: "1px solid var(--line-2)", borderRadius: 5, color: "var(--text-hi)", fontSize: 12.5, fontFamily: "var(--font-mono)" }}
@@ -454,8 +473,9 @@ const ProfileView = () => {
                 </select>
               </div>
               <div>
-                <label style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Primary Model</label>
+                <label htmlFor="profile-model" style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Primary Model</label>
                 <input
+                  id="profile-model"
                   type="text"
                   value={profile.copilot?.model || ""}
                   placeholder="e.g. stepfun-ai/step-3.5-flash or llama3"
@@ -464,10 +484,23 @@ const ProfileView = () => {
                 />
               </div>
             </div>
+            <div>
+              <label htmlFor="profile-compile-model" style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Research Desk Model</label>
+              <input
+                id="profile-compile-model"
+                type="text"
+                value={profile.copilot?.compile_model || ""}
+                placeholder="e.g. meta/llama-3.3-70b-instruct"
+                onChange={e => updateNestedField("copilot", "compile_model", e.target.value)}
+                style={{ width: "100%", height: 36, padding: "0 12px", background: "var(--bg-0)", border: "1px solid var(--line-2)", borderRadius: 5, color: "var(--text-hi)", fontSize: 12.5, fontFamily: "var(--font-mono)" }}
+              />
+              <div style={{ marginTop: 5, color: "var(--text-lo)", fontSize: 10.5 }}>Use an instruction model that reliably returns strict JSON; reasoning traces are intentionally excluded from briefs.</div>
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div>
-                <label style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Fallback Model</label>
+                <label htmlFor="profile-fallback-model" style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Fallback Model</label>
                 <input
+                  id="profile-fallback-model"
                   type="text"
                   value={profile.copilot?.fallback_model || ""}
                   placeholder="e.g. minimaxai/minimax-m2.7"
@@ -476,8 +509,9 @@ const ProfileView = () => {
                 />
               </div>
               <div>
-                <label style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Max Context Tokens</label>
+                <label htmlFor="profile-max-tokens" style={{ display: "block", color: "var(--text-mid)", fontSize: 11, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Max Context Tokens</label>
                 <input
+                  id="profile-max-tokens"
                   type="number"
                   value={profile.copilot?.max_tokens || 1000}
                   onChange={e => updateNestedField("copilot", "max_tokens", parseInt(e.target.value) || 1000)}

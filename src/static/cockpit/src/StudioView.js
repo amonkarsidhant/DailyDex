@@ -725,7 +725,7 @@ const StudioView = ({
           alert("Simulate failed: " + e.message);
         }
       }
-    }, "\u26A1 Simulate 48h"), /*#__PURE__*/React.createElement("button", {
+    }, "Sync YouTube analytics"), /*#__PURE__*/React.createElement("button", {
       className: `btn ${showSteering ? "primary" : "ghost"}`,
       onClick: () => setShowSteering(!showSteering)
     }, "\uD83C\uDFAF Steering ", selectedSlugs.length > 0 ? `(${selectedSlugs.length})` : ""), /*#__PURE__*/React.createElement("span", {
