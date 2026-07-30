@@ -23,6 +23,7 @@ def test_extract_video_id():
     assert analytics_sync._extract_video_id("https://youtube.com/shorts/1234567890a") == "1234567890a"
     assert analytics_sync._extract_video_id("https://youtube.com/embed/1234567890a") == "1234567890a"
     assert analytics_sync._extract_video_id("https://other.com") is None
+    assert analytics_sync._extract_video_id("https://internal.test/youtube.com/watch?v=1234567890a") is None
     assert analytics_sync._extract_video_id("") is None
 
 @patch("urllib.request.urlopen")
@@ -55,15 +56,17 @@ def test_scrape_youtube_views_html(mock_urlopen):
     mock_res = MagicMock()
     mock_res.read.return_value = b'<meta itemprop="interactionCount" content="500">'
     mock_urlopen.return_value.__enter__.return_value = mock_res
-    assert analytics_sync._scrape_youtube_views_html("http://url") == 500
+    url = "https://youtube.com/watch?v=1234567890a"
+    assert analytics_sync._scrape_youtube_views_html(url) == 500
+    assert mock_urlopen.call_args.args[0].full_url == "https://www.youtube.com/watch?v=1234567890a"
 
     # Success viewCount json
     mock_res.read.return_value = b'"viewCount":"600"'
-    assert analytics_sync._scrape_youtube_views_html("http://url") == 600
+    assert analytics_sync._scrape_youtube_views_html(url) == 600
 
     # Error
     mock_urlopen.side_effect = Exception("Fail")
-    assert analytics_sync._scrape_youtube_views_html("http://url") is None
+    assert analytics_sync._scrape_youtube_views_html(url) is None
 
 @patch("analytics_sync.fetch_video_stats_api")
 @patch("analytics_sync._scrape_youtube_views_html")
@@ -82,7 +85,7 @@ def test_get_youtube_views(mock_get_key, mock_scrape, mock_fetch):
     # Actually if fetch fails it returns None, get_youtube_views returns None
     mock_fetch.return_value = None
     mock_scrape.return_value = 50
-    assert analytics_sync.get_youtube_views("https://youtube.com/invalid_id") == 50
+    assert analytics_sync.get_youtube_views("https://youtube.com/invalid_id") is None
 
     # No API key -> fallback
     mock_get_key.return_value = ""
@@ -107,17 +110,22 @@ def test_get_youtube_full_stats(mock_get_key, mock_fetch):
 @patch("analytics_sync.fetch_video_stats_api")
 @patch("analytics_sync._scrape_youtube_views_html")
 @patch("analytics_sync._get_youtube_api_key")
-def test_sync_publication_metrics(mock_get_key, mock_scrape, mock_fetch):
+def test_sync_publication_metrics(mock_get_key, mock_scrape, mock_fetch, monkeypatch):
+    monkeypatch.setattr("youtube_oauth.get_video_analytics", lambda *_args, **_kwargs: {"error": "not connected"})
     # No url
     assert analytics_sync.sync_publication_metrics({}) is None
     
     # API success
     mock_get_key.return_value = "key"
     mock_fetch.return_value = {"view_count": 30000, "like_count": 100, "comment_count": 50}
-    res = analytics_sync.sync_publication_metrics({"published_url": "https://youtu.be/1234567890a"})
+    res = analytics_sync.sync_publication_metrics({
+        "published_url": "https://youtu.be/1234567890a", "impressions": 1000, "ctr": 0.05,
+    })
     assert res["views"] == 30000
-    assert res["status"] == "completed"
+    assert res["status"] == "live"
     assert res["source"] == "youtube_api_v3"
+    assert res["impressions"] == 1000
+    assert res["ctr"] == 0.05
     
     # Scraper fallback
     mock_get_key.return_value = ""
@@ -126,6 +134,7 @@ def test_sync_publication_metrics(mock_get_key, mock_scrape, mock_fetch):
     assert res2["views"] == 5000
     assert res2["status"] == "live"
     assert res2["source"] == "html_scraper"
+    assert res2["impressions"] is None
     
     # Scraper fails
     mock_scrape.return_value = None
