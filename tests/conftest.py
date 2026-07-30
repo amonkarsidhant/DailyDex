@@ -10,6 +10,11 @@ import pytest
 
 REPO_DIR = Path(__file__).resolve().parent.parent
 
+# Make src/ importable regardless of which test module runs first.
+for _path in (str(REPO_DIR / "src"), str(REPO_DIR)):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
 
 def _sample_raw_data(now_iso: str):
     return {

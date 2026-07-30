@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ auth_csrf_token }}">
+  <title>Billing - DailyDex</title>
+  <style>
+    :root { color-scheme:dark; --ink:#f4f0e6; --muted:#9b988e; --line:#302d26; --panel:#14130f; --amber:#f0b72f; }
+    * { box-sizing:border-box; } body { margin:0; min-height:100vh; background:radial-gradient(circle at 20% 0%,#2d2410 0,#0b0b09 35%,#070806 100%); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,sans-serif; }
+    main { width:min(100% - 32px,980px); margin:0 auto; padding:48px 0 72px; } header { text-align:center; margin-bottom:30px; }
+    .mark { width:42px; height:42px; display:grid; place-items:center; margin:0 auto 14px; border-radius:9px; background:linear-gradient(135deg,var(--amber),#ff7a2d); color:#1a1100; font-weight:900; }
+    h1 { margin:0; font-size:38px; letter-spacing:-.05em; } .lede,.status { color:var(--muted); line-height:1.55; }
+    .status { margin:22px auto; max-width:680px; padding:13px 16px; border:1px solid #f0b72f44; border-radius:9px; background:#f0b72f0c; text-align:center; }
+    .plans { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+    .plan { display:flex; flex-direction:column; padding:28px; border:1px solid var(--line); border-radius:14px; background:linear-gradient(180deg,#171610,#11110e); box-shadow:0 25px 70px #0007; }
+    .plan.studio { border-color:#f0b72f66; } .eyebrow { color:var(--amber); font:10px ui-monospace,monospace; letter-spacing:.14em; }
+    h2 { margin:9px 0 0; font-size:24px; } .price { margin:18px 0; font-size:42px; font-weight:850; letter-spacing:-.05em; } .price span { color:var(--muted); font-size:13px; font-weight:500; letter-spacing:0; }
+    ul { margin:0 0 26px; padding:0; list-style:none; color:#c9c5ba; line-height:2; font-size:13px; } li::before { content:"+"; color:var(--amber); margin-right:9px; }
+    button,a.action { margin-top:auto; width:100%; padding:12px 14px; border:1px solid #f0b72f55; border-radius:7px; background:linear-gradient(90deg,var(--amber),#ff9538); color:#1a1100; font-weight:800; cursor:pointer; text-align:center; text-decoration:none; }
+    .links { display:flex; justify-content:center; gap:16px; margin-top:24px; } .links a,.links button { width:auto; padding:0; border:0; background:none; color:var(--amber); font-size:12px; }
+    @media (max-width:700px) { main { padding-top:28px; } .plans { grid-template-columns:1fr; } h1 { font-size:31px; } }
+  </style>
+  <script src="/static/auth-client.js" defer></script>
+</head>
+<body>
+  <main>
+    <header><div class="mark">D</div><div class="eyebrow">DAILYDEX CREATOR COCKPIT</div><h1>Choose your operating tier</h1><p class="lede">Your first 14 days are free. No card is required to use the trial.</p></header>
+    <div id="status" class="status">Loading billing status...</div>
+    <section class="plans">
+      <article class="plan"><div class="eyebrow">INDEPENDENT CREATOR</div><h2>Creator</h2><div class="price">$12.99 <span>/ month</span></div><ul><li>Managed signal cockpit</li><li>Research packs and production scripts</li><li>Source-backed vertical video rendering</li><li>Bring your own AI provider keys</li></ul><button data-plan="creator">Choose Creator</button></article>
+      <article class="plan studio"><div class="eyebrow">HIGH-OUTPUT WORKFLOW</div><h2>Studio</h2><div class="price">$33.99 <span>/ month</span></div><ul><li>Everything in Creator</li><li>Higher-throughput production workflows</li><li>Publishing integrations</li><li>Priority product support</li></ul><button data-plan="studio">Choose Studio</button></article>
+    </section>
+    <div class="links"><button id="portal" hidden>Manage subscription</button><a href="/">Return to cockpit</a></div>
+  </main>
+  <script>
+    window.addEventListener("DOMContentLoaded", async function () {
+      var statusEl = document.getElementById("status");
+      var portal = document.getElementById("portal");
+      async function loadStatus() {
+        var response = await fetch("/api/billing/status");
+        var data = await response.json();
+        if (data.status === "trialing" && !data.plan) statusEl.textContent = "Free trial active: " + data.trial_days_left + " day(s) remaining. No card is on file.";
+        else if (data.status === "active") statusEl.textContent = "Active " + (data.plan || "paid") + " subscription.";
+        else statusEl.textContent = "Your free trial has ended. Choose a plan to continue.";
+        portal.hidden = !data.has_customer;
+        if (!data.can_checkout) document.querySelectorAll("[data-plan]").forEach(function (button) { button.hidden = true; });
+      }
+      document.querySelectorAll("[data-plan]").forEach(function (button) {
+        button.addEventListener("click", async function () {
+          button.disabled = true;
+          var response = await fetch("/api/billing/checkout", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan:button.dataset.plan})});
+          var data = await response.json();
+          if (data.url) window.location.assign(data.url); else { statusEl.textContent = data.error || "Checkout is unavailable."; button.disabled = false; }
+        });
+      });
+      portal.addEventListener("click", async function () {
+        var response = await fetch("/api/billing/portal", {method:"POST"}); var data = await response.json(); if (data.url) window.location.assign(data.url);
+      });
+      loadStatus().catch(function () { statusEl.textContent = "Billing status is temporarily unavailable."; });
+    });
+  </script>
+</body>
+</html>

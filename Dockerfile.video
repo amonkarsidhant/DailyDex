@@ -5,6 +5,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        chromium \
        ffmpeg \
+       espeak-ng \
+       python3 \
+       python3-pip \
        ca-certificates \
        fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
@@ -12,6 +15,15 @@ RUN apt-get update \
 # Tell Remotion to use the system Chromium instead of downloading its own
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV REMOTION_BROWSER_EXECUTABLE=/usr/bin/chromium
+
+WORKDIR /app
+
+COPY requirements.txt ./
+RUN pip3 install --break-system-packages --no-cache-dir -r requirements.txt
+
+COPY src ./src
+COPY config.json ./
+COPY config ./config
 
 WORKDIR /engine
 
@@ -27,12 +39,15 @@ COPY video-engine/tsconfig.json ./
 # Copy static assets (bg music, images)
 COPY video-engine/public ./public
 
-# The data volume is mounted at /app/data at runtime (via docker-compose).
-# Remotion's staticFile() resolves from public/, so symlink render_tmp there
-# so voice audio and demo videos written by the Flask container are visible.
-RUN ln -s /app/data/render_tmp /engine/public/render_tmp
-
 # Render output lands here; the Flask container reads from the shared volume
 RUN mkdir -p /output
 
-CMD ["echo", "video-engine ready — invoked via npx remotion render"]
+ENV PYTHONPATH=/app/src
+ENV DATA_DIR=/app/data
+ENV DB_PATH=/app/data/intelligence.db
+ENV SCORED_DATA_FILE=/app/data/data_scored.json
+ENV DAILYDEX_SETTINGS_DIR=/app/data/settings
+ENV CREATOR_PROFILE_PATH=/app/data/creator_profile.json
+ENV VIDEO_ENGINE_DIR=/engine
+
+CMD ["python3", "/app/src/render_worker.py"]

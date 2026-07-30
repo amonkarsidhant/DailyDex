@@ -297,4 +297,5 @@ def test_main_dashboard_app_is_guarded_when_auth_enabled(tmp_path, monkeypatch):
     assert client.get("/").status_code == 302
     assert client.get("/api/benchmarks").status_code == 401
     assert client.post("/api/refresh").status_code == 401
+    assert client.post("/api/compile").status_code == 401
     assert client.get("/login").status_code == 200

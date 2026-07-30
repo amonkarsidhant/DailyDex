@@ -6,10 +6,12 @@ module was imported (``dashboard_new`` locally, ``src.dashboard_new`` under
 gunicorn, or a re-import in tests).
 """
 import json
+import hmac
+import secrets
 import time
 
 import os
-from flask import Blueprint, current_app, jsonify, request, send_from_directory
+from flask import Blueprint, current_app, jsonify, redirect, request, send_from_directory, session, url_for
 
 integrations_bp = Blueprint("integrations", __name__)
 
@@ -17,6 +19,69 @@ integrations_bp = Blueprint("integrations", __name__)
 def _db():
     dash = current_app.config.get("DASH")
     return getattr(dash, "intel_db", None)
+
+
+@integrations_bp.route("/api/integrations/youtube/connect", methods=["GET"])
+def api_youtube_connect():
+    """Start a CSRF-protected Google OAuth flow for the creator channel."""
+    import youtube_oauth
+
+    state = secrets.token_urlsafe(32)
+    session["youtube_oauth_state"] = state
+    redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI") or url_for(
+        "integrations.api_youtube_callback", _external=True
+    )
+    auth_url = youtube_oauth.get_auth_url(redirect_uri=redirect_uri, state=state)
+    if auth_url.startswith("error:"):
+        return jsonify({"error": auth_url.removeprefix("error: ")}), 400
+    return redirect(auth_url)
+
+
+@integrations_bp.route("/api/integrations/youtube/callback", methods=["GET"])
+def api_youtube_callback():
+    """Validate Google OAuth state and persist the resulting refresh token."""
+    expected = session.pop("youtube_oauth_state", "")
+    received = request.args.get("state", "")
+    if not expected or not received or not hmac.compare_digest(expected, received):
+        return jsonify({"error": "Invalid or expired OAuth state."}), 400
+    if request.args.get("error"):
+        return jsonify({"error": f"Google authorization failed: {request.args['error']}"}), 400
+
+    code = request.args.get("code", "")
+    if not code:
+        return jsonify({"error": "Google did not return an authorization code."}), 400
+
+    import youtube_oauth
+
+    redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI") or url_for(
+        "integrations.api_youtube_callback", _external=True
+    )
+    result = youtube_oauth.exchange_code(code, redirect_uri=redirect_uri)
+    if result.get("error"):
+        return jsonify({"error": result["error"]}), 502
+    return redirect("/cockpit?youtube=connected")
+
+
+@integrations_bp.route("/api/integrations/youtube/status", methods=["GET"])
+def api_youtube_status():
+    from settings_manager import get as settings_get
+
+    return jsonify({
+        "connected": bool(settings_get("google_refresh_token") or settings_get("google_access_token")),
+        "client_configured": bool(settings_get("google_client_id") and settings_get("google_client_secret")),
+    })
+
+
+@integrations_bp.route("/api/integrations/youtube/disconnect", methods=["DELETE"])
+def api_youtube_disconnect():
+    from settings_manager import update as settings_update
+
+    settings_update({
+        "google_access_token": "",
+        "google_refresh_token": "",
+        "google_token_expiry": "",
+    })
+    return jsonify({"ok": True, "connected": False})
 
 
 @integrations_bp.route("/api/integrations/notion/sync", methods=["POST"])
@@ -230,4 +295,3 @@ def serve_rendered_video(filename):
     data_dir = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "data"))
     videos_dir = os.path.join(data_dir, "videos")
     return send_from_directory(videos_dir, filename)
-

@@ -99,6 +99,8 @@ else:
             if raw is None:
                 return None
             if self._rf:
+                if self._rf is Row:
+                    return Row(raw)
                 return self._rf(self._c, raw)
             return Row(raw) if isinstance(raw, dict) else raw
 
@@ -213,6 +215,9 @@ else:
 
         def commit(self):
             self._conn.commit()
+
+        def rollback(self):
+            self._conn.rollback()
 
         def close(self):
             try:

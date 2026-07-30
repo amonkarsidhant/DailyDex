@@ -55,6 +55,7 @@ const ProfileView = () => {
         },
         body: JSON.stringify(profile)
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setMsg({
           text: "✓ Brand profile updated and saved successfully",
@@ -66,7 +67,7 @@ const ProfileView = () => {
         }
       } else {
         setMsg({
-          text: "Failed to update profile",
+          text: data.error || "Failed to update profile",
           ok: false
         });
       }
@@ -161,8 +162,9 @@ const ProfileView = () => {
       justifyContent: "space-between",
       gap: 16
     }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h1", {
     style: {
+      margin: 0,
       color: "var(--text-hi)",
       fontWeight: 700,
       fontSize: 20,
@@ -213,8 +215,9 @@ const ProfileView = () => {
       borderBottom: "1px solid var(--line)",
       background: "var(--bg-2)"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("h2", {
     style: {
+      margin: 0,
       color: "var(--text-hi)",
       fontWeight: 700,
       fontSize: 14
@@ -239,6 +242,7 @@ const ProfileView = () => {
       gap: 16
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    htmlFor: "profile-channel-name",
     style: {
       display: "block",
       color: "var(--text-mid)",
@@ -248,6 +252,7 @@ const ProfileView = () => {
       textTransform: "uppercase"
     }
   }, "Channel Name"), /*#__PURE__*/React.createElement("input", {
+    id: "profile-channel-name",
     type: "text",
     value: profile.channel_name || "",
     onChange: e => updateField("channel_name", e.target.value),
@@ -262,6 +267,7 @@ const ProfileView = () => {
       fontSize: 12.5
     }
   })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    htmlFor: "profile-niche",
     style: {
       display: "block",
       color: "var(--text-mid)",
@@ -271,6 +277,7 @@ const ProfileView = () => {
       textTransform: "uppercase"
     }
   }, "Niche Focus"), /*#__PURE__*/React.createElement("input", {
+    id: "profile-niche",
     type: "text",
     value: profile.niche || "",
     onChange: e => updateField("niche", e.target.value),
@@ -285,6 +292,7 @@ const ProfileView = () => {
       fontSize: 12.5
     }
   }))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    htmlFor: "profile-audience",
     style: {
       display: "block",
       color: "var(--text-mid)",
@@ -294,6 +302,7 @@ const ProfileView = () => {
       textTransform: "uppercase"
     }
   }, "Target Audience Description"), /*#__PURE__*/React.createElement("textarea", {
+    id: "profile-audience",
     value: profile.audience || "",
     onChange: e => updateField("audience", e.target.value),
     rows: 3,
@@ -309,6 +318,7 @@ const ProfileView = () => {
       resize: "vertical"
     }
   })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    htmlFor: "profile-tone",
     style: {
       display: "block",
       color: "var(--text-mid)",
@@ -318,6 +328,7 @@ const ProfileView = () => {
       textTransform: "uppercase"
     }
   }, "Channel Tone & Personality"), /*#__PURE__*/React.createElement("textarea", {
+    id: "profile-tone",
     value: profile.tone || "",
     onChange: e => updateField("tone", e.target.value),
     rows: 2,
@@ -333,6 +344,7 @@ const ProfileView = () => {
       resize: "vertical"
     }
   })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    htmlFor: "profile-perspective",
     style: {
       display: "block",
       color: "var(--text-mid)",
@@ -342,6 +354,7 @@ const ProfileView = () => {
       textTransform: "uppercase"
     }
   }, "Perspective (POV Structure)"), /*#__PURE__*/React.createElement("textarea", {
+    id: "profile-perspective",
     value: profile.perspective || "",
     onChange: e => updateField("perspective", e.target.value),
     rows: 2,
@@ -368,8 +381,9 @@ const ProfileView = () => {
       borderBottom: "1px solid var(--line)",
       background: "var(--bg-2)"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("h2", {
     style: {
+      margin: 0,
       color: "var(--text-hi)",
       fontWeight: 700,
       fontSize: 14
@@ -388,6 +402,7 @@ const ProfileView = () => {
       gap: 16
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    htmlFor: "profile-preferred-word",
     style: {
       display: "block",
       color: "var(--text-mid)",
@@ -403,6 +418,7 @@ const ProfileView = () => {
       marginBottom: 8
     }
   }, /*#__PURE__*/React.createElement("input", {
+    id: "profile-preferred-word",
     type: "text",
     placeholder: "e.g. ship, local, self-host",
     value: newPreferred,
@@ -443,9 +459,14 @@ const ProfileView = () => {
       alignItems: "center",
       gap: 6
     }
-  }, word, /*#__PURE__*/React.createElement("span", {
+  }, word, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    "aria-label": `Remove preferred word ${word}`,
     onClick: () => removeTag("preferred_words", word),
     style: {
+      padding: 0,
+      border: 0,
+      background: "transparent",
       cursor: "pointer",
       color: "var(--text-lo)",
       fontWeight: "bold"
@@ -457,6 +478,7 @@ const ProfileView = () => {
       fontStyle: "italic"
     }
   }, "No preferred words defined"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    htmlFor: "profile-banned-phrase",
     style: {
       display: "block",
       color: "var(--text-mid)",
@@ -472,6 +494,7 @@ const ProfileView = () => {
       marginBottom: 8
     }
   }, /*#__PURE__*/React.createElement("input", {
+    id: "profile-banned-phrase",
     type: "text",
     placeholder: "e.g. game changer, mind-blowing, AI is taking over",
     value: newBanned,
@@ -512,9 +535,14 @@ const ProfileView = () => {
       alignItems: "center",
       gap: 6
     }
-  }, phrase, /*#__PURE__*/React.createElement("span", {
+  }, phrase, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    "aria-label": `Remove banned phrase ${phrase}`,
     onClick: () => removeTag("banned_phrases", phrase),
     style: {
+      padding: 0,
+      border: 0,
+      background: "transparent",
       cursor: "pointer",
       color: "var(--text-lo)",
       fontWeight: "bold"
@@ -537,8 +565,9 @@ const ProfileView = () => {
       borderBottom: "1px solid var(--line)",
       background: "var(--bg-2)"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("h2", {
     style: {
+      margin: 0,
       color: "var(--text-hi)",
       fontWeight: 700,
       fontSize: 14
@@ -562,6 +591,7 @@ const ProfileView = () => {
       gap: 8
     }
   }, /*#__PURE__*/React.createElement("input", {
+    "aria-label": "New signature angle",
     type: "text",
     placeholder: "e.g. Does it actually run on a Pi 4? or Hype vs Real Benchmark",
     value: newAngle,
@@ -609,7 +639,9 @@ const ProfileView = () => {
       color: "var(--text-hi)"
     }
   }, angle), /*#__PURE__*/React.createElement("button", {
+    type: "button",
     className: "btn ghost",
+    "aria-label": `Remove angle ${angle}`,
     onClick: () => removeAngle(angle),
     style: {
       padding: "2px 6px",
@@ -642,8 +674,9 @@ const ProfileView = () => {
       borderBottom: "1px solid var(--line)",
       background: "var(--bg-2)"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("h2", {
     style: {
+      margin: 0,
       color: "var(--text-hi)",
       fontWeight: 700,
       fontSize: 14
@@ -669,6 +702,7 @@ const ProfileView = () => {
       gap: 10
     }
   }, /*#__PURE__*/React.createElement("input", {
+    "aria-label": "Minimum title characters",
     type: "number",
     value: profile.format_rules?.title_min_chars || 30,
     onChange: e => updateNestedField("format_rules", "title_min_chars", parseInt(e.target.value) || 0),
@@ -688,6 +722,7 @@ const ProfileView = () => {
       color: "var(--text-lo)"
     }
   }, "\u2014"), /*#__PURE__*/React.createElement("input", {
+    "aria-label": "Maximum title characters",
     type: "number",
     value: profile.format_rules?.title_max_chars || 60,
     onChange: e => updateNestedField("format_rules", "title_max_chars", parseInt(e.target.value) || 0),
@@ -703,6 +738,7 @@ const ProfileView = () => {
       fontSize: 12
     }
   }))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    htmlFor: "profile-hook-max",
     style: {
       display: "block",
       color: "var(--text-mid)",
@@ -710,6 +746,7 @@ const ProfileView = () => {
       marginBottom: 4
     }
   }, "Hook character length (Max)"), /*#__PURE__*/React.createElement("input", {
+    id: "profile-hook-max",
     type: "number",
     value: profile.format_rules?.hook_max_chars || 140,
     onChange: e => updateNestedField("format_rules", "hook_max_chars", parseInt(e.target.value) || 0),
@@ -738,6 +775,7 @@ const ProfileView = () => {
       gap: 10
     }
   }, /*#__PURE__*/React.createElement("input", {
+    "aria-label": "Minimum short script seconds",
     type: "number",
     value: profile.format_rules?.short_script_min_seconds || 25,
     onChange: e => updateNestedField("format_rules", "short_script_min_seconds", parseInt(e.target.value) || 0),
@@ -757,6 +795,7 @@ const ProfileView = () => {
       color: "var(--text-lo)"
     }
   }, "\u2014"), /*#__PURE__*/React.createElement("input", {
+    "aria-label": "Maximum short script seconds",
     type: "number",
     value: profile.format_rules?.short_script_max_seconds || 60,
     onChange: e => updateNestedField("format_rules", "short_script_max_seconds", parseInt(e.target.value) || 0),
@@ -783,8 +822,9 @@ const ProfileView = () => {
       borderBottom: "1px solid var(--line)",
       background: "var(--bg-2)"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("h2", {
     style: {
+      margin: 0,
       color: "var(--text-hi)",
       fontWeight: 700,
       fontSize: 14
@@ -814,6 +854,8 @@ const ProfileView = () => {
     const isSelected = (profile.schedule?.publish_days || []).includes(day);
     return /*#__PURE__*/React.createElement("button", {
       key: day,
+      type: "button",
+      "aria-pressed": isSelected,
       onClick: () => togglePublishDay(day),
       style: {
         padding: "6px 10px",
@@ -834,6 +876,7 @@ const ProfileView = () => {
       marginTop: 4
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    htmlFor: "profile-recording-window",
     style: {
       display: "block",
       color: "var(--text-mid)",
@@ -841,6 +884,7 @@ const ProfileView = () => {
       marginBottom: 4
     }
   }, "Recording Window"), /*#__PURE__*/React.createElement("input", {
+    id: "profile-recording-window",
     type: "text",
     placeholder: "e.g. 10:00-12:00",
     value: profile.schedule?.preferred_record_window || "",
@@ -857,6 +901,7 @@ const ProfileView = () => {
       fontSize: 12
     }
   })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    htmlFor: "profile-social-time",
     style: {
       display: "block",
       color: "var(--text-mid)",
@@ -864,6 +909,7 @@ const ProfileView = () => {
       marginBottom: 4
     }
   }, "Social Posting Time"), /*#__PURE__*/React.createElement("input", {
+    id: "profile-social-time",
     type: "text",
     placeholder: "e.g. 10:00",
     value: profile.schedule?.linkedin_time || "",
@@ -891,8 +937,9 @@ const ProfileView = () => {
       borderBottom: "1px solid var(--line)",
       background: "var(--bg-2)"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("h2", {
     style: {
+      margin: 0,
       color: "var(--text-hi)",
       fontWeight: 700,
       fontSize: 14
@@ -903,7 +950,7 @@ const ProfileView = () => {
       fontSize: 11.5,
       marginTop: 2
     }
-  }, "Specify the provider and models used by both your Copilot strategist and content Factory script-writers.")), /*#__PURE__*/React.createElement("div", {
+  }, "Choose the general generation model and a structured-output model for cited research briefs.")), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "18px",
       display: "flex",
@@ -917,6 +964,7 @@ const ProfileView = () => {
       gap: 16
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    htmlFor: "profile-provider",
     style: {
       display: "block",
       color: "var(--text-mid)",
@@ -926,6 +974,7 @@ const ProfileView = () => {
       textTransform: "uppercase"
     }
   }, "Primary Provider"), /*#__PURE__*/React.createElement("select", {
+    id: "profile-provider",
     value: profile.copilot?.provider || "",
     onChange: e => updateNestedField("copilot", "provider", e.target.value),
     style: {
@@ -954,6 +1003,7 @@ const ProfileView = () => {
   }, "anthropic (Anthropic API)"), /*#__PURE__*/React.createElement("option", {
     value: "opencode"
   }, "opencode (Free Models CLI)"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    htmlFor: "profile-model",
     style: {
       display: "block",
       color: "var(--text-mid)",
@@ -963,6 +1013,7 @@ const ProfileView = () => {
       textTransform: "uppercase"
     }
   }, "Primary Model"), /*#__PURE__*/React.createElement("input", {
+    id: "profile-model",
     type: "text",
     value: profile.copilot?.model || "",
     placeholder: "e.g. stepfun-ai/step-3.5-flash or llama3",
@@ -978,13 +1029,47 @@ const ProfileView = () => {
       fontSize: 12.5,
       fontFamily: "var(--font-mono)"
     }
-  }))), /*#__PURE__*/React.createElement("div", {
+  }))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    htmlFor: "profile-compile-model",
+    style: {
+      display: "block",
+      color: "var(--text-mid)",
+      fontSize: 11,
+      fontWeight: 600,
+      marginBottom: 6,
+      textTransform: "uppercase"
+    }
+  }, "Research Desk Model"), /*#__PURE__*/React.createElement("input", {
+    id: "profile-compile-model",
+    type: "text",
+    value: profile.copilot?.compile_model || "",
+    placeholder: "e.g. meta/llama-3.3-70b-instruct",
+    onChange: e => updateNestedField("copilot", "compile_model", e.target.value),
+    style: {
+      width: "100%",
+      height: 36,
+      padding: "0 12px",
+      background: "var(--bg-0)",
+      border: "1px solid var(--line-2)",
+      borderRadius: 5,
+      color: "var(--text-hi)",
+      fontSize: 12.5,
+      fontFamily: "var(--font-mono)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 5,
+      color: "var(--text-lo)",
+      fontSize: 10.5
+    }
+  }, "Use an instruction model that reliably returns strict JSON; reasoning traces are intentionally excluded from briefs.")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: "1fr 1fr",
       gap: 16
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    htmlFor: "profile-fallback-model",
     style: {
       display: "block",
       color: "var(--text-mid)",
@@ -994,6 +1079,7 @@ const ProfileView = () => {
       textTransform: "uppercase"
     }
   }, "Fallback Model"), /*#__PURE__*/React.createElement("input", {
+    id: "profile-fallback-model",
     type: "text",
     value: profile.copilot?.fallback_model || "",
     placeholder: "e.g. minimaxai/minimax-m2.7",
@@ -1010,6 +1096,7 @@ const ProfileView = () => {
       fontFamily: "var(--font-mono)"
     }
   })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    htmlFor: "profile-max-tokens",
     style: {
       display: "block",
       color: "var(--text-mid)",
@@ -1019,6 +1106,7 @@ const ProfileView = () => {
       textTransform: "uppercase"
     }
   }, "Max Context Tokens"), /*#__PURE__*/React.createElement("input", {
+    id: "profile-max-tokens",
     type: "number",
     value: profile.copilot?.max_tokens || 1000,
     onChange: e => updateNestedField("copilot", "max_tokens", parseInt(e.target.value) || 1000),

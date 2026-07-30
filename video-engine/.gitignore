@@ -1,7 +1,11 @@
 node_modules
 dist
+build
 .DS_Store
 .env
 
 # Ignore the output video from Git but not videos you import into src/.
 out
+
+# Per-render temp audio assets copied in by video_renderer.py
+public/render_tmp

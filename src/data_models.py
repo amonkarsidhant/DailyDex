@@ -24,6 +24,7 @@ if not sqlite3.DATABASE_URL:
 import json
 import time
 import os
+import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 
@@ -350,6 +351,44 @@ class IntelligenceDB:
             CREATE UNIQUE INDEX IF NOT EXISTS idx_publication_analytics_item_platform 
                 ON publication_analytics(item_id, platform)
         """)
+        cursor.execute("PRAGMA table_info(publication_analytics)")
+        publication_columns = {row[1] for row in cursor.fetchall()}
+        publication_extensions = {
+            "video_id": "TEXT",
+            "likes": "INTEGER",
+            "comments": "INTEGER",
+            "average_view_duration_seconds": "REAL",
+            "average_view_percentage": "REAL",
+            "last_synced_at": "TEXT",
+            "sync_source": "TEXT",
+            "sync_error": "TEXT",
+            "rescue_status": "TEXT DEFAULT 'pending'",
+            "rescue_applied_at": "TEXT",
+        }
+        for column, definition in publication_extensions.items():
+            if column not in publication_columns:
+                cursor.execute(f"ALTER TABLE publication_analytics ADD COLUMN {column} {definition}")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS publication_analytics_samples (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                publication_id INTEGER NOT NULL,
+                sampled_at TEXT NOT NULL,
+                views INTEGER,
+                impressions INTEGER,
+                ctr REAL,
+                likes INTEGER,
+                comments INTEGER,
+                engagement_rate REAL,
+                average_view_duration_seconds REAL,
+                average_view_percentage REAL,
+                source TEXT,
+                FOREIGN KEY (publication_id) REFERENCES publication_analytics(id)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_publication_samples_time
+                ON publication_analytics_samples(publication_id, sampled_at DESC)
+        """)
 
         # 9:16 Shorts / Repurposed clips table
         cursor.execute("""
@@ -432,6 +471,80 @@ class IntelligenceDB:
                 published_url TEXT DEFAULT '',
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS factory_jobs (
+                id TEXT PRIMARY KEY,
+                cluster_slug TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'queued',
+                phase TEXT NOT NULL DEFAULT 'queued',
+                result_json TEXT DEFAULT '',
+                error TEXT DEFAULT '',
+                attempts INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                started_at TEXT,
+                finished_at TEXT,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_factory_jobs_status_created
+            ON factory_jobs(status, created_at)
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS factory_job_payloads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id TEXT NOT NULL UNIQUE,
+                scored_data_json TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS compile_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cluster_slug TEXT NOT NULL,
+                instruction_hash TEXT NOT NULL,
+                instruction TEXT NOT NULL DEFAULT '',
+                source_version TEXT NOT NULL DEFAULT '',
+                evidence_json TEXT NOT NULL,
+                result_json TEXT NOT NULL,
+                model TEXT NOT NULL DEFAULT '',
+                schema_version INTEGER NOT NULL DEFAULT 1,
+                generated_at REAL NOT NULL,
+                UNIQUE(cluster_slug, instruction_hash)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_compile_cache_generated_at
+            ON compile_cache(generated_at)
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS compile_locks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                lock_key TEXT NOT NULL UNIQUE,
+                owner_token TEXT NOT NULL,
+                created_at REAL NOT NULL
+            )
+        """)
+        cursor.execute("PRAGMA table_info(compile_locks)")
+        if "owner_token" not in {row[1] for row in cursor.fetchall()}:
+            cursor.execute("ALTER TABLE compile_locks ADD COLUMN owner_token TEXT NOT NULL DEFAULT ''")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS compile_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at REAL NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_compile_attempts_created_at
+            ON compile_attempts(created_at)
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS compile_rate_buckets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bucket_key TEXT NOT NULL UNIQUE,
+                attempt_count INTEGER NOT NULL DEFAULT 0
             )
         """)
 
@@ -646,60 +759,42 @@ class IntelligenceDB:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        url = item.get("url")
+        url = item.get("url") or f"dailydex://saved/{uuid.uuid4()}"
         pipeline_type = self._default_pipeline_type(item)
         tags = self._serialize_value("tags", item.get("tags", []))
         sources = self._serialize_value("sources", item.get("sources", []))
         outline = self._serialize_value("outline", item.get("outline", []))
         thumbnail_text = self._serialize_value("thumbnail_text", item.get("thumbnail_text", []))
+        updated_at = datetime.now().isoformat()
         
-        # Check if item with this URL already exists
-        if url:
-            cursor.execute("SELECT id FROM saved_items WHERE url = ?", (url,))
-            existing = cursor.fetchone()
-            if existing:
-                # Update existing item instead of inserting
-                cursor.execute("""
-                    UPDATE saved_items SET 
-                        title = ?, source = ?, source_type = ?, category = ?,
-                        notes = ?, tags = ?, status = ?, signal_score = ?, creator_score = ?,
-                        pipeline_type = ?, working_title = ?, hook = ?, format = ?,
-                        outline = ?, sources = ?, thumbnail_text = ?, priority = ?, published_url = ?,
-                        updated_at = ?
-                    WHERE url = ?
-                """, (
-                    item.get("title"),
-                    item.get("source"),
-                    item.get("source_type"),
-                    item.get("category"),
-                    item.get("notes", ""),
-                    tags,
-                    item.get("status", "to_read"),
-                    item.get("signal_score"),
-                    item.get("creator_score"),
-                    pipeline_type,
-                    item.get("working_title"),
-                    item.get("hook"),
-                    item.get("format"),
-                    outline,
-                    sources,
-                    thumbnail_text,
-                    item.get("priority"),
-                    item.get("published_url"),
-                    datetime.now().isoformat(),
-                    url
-                ))
-                conn.commit()
-                conn.close()
-                return existing[0]
-        
-        cursor.execute("""
+        row = cursor.execute("""
             INSERT INTO saved_items (
                 title, url, source, source_type, category, notes, tags, status, signal_score,
                 creator_score, pipeline_type, working_title, hook, format, outline, sources,
-                thumbnail_text, priority, published_url
+                thumbnail_text, priority, published_url, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(url) DO UPDATE SET
+                title = excluded.title,
+                source = excluded.source,
+                source_type = excluded.source_type,
+                category = excluded.category,
+                notes = excluded.notes,
+                tags = excluded.tags,
+                status = excluded.status,
+                signal_score = excluded.signal_score,
+                creator_score = excluded.creator_score,
+                pipeline_type = excluded.pipeline_type,
+                working_title = excluded.working_title,
+                hook = excluded.hook,
+                format = excluded.format,
+                outline = excluded.outline,
+                sources = excluded.sources,
+                thumbnail_text = excluded.thumbnail_text,
+                priority = excluded.priority,
+                published_url = excluded.published_url,
+                updated_at = excluded.updated_at
+            RETURNING id
         """, (
             item.get("title"),
             url,
@@ -719,10 +814,11 @@ class IntelligenceDB:
             sources,
             thumbnail_text,
             item.get("priority"),
-            item.get("published_url")
-        ))
-        
-        item_id = cursor.lastrowid
+            item.get("published_url"),
+            updated_at,
+        )).fetchone()
+
+        item_id = row[0]
         conn.commit()
         conn.close()
         return item_id
@@ -764,6 +860,12 @@ class IntelligenceDB:
         """Delete a saved item"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM publication_analytics_samples WHERE publication_id IN "
+            "(SELECT id FROM publication_analytics WHERE item_id = ?)",
+            (item_id,),
+        )
+        cursor.execute("DELETE FROM publication_analytics WHERE item_id = ?", (item_id,))
         cursor.execute("DELETE FROM saved_items WHERE id = ?", (item_id,))
         conn.commit()
         conn.close()
@@ -1459,20 +1561,28 @@ class IntelligenceDB:
 
     def create_or_update_publication(self, item_id: int, platform: str, views: int = 0,
                                      impressions: int = 0, ctr: float = 0.0,
-                                     engagement_rate: float = 0.0, status: str = 'live') -> None:
+                                     engagement_rate: float = 0.0, status: str = 'live',
+                                     video_id: Optional[str] = None) -> None:
         """Upsert a publication record for a saved item and platform"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO publication_analytics (item_id, platform, views, impressions, ctr, engagement_rate, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO publication_analytics
+                (item_id, platform, views, impressions, ctr, engagement_rate, status, video_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(item_id, platform) DO UPDATE SET
                 views=excluded.views,
                 impressions=excluded.impressions,
                 ctr=excluded.ctr,
                 engagement_rate=excluded.engagement_rate,
-                status=excluded.status
-        """, (item_id, platform, views, impressions, ctr, engagement_rate, status))
+                status=excluded.status,
+                video_id=COALESCE(excluded.video_id, publication_analytics.video_id),
+                published_at=CASE
+                    WHEN publication_analytics.status <> 'live' AND excluded.status = 'live'
+                    THEN CURRENT_TIMESTAMP
+                    ELSE publication_analytics.published_at
+                END
+        """, (item_id, platform, views, impressions, ctr, engagement_rate, status, video_id))
         conn.commit()
         conn.close()
 
@@ -1506,8 +1616,99 @@ class IntelligenceDB:
                 "category": r["category"],
                 "format": r["format"],
                 "published_url": r["published_url"],
+                "video_id": r["video_id"],
+                "likes": r["likes"],
+                "comments": r["comments"],
+                "average_view_duration_seconds": r["average_view_duration_seconds"],
+                "average_view_percentage": r["average_view_percentage"],
+                "last_synced_at": r["last_synced_at"],
+                "sync_source": r["sync_source"],
+                "sync_error": r["sync_error"],
+                "rescue_status": r["rescue_status"] or "pending",
+                "rescue_applied_at": r["rescue_applied_at"],
             })
         return results
+
+    def get_publication_for_item(self, item_id: int, platform: str = "youtube") -> Optional[Dict]:
+        """Return the persisted publication identity for an item/platform pair."""
+        rows = self.get_publication_analytics()
+        return next(
+            (row for row in rows if row["item_id"] == item_id and row["platform"].lower() == platform.lower()),
+            None,
+        )
+
+    def record_publication_metrics(self, publication_id: int, metrics: Dict) -> None:
+        """Update current observed metrics and append an immutable sample."""
+        sampled_at = metrics.get("synced_at") or datetime.now().isoformat()
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE publication_analytics SET
+                video_id=COALESCE(?, video_id),
+                views=COALESCE(?, views),
+                impressions=COALESCE(?, impressions),
+                ctr=COALESCE(?, ctr),
+                likes=COALESCE(?, likes),
+                comments=COALESCE(?, comments),
+                engagement_rate=COALESCE(?, engagement_rate),
+                average_view_duration_seconds=COALESCE(?, average_view_duration_seconds),
+                average_view_percentage=COALESCE(?, average_view_percentage),
+                status=COALESCE(?, status),
+                last_synced_at=?,
+                sync_source=?,
+                sync_error=NULL,
+                rescue_status=COALESCE(?, rescue_status)
+            WHERE id = ?
+        """, (
+            metrics.get("video_id"), metrics.get("views"), metrics.get("impressions"), metrics.get("ctr"),
+            metrics.get("likes"), metrics.get("comments"), metrics.get("engagement_rate"),
+            metrics.get("average_view_duration_seconds"), metrics.get("average_view_percentage"),
+            metrics.get("status"), sampled_at, metrics.get("source"), metrics.get("rescue_status"), publication_id,
+        ))
+        if cursor.rowcount != 1:
+            conn.close()
+            raise ValueError(f"Unknown publication: {publication_id}")
+        cursor.execute("""
+            INSERT INTO publication_analytics_samples (
+                publication_id, sampled_at, views, impressions, ctr, likes, comments,
+                engagement_rate, average_view_duration_seconds, average_view_percentage, source
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            publication_id, sampled_at, metrics.get("views"), metrics.get("impressions"), metrics.get("ctr"),
+            metrics.get("likes"), metrics.get("comments"), metrics.get("engagement_rate"),
+            metrics.get("average_view_duration_seconds"), metrics.get("average_view_percentage"),
+            metrics.get("source"),
+        ))
+        conn.commit()
+        conn.close()
+
+    def mark_publication_sync_error(self, publication_id: int, error: str) -> None:
+        conn = sqlite3.connect(self.db_path)
+        conn.cursor().execute(
+            "UPDATE publication_analytics SET sync_error = ?, last_synced_at = ? WHERE id = ?",
+            (str(error)[:500], datetime.now().isoformat(), publication_id),
+        )
+        conn.commit()
+        conn.close()
+
+    def mark_rescue_applied(self, publication_id: int) -> None:
+        conn = sqlite3.connect(self.db_path)
+        conn.cursor().execute(
+            "UPDATE publication_analytics SET rescue_status = 'applied', rescue_applied_at = ? WHERE id = ?",
+            (datetime.now().isoformat(), publication_id),
+        )
+        conn.commit()
+        conn.close()
+
+    def get_publication_samples(self, publication_id: int) -> List[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        rows = conn.cursor().execute(
+            "SELECT * FROM publication_analytics_samples WHERE publication_id = ? ORDER BY sampled_at",
+            (publication_id,),
+        ).fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
 
 
     def get_top_performing_categories(self, limit: int = 3) -> List[str]:
@@ -1519,6 +1720,7 @@ class IntelligenceDB:
             FROM publication_analytics p
             JOIN saved_items s ON p.item_id = s.id
             WHERE s.category IS NOT NULL AND s.category != ''
+              AND p.sync_source IS NOT NULL
             GROUP BY s.category
             ORDER BY total_views DESC
             LIMIT ?
@@ -1563,7 +1765,7 @@ class IntelligenceDB:
         cursor.execute("SELECT COUNT(*) FROM factory_queue WHERE status = 'pending_review'")
         total = int(cursor.fetchone()[0])
         cursor.execute("""
-            SELECT id, topic, title, hook, virality_score, status, error, created_at
+            SELECT id, topic, title, hook, video_path, virality_score, status, error, created_at
             FROM factory_queue
             WHERE status = 'pending_review'
             ORDER BY created_at DESC
@@ -1613,6 +1815,332 @@ class IntelligenceDB:
         rows = [r[0] for r in cursor.fetchall()]
         conn.close()
         return rows
+
+    # ── live research compile cache ──────────────────────────────────────
+
+    def compile_cache_get(self, cluster_slug: str, instruction_hash: str,
+                          max_age_seconds: int = 86400) -> Optional[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        row = conn.cursor().execute("""
+            SELECT cluster_slug, instruction_hash, instruction, source_version,
+                   evidence_json, result_json, model, schema_version, generated_at
+            FROM compile_cache
+            WHERE cluster_slug = ? AND instruction_hash = ? AND generated_at >= ?
+        """, (cluster_slug, instruction_hash, time.time() - max_age_seconds)).fetchone()
+        conn.close()
+        if not row:
+            return None
+        data = dict(row)
+        try:
+            data["evidence"] = json.loads(data.pop("evidence_json"))
+            data["result"] = json.loads(data.pop("result_json"))
+        except (TypeError, ValueError):
+            return None
+        return data
+
+    def compile_cache_set(self, cluster_slug: str, instruction_hash: str,
+                          instruction: str, source_version: str,
+                          evidence: List[Dict], result: Dict, model: str,
+                          schema_version: int = 1) -> None:
+        conn = sqlite3.connect(self.db_path)
+        conn.cursor().execute("""
+            INSERT INTO compile_cache
+                (cluster_slug, instruction_hash, instruction, source_version,
+                 evidence_json, result_json, model, schema_version, generated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(cluster_slug, instruction_hash) DO UPDATE SET
+                instruction = excluded.instruction,
+                source_version = excluded.source_version,
+                evidence_json = excluded.evidence_json,
+                result_json = excluded.result_json,
+                model = excluded.model,
+                schema_version = excluded.schema_version,
+                generated_at = excluded.generated_at
+        """, (
+            cluster_slug, instruction_hash, instruction, source_version,
+            json.dumps(evidence), json.dumps(result), model,
+            schema_version, time.time(),
+        ))
+        conn.commit()
+        conn.close()
+
+    def compile_cache_set_if_lock_owner(
+        self, cluster_slug: str, instruction_hash: str, instruction: str,
+        source_version: str, evidence: List[Dict], result: Dict, model: str,
+        schema_version: int, lock_key: str, owner_token: str,
+        lease_ttl_seconds: int = 600,
+    ) -> bool:
+        now = time.time()
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO compile_cache
+                (cluster_slug, instruction_hash, instruction, source_version,
+                 evidence_json, result_json, model, schema_version, generated_at)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+            FROM compile_locks
+            WHERE lock_key = ? AND owner_token = ? AND created_at >= ?
+            ON CONFLICT(cluster_slug, instruction_hash) DO UPDATE SET
+                instruction = excluded.instruction,
+                source_version = excluded.source_version,
+                evidence_json = excluded.evidence_json,
+                result_json = excluded.result_json,
+                model = excluded.model,
+                schema_version = excluded.schema_version,
+                generated_at = excluded.generated_at
+        """, (
+            cluster_slug, instruction_hash, instruction, source_version,
+            json.dumps(evidence), json.dumps(result), model, schema_version, now,
+            lock_key, owner_token, now - lease_ttl_seconds,
+        ))
+        stored = cursor.rowcount == 1
+        conn.commit()
+        conn.close()
+        return stored
+
+    def compile_cache_recent_count(self, since_timestamp: float) -> int:
+        conn = sqlite3.connect(self.db_path)
+        row = conn.cursor().execute(
+            "SELECT COUNT(*) FROM compile_cache WHERE generated_at >= ?",
+            (since_timestamp,),
+        ).fetchone()
+        conn.close()
+        return int(row[0]) if row else 0
+
+    def compile_cache_trim(self, older_than_timestamp: float) -> int:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM compile_cache WHERE generated_at < ?",
+            (older_than_timestamp,),
+        )
+        changed = max(0, cursor.rowcount)
+        conn.commit()
+        conn.close()
+        return changed
+
+    def compile_attempt_allow(self, limit: int, window_seconds: int = 3600) -> bool:
+        now = time.time()
+        bucket_key = str(int(now // window_seconds))
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        row = cursor.execute("""
+            INSERT INTO compile_rate_buckets (bucket_key, attempt_count)
+            VALUES (?, 1)
+            ON CONFLICT(bucket_key) DO UPDATE SET
+                attempt_count = compile_rate_buckets.attempt_count + 1
+            RETURNING attempt_count
+        """, (bucket_key,)).fetchone()
+        cursor.execute(
+            "DELETE FROM compile_rate_buckets WHERE CAST(bucket_key AS INTEGER) < ?",
+            (int(bucket_key),),
+        )
+        conn.commit()
+        conn.close()
+        return bool(row and int(row[0]) <= limit)
+
+    def compile_lock_acquire(self, lock_key: str, owner_token: str,
+                             ttl_seconds: int = 600) -> bool:
+        now = time.time()
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM compile_locks WHERE lock_key = ? AND created_at < ?",
+            (lock_key, now - ttl_seconds),
+        )
+        try:
+            cursor.execute(
+                "INSERT INTO compile_locks (lock_key, owner_token, created_at) VALUES (?, ?, ?)",
+                (lock_key, owner_token, now),
+            )
+            conn.commit()
+            conn.close()
+            return True
+        except Exception:
+            conn.rollback()
+            existing = cursor.execute(
+                "SELECT 1 FROM compile_locks WHERE lock_key = ?", (lock_key,)
+            ).fetchone()
+            conn.close()
+            if existing:
+                return False
+            raise
+
+    def compile_lock_refresh(self, lock_key: str, owner_token: str,
+                             ttl_seconds: int = 600) -> bool:
+        now = time.time()
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            """UPDATE compile_locks SET created_at = ?
+               WHERE lock_key = ? AND owner_token = ? AND created_at >= ?""",
+            (now, lock_key, owner_token, now - ttl_seconds),
+        )
+        refreshed = cursor.rowcount == 1
+        conn.commit()
+        conn.close()
+        return refreshed
+
+    def compile_lock_release(self, lock_key: str, owner_token: str) -> None:
+        conn = sqlite3.connect(self.db_path)
+        conn.cursor().execute(
+            "DELETE FROM compile_locks WHERE lock_key = ? AND owner_token = ?",
+            (lock_key, owner_token),
+        )
+        conn.commit()
+        conn.close()
+
+    def factory_job_enqueue(self, job_id: str, cluster_slug: str,
+                            scored_data: Optional[Dict] = None) -> str:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO factory_jobs (id, cluster_slug) VALUES (?, ?)",
+            (job_id, cluster_slug),
+        )
+        if scored_data is not None:
+            cursor.execute(
+                "INSERT INTO factory_job_payloads (job_id, scored_data_json) VALUES (?, ?)",
+                (job_id, json.dumps(scored_data)),
+            )
+        conn.commit()
+        conn.close()
+        return job_id
+
+    def factory_job_payload(self, job_id: str) -> Optional[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        row = conn.cursor().execute(
+            "SELECT scored_data_json FROM factory_job_payloads WHERE job_id = ?", (job_id,)
+        ).fetchone()
+        conn.close()
+        if not row:
+            return None
+        try:
+            return json.loads(row[0])
+        except (TypeError, ValueError):
+            return None
+
+    def factory_job_active_for_cluster(self, cluster_slug: str) -> Optional[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        row = conn.cursor().execute(
+            """
+            SELECT * FROM factory_jobs
+            WHERE cluster_slug = ? AND status IN ('queued', 'running')
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (cluster_slug,),
+        ).fetchone()
+        conn.close()
+        return self._factory_job_dict(row)
+
+    def factory_job_get(self, job_id: str) -> Optional[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        row = conn.cursor().execute(
+            "SELECT * FROM factory_jobs WHERE id = ?", (job_id,)
+        ).fetchone()
+        conn.close()
+        return self._factory_job_dict(row)
+
+    def factory_job_latest(self) -> Optional[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        row = conn.cursor().execute(
+            "SELECT * FROM factory_jobs ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+        conn.close()
+        return self._factory_job_dict(row)
+
+    def factory_job_claim(self) -> Optional[Dict]:
+        """Claim the oldest queued render job. Compose runs one worker."""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        row = cursor.execute(
+            "SELECT id FROM factory_jobs WHERE status = 'queued' ORDER BY created_at LIMIT 1"
+        ).fetchone()
+        if not row:
+            conn.close()
+            return None
+        job_id = row[0]
+        cursor.execute(
+            """
+            UPDATE factory_jobs
+            SET status = 'running', phase = 'factory', attempts = attempts + 1,
+                started_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND status = 'queued'
+            """,
+            (job_id,),
+        )
+        claimed = cursor.rowcount > 0
+        conn.commit()
+        row = cursor.execute("SELECT * FROM factory_jobs WHERE id = ?", (job_id,)).fetchone() if claimed else None
+        conn.close()
+        return self._factory_job_dict(row)
+
+    def factory_job_finish(self, job_id: str, result: Optional[Dict] = None,
+                           error: str = "") -> None:
+        status = "failed" if error else "succeeded"
+        conn = sqlite3.connect(self.db_path)
+        conn.cursor().execute(
+            """
+            UPDATE factory_jobs
+            SET status = ?, phase = ?, result_json = ?, error = ?,
+                finished_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (status, status, json.dumps(result or {}), error, job_id),
+        )
+        conn.commit()
+        conn.close()
+
+    def factory_job_retry(self, job_id: str, error: str) -> None:
+        conn = sqlite3.connect(self.db_path)
+        conn.cursor().execute("""
+            UPDATE factory_jobs
+            SET status = 'queued', phase = 'retrying', error = ?,
+                started_at = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND attempts < 3
+        """, (error, job_id))
+        conn.commit()
+        conn.close()
+
+    def factory_jobs_requeue_running(self) -> None:
+        """Recover jobs left running when the single Compose worker restarted."""
+        conn = sqlite3.connect(self.db_path)
+        conn.cursor().execute("""
+            UPDATE factory_jobs
+            SET status = 'queued', phase = 'recovered', started_at = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE status = 'running' AND attempts < 3
+        """)
+        conn.cursor().execute("""
+            UPDATE factory_jobs
+            SET status = 'failed', phase = 'failed',
+                error = CASE
+                    WHEN error = '' THEN 'Render worker stopped during final attempt'
+                    ELSE error || '; render worker stopped during final attempt'
+                END,
+                finished_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+            WHERE status = 'running' AND attempts >= 3
+        """)
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def _factory_job_dict(row) -> Optional[Dict]:
+        if not row:
+            return None
+        data = dict(row)
+        raw_result = data.pop("result_json", "")
+        try:
+            data["result"] = json.loads(raw_result) if raw_result else None
+        except (TypeError, ValueError):
+            data["result"] = None
+        data["running"] = data.get("status") in ("queued", "running")
+        return data
 
     # ── repurposed_clips database helpers ──
     def insert_repurposed_clip(self, clip: Dict) -> str:

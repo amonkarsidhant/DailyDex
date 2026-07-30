@@ -47,6 +47,47 @@
     copilot(view, question, context) {
       return jpost("/api/copilot", { view, question, context: context || {} });
     },
+    async compile(clusterSlug, instruction, onEvent, signal) {
+      const response = await fetch("/api/compile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+        body: JSON.stringify({ cluster_slug: clusterSlug, instruction: instruction || "" }),
+        signal,
+      });
+      if (!response.ok) {
+        let message = `Compile failed (${response.status})`;
+        try { message = (await response.json()).error || message; } catch (_) {}
+        throw new Error(message);
+      }
+      if (!response.body) throw new Error("Streaming is unavailable in this browser");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let sawTerminal = false;
+      const dispatchFrame = frame => {
+        const payload = frame.split(/\r?\n/)
+          .filter(line => line.startsWith("data:"))
+          .map(line => line.slice(5).trim())
+          .join("\n");
+        if (!payload) return;
+        let event;
+        try { event = JSON.parse(payload); } catch (_) { return; }
+        if (event.type === "result" || event.type === "error") sawTerminal = true;
+        onEvent(event);
+      };
+      while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+        const frames = buffer.split(/\r?\n\r?\n/);
+        buffer = frames.pop() || "";
+        frames.forEach(dispatchFrame);
+        if (done) break;
+      }
+      if (buffer.trim()) dispatchFrame(buffer);
+      if (!sawTerminal) {
+        throw new Error("The compile stream ended before the desk returned a result.");
+      }
+    },
     agents() { return jget("/api/agents"); },
     dispatch(agent_type, topic, target_id) {
       return jpost("/api/agents/dispatch", { agent_type, topic, target_id });
@@ -71,8 +112,8 @@
     // Creator Central
     studio() { return jget("/api/studio"); },
     studioRun(topN, slugs) { return jpost("/api/studio/run", { top_n: topN || 0, slugs: slugs || null }); },
-    factoryRun(limit) { return jpost("/api/factory/run", { limit: limit || 3 }); },
-    factoryStatus() { return jget("/api/factory/status"); },
+    factoryRun(clusterSlug) { return jpost("/api/factory/run", { cluster_slug: clusterSlug }); },
+    factoryStatus(jobId) { return jget("/api/factory/status" + (jobId ? `?job_id=${encodeURIComponent(jobId)}` : "")); },
     factoryQueue(status) { return jget("/api/factory/queue" + (status ? `?status=${status}` : "")); },
     factoryApprove(id) { return jpost(`/api/factory/${id}/approve`, {}); },
     factoryReject(id) { return jpost(`/api/factory/${id}/reject`, {}); },
@@ -87,7 +128,7 @@
     },
     editorialApprove() { return jpost("/api/editorial/approve", {}); },
     publish(item_id, platform) { return jpost("/api/publish", { item_id, platform }); },
-    simulateAnalytics() { return jpost("/api/analytics/simulate", {}); },
+    simulateAnalytics() { return jpost("/api/analytics/sync", {}); },
 
     // Advanced Creator Integrations
     syncNotion(itemId) {

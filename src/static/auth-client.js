@@ -20,6 +20,8 @@
     return nativeFetch(input, init).then(function (response) {
       if (response.status === 401 && url.origin === window.location.origin) {
         window.location.assign("/login?next=" + encodeURIComponent(window.location.pathname + window.location.search));
+      } else if (response.status === 402 && url.origin === window.location.origin) {
+        window.location.assign("/billing");
       }
       return response;
     });

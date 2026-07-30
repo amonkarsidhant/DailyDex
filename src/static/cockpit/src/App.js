@@ -123,7 +123,7 @@ const App = () => {
   }, []);
   const navigate = (nextView, clusterSlug) => {
     const normalizedView = nextView === "pulse" ? "today" : nextView;
-    if (clusterSlug) setSelectedClusterSlug(clusterSlug);else if (normalizedView === "today") setSelectedClusterSlug(window.DD_DATA?.clusters?.[0]?.slug || null);
+    if (clusterSlug) setSelectedClusterSlug(clusterSlug);
     React.startTransition(() => setView(normalizedView));
     setNavOpen(false);
   };
@@ -138,7 +138,6 @@ const App = () => {
     studio: StudioView,
     benchmarks: BenchmarksView,
     profile: ProfileView,
-    copilot: CopilotChatView,
     settings: SettingsView
   };
   const CurrentView = Views[view] || TodayView;
@@ -155,7 +154,7 @@ const App = () => {
     onClose: () => setNavOpen(false)
   }), navOpen && /*#__PURE__*/React.createElement("button", {
     className: "nav-backdrop",
-    "aria-label": "Close navigation",
+    "aria-label": "Dismiss navigation overlay",
     onClick: () => setNavOpen(false)
   }), /*#__PURE__*/React.createElement(Topbar, {
     now: now,
@@ -181,9 +180,6 @@ const App = () => {
   }))), railOpen && /*#__PURE__*/React.createElement(AgentRail, {
     selectedClusterSlug: selectedClusterSlug,
     onClose: () => setRailOpen(false)
-  }), /*#__PURE__*/React.createElement(CopilotDock, {
-    context: view,
-    selectedClusterSlug: selectedClusterSlug
   }));
 };
 

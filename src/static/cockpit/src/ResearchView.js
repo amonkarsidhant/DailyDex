@@ -65,27 +65,27 @@ const ResearchView = ({
     try {
       const markdown = packContent;
       const sections = {};
-      const leadsMatch = markdown.match(/## Leads\s*([\s\S]*?)(?=\n##|$)/);
+      const leadsMatch = markdown.match(/## (?:Research )?Leads\s*([\s\S]*?)(?=\n##|$)/);
       sections.leads = leadsMatch ? leadsMatch[1].trim() : "";
-      const titleMatch = markdown.match(/\*\*Strategic title:\*\*\s*(.*?)\n/);
+      const titleMatch = markdown.match(/\*\*(?:Strategic title|Title):\*\*\s*(.*?)\n/i);
       sections.strategicTitle = titleMatch ? titleMatch[1].trim() : "";
-      const shiftMatch = markdown.match(/\*\*Shift:\*\*\s*(.*?)\n/);
+      const shiftMatch = markdown.match(/\*\*(?:The )?Shift:\*\*\s*(.*?)\n/i);
       sections.shift = shiftMatch ? shiftMatch[1].trim() : "";
       const superpowerMatch = markdown.match(/\*\*Superpower:\*\*\s*(.*?)\n/);
       sections.superpower = superpowerMatch ? superpowerMatch[1].trim() : "";
-      const inversionMatch = markdown.match(/\*\*Munger Inversion:\*\*\s*(.*?)\n/);
+      const inversionMatch = markdown.match(/\*\*(?:Operational Reality Check|Munger Inversion):\*\*\s*(.*?)\n/i);
       sections.inversion = inversionMatch ? inversionMatch[1].trim() : "";
       const contrarianMatch = markdown.match(/- Contrarian:\s*(.*?)\n/);
       sections.hookContrarian = contrarianMatch ? contrarianMatch[1].trim() : "";
       const speedMatch = markdown.match(/- Speed-to-Value:\s*(.*?)\n/);
       sections.hookSpeed = speedMatch ? speedMatch[1].trim() : "";
-      const beatsMatch = markdown.match(/## Narrative Beats:\s*([\s\S]*?)(?=\n##|$)/);
+      const beatsMatch = markdown.match(/(?:## |\*\*)Narrative Beats(?::|:\*\*)\s*([\s\S]*?)(?=\n##|\n\*\*Thumbnail|$)/i);
       if (beatsMatch) {
         sections.beats = beatsMatch[1].split("\n").map(line => line.replace(/^-\s*/, "").trim()).filter(Boolean);
       } else {
         sections.beats = [];
       }
-      const thumbsMatch = markdown.match(/## Thumbnail Visuals:\s*([\s\S]*?)(?=\n##|$)/);
+      const thumbsMatch = markdown.match(/(?:## |\*\*)Thumbnail (?:Visuals|Concepts)(?::|:\*\*)\s*([\s\S]*?)(?=\n##|$)/i);
       if (thumbsMatch) {
         sections.thumbs = thumbsMatch[1].split("\n").map(line => line.replace(/^-\s*/, "").trim()).filter(Boolean);
       } else {
@@ -134,7 +134,7 @@ const ResearchView = ({
   const buildMD = (c, pData) => {
     if (!c) return "";
     const ev = (c.related_items || []).map((it, i) => `${i + 1}. **${it.title}** — ${it.source_type} · signal ${it.signal_score}${it.url && it.url !== "#" ? ` — ${it.url}` : ""}`).join("\n");
-    return [`# Research Pack — ${c.topic}`, "", `Creator score: ${c.creator_score} · Signal: ${c.average_signal_score} · Momentum: ${c.momentum}% · Sources: ${(c.sources || []).join(", ")}`, "", pData ? `## Core Claim\n${pData.leads}\n` : "", pData ? `## Strategic Title\n${pData.strategicTitle}\n` : "", pData ? `## Shift\n${pData.shift}\n` : "", pData ? `## Superpower\n${pData.superpower}\n` : "", pData ? `## Munger Inversion\n${pData.inversion}\n` : "", `## Source evidence`, ev || "_none_", ""].join("\n");
+    return [`# Research Pack — ${c.topic}`, "", `Creator score: ${c.creator_score} · Signal: ${c.average_signal_score} · Momentum: ${c.momentum}% · Sources: ${(c.sources || []).join(", ")}`, "", pData ? `## Core Claim\n${pData.leads}\n` : "", pData ? `## Strategic Title\n${pData.strategicTitle}\n` : "", pData ? `## Shift\n${pData.shift}\n` : "", pData ? `## Superpower\n${pData.superpower}\n` : "", pData ? `## Operational Reality Check\n${pData.inversion}\n` : "", `## Source evidence`, ev || "_none_", ""].join("\n");
   };
   const exportMD = () => {
     const blob = new Blob([buildMD(cluster, parsed)], {
@@ -385,7 +385,7 @@ const ResearchView = ({
     idx: i + 1,
     it: it
   })))), parsed.inversion && /*#__PURE__*/React.createElement(Section, {
-    title: "Counterpoints & Munger Inversion",
+    title: "Operational Reality Check",
     no: "03"
   }, /*#__PURE__*/React.createElement("ul", {
     style: {
@@ -398,7 +398,7 @@ const ResearchView = ({
     }
   }, /*#__PURE__*/React.createElement(Counter, {
     pt: parsed.inversion,
-    src: "Inversion Analysis"
+    src: "Failure-boundary analysis"
   }))), (parsed.shift || parsed.superpower) && /*#__PURE__*/React.createElement(Section, {
     title: "Strategic Context",
     no: "04"

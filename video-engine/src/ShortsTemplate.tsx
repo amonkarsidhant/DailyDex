@@ -6,7 +6,7 @@ export type ShortsProps = {
 };
 
 export const ShortsTemplate: React.FC<ShortsProps> = ({ backgroundUrl }) => {
-  const { fps, durationInFrames } = useVideoConfig();
+  const { durationInFrames } = useVideoConfig();
   const frame = useCurrentFrame();
 
   const imgSrc = backgroundUrl.startsWith("http") ? backgroundUrl : staticFile(backgroundUrl);
@@ -21,7 +21,7 @@ export const ShortsTemplate: React.FC<ShortsProps> = ({ backgroundUrl }) => {
       </AbsoluteFill>
 
       {/* Intro Scene */}
-      <Sequence from={0} durationInFrames={100}>
+      <Sequence durationInFrames={100}>
         <IntroScene />
       </Sequence>
       

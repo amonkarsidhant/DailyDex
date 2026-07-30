@@ -1,8 +1,8 @@
 """Studio-Grade Animated Motion Graphics & Live Demo Video Renderer.
 
 Generates 1080x1920 vertical Shorts with:
-1. ElevenLabs AI Voiceover (Charlie - Deep, Confident, Energetic)
-2. Live-typing macOS Terminal Demo window (commands + streaming logs), rendered
+1. ElevenLabs AI Voiceover with deterministic creator-configured voice rotation
+2. Live-typing Terminal Demo window (commands + streaming logs), rendered
    by the Remotion composition in video-engine/src/BreakoutShort.tsx
 3. Animated visual benchmark metrics & progress indicators
 4. Synchronized kinetic highlighted subtitles (word-by-word)
@@ -20,31 +20,38 @@ import uuid
 import urllib.request
 import urllib.error
 import json
+import hashlib
 from typing import Dict, Any, Optional, List
 
 VIDEO_ENGINE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "video-engine")
 FPS = 30
+DEFAULT_ELEVENLABS_VOICES = [
+    "IKne3meq5aSn9XLyUdCD",
+    "pNInz6obpgDQGcFmaJgB",
+    "ErXwobaYiNj19HyfgpX6",
+    "TxGEqnHWrfWFTfGW9XjX",
+]
 
-# Inside Docker, the video engine lives at /engine (built from Dockerfile.video).
+# Inside Docker, the video engine lives at /engine.
 # Locally, it's the video-engine/ directory next to src/.
 _RENDER_CMD = None
+_ELEVENLABS_VOICE_CACHE: Optional[List[str]] = None
 def _resolve_render_command():
-    """Pick the right way to invoke Remotion: direct npx, or docker compose run."""
+    """Resolve the local Remotion executable used by the render worker."""
     global _RENDER_CMD
     if _RENDER_CMD is not None:
         return _RENDER_CMD
     engine_dir = os.environ.get("VIDEO_ENGINE_DIR", VIDEO_ENGINE_DIR)
     has_npx = shutil.which("npx") is not None
     has_engine = os.path.isdir(os.path.join(engine_dir, "src"))
-    if has_npx and has_engine:
-        _RENDER_CMD = ("npx",)
-    else:
-        _RENDER_CMD = ("docker", "compose", "run", "--rm", "-T", "video")
+    if not (has_npx and has_engine):
+        raise RuntimeError("Remotion is unavailable; run rendering in the video-worker service")
+    _RENDER_CMD = ("npx",)
     return _RENDER_CMD
 
 
-def _generate_elevenlabs_audio(text: str, api_key: str, output_path: str) -> bool:
-    url = "https://api.elevenlabs.io/v1/text-to-speech/IKne3meq5aSn9XLyUdCD"
+def _generate_elevenlabs_audio(text: str, api_key: str, output_path: str, voice_id: str) -> bool:
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     headers = {
         "xi-api-key": api_key,
         "Content-Type": "application/json",
@@ -66,73 +73,86 @@ def _generate_elevenlabs_audio(text: str, api_key: str, output_path: str) -> boo
             with open(output_path, "wb") as f:
                 f.write(response.read())
         return True
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="ignore")[:300]
+        print(f"[video_renderer] ElevenLabs API error ({e.code}): {detail}")
+        return False
     except Exception as e:
         print(f"[video_renderer] ElevenLabs API error: {e}")
         return False
 
 
-def _pick_demo_content(title: str, hook_text: str):
-    """Return (demo_cmd, demo_logs, metric_label, metric_val, metric_unit) for the topic."""
-    t_lower = (title + " " + hook_text).lower()
-    if "hit piece" in t_lower or "rogue" in t_lower or "published" in t_lower:
-        return (
-            "tail -f /var/log/autonomous_agent.log",
-            [
-                "[AUDIT] Step 41: Recursion threshold reached",
-                "[ALERT] Prompt drift -> Context window saturated",
-                "[EXEC] tool_call -> blog_publish('Hit Piece...')",
-                "[LIVE] Post published • 14,200 impressions",
-                "[RULE] Sand-box write tools with human review"
-            ],
-            "Unchecked Tool Escalation Rate", 4120.0, "calls / hr"
+def _available_elevenlabs_voice_ids(api_key: str) -> List[str]:
+    """Return voices visible to this ElevenLabs account, cached per worker."""
+    global _ELEVENLABS_VOICE_CACHE
+    if _ELEVENLABS_VOICE_CACHE is not None:
+        return _ELEVENLABS_VOICE_CACHE
+    try:
+        req = urllib.request.Request(
+            "https://api.elevenlabs.io/v2/voices?page_size=100",
+            headers={"xi-api-key": api_key, "Accept": "application/json"},
         )
-    if "bankrupt" in t_lower or "billing" in t_lower or "dn42" in t_lower or "saas" in t_lower or "$4,800" in t_lower:
-        return (
-            "curl -s https://api.openai.com/v1/usage",
-            [
-                "[ACCT] ID: org-daily-dex-prod | Status: ACTIVE",
-                "[SPIKE] 03:14 AM -> 89,412 loop retries logged",
-                "[CHARGE] 148.2M input tokens billed @ $15/M",
-                "[INVOICE] Total balance reached: $4,842.19 USD",
-                "[FIX] Added local circuit breaker + 3B fallback"
-            ],
-            "Cloud Runaway Cost Burn Rate", 142.5, "$ USD / min"
-        )
-    if "opencode" in t_lower or "coding" in t_lower or "offline" in t_lower or "3b" in t_lower:
-        return (
-            "opencode --refactor ./src/engine.py",
-            [
-                "[MODEL] OpenCode-7B-Instruct (Q4_K_M) loaded",
-                "[PARSE] AST generated across 24 source files",
-                "[DIFF] +142 / -89 lines modified in 1.4s pass",
-                "[TEST] pytest passed • 48 tests • 0 errors",
-                "[PRIVACY] Zero telemetry • 100% Offline execution"
-            ],
-            "Local Refactor Pass Accuracy", 94.8, "% Score"
-        )
-    if "pi 4" in t_lower or "raspberry" in t_lower or "llamafile" in t_lower:
-        return (
-            "./llamafile --model 3b-instruct.gguf",
-            [
-                "[INFO] CPU Arch: ARM64 Cortex-A72 | RAM: 8.0 GB",
-                "[LOAD] mmap weights 1.86 GB ... READY (0.42s)",
-                "[TEST] Prompt: 'Extract key metrics from JSON'",
-                "[BENCH] Generation speed: 6.42 tokens/sec local",
-                "[SUCCESS] Zero cloud calls • Zero API latency"
-            ],
-            "Local Pi 4 Inference Speed", 6.4, "tok / sec"
-        )
+        with urllib.request.urlopen(req, timeout=30) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        _ELEVENLABS_VOICE_CACHE = [
+            str(voice.get("voice_id"))
+            for voice in payload.get("voices", [])
+            if voice.get("voice_id")
+        ]
+    except Exception as exc:
+        print(f"[video_renderer] ElevenLabs voice catalog unavailable: {exc}")
+        _ELEVENLABS_VOICE_CACHE = []
+    return _ELEVENLABS_VOICE_CACHE
+
+
+def _signal_demo_content(signal_context: Optional[Dict[str, Any]] = None):
+    """Build a fallback card using only observed DailyDex scoring data."""
+    context = signal_context or {}
+    score = float(context.get("average_signal_score") or 0)
+    source_count = int(context.get("source_count") or 0)
+    sources = [str(value) for value in context.get("sources", []) if value]
+    logs = [f"[SOURCE] {source}" for source in sources[:3]]
+    logs.extend([
+        f"[SIGNAL] DailyDex score: {score:.1f} / 100",
+        f"[COVERAGE] {source_count} source families observed",
+    ])
     return (
-        "python3 -m dailydex.creator_labs --topic",
-        [
-            "[MINER] Connected to Hacker News & Reddit feeds",
-            "[SIGNAL] Found 4 breakout audience debates",
-            "[SCRIPT] Synthesized contrarian hook structure",
-            "[STUDIO] Rendered kinetic subtitles & voiceover",
-            "[READY] Prepared Shorts distribution queue"
-        ],
-        "Audience Engagement Signal", 91.5, "% Virality"
+        "dailydex inspect --evidence",
+        logs[:5],
+        "DailyDex Signal Score",
+        score,
+        "/ 100",
     )
+
+
+def _load_creator_profile() -> Dict[str, Any]:
+    profile_path = os.environ.get(
+        "CREATOR_PROFILE_PATH",
+        os.path.join(os.path.dirname(VIDEO_ENGINE_DIR), "config", "creator_profile.json"),
+    )
+    try:
+        with open(profile_path, encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return {}
+
+
+def _system_tts(text: str, output_dir: str) -> tuple[str, str]:
+    if shutil.which("say"):
+        output_path = os.path.join(output_dir, "voice.wav")
+        subprocess.run(
+            ["say", "-o", output_path, "--data-format=LEF32@22050", text],
+            check=True, timeout=30,
+        )
+        return output_path, "macOS system voice"
+    if shutil.which("espeak-ng"):
+        output_path = os.path.join(output_dir, "voice.wav")
+        subprocess.run(
+            ["espeak-ng", "-w", output_path, "-s", "160", "-p", "40", text],
+            check=True, timeout=30,
+        )
+        return output_path, "espeak-ng"
+    raise RuntimeError("No TTS engine is available")
 
 
 def _demo_from_evidence(evidence: Dict[str, Any]) -> Optional[tuple]:
@@ -218,19 +238,23 @@ def render_short_video(
     output_path: Optional[str] = None,
     clip_id: Optional[str] = None,
     virality_score: float = 85.0,
-    evidence: Optional[Dict[str, Any]] = None
+    evidence: Optional[Dict[str, Any]] = None,
+    signal_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Render a full animated motion graphics + live terminal demo Short via Remotion."""
     import settings_manager
     elevenlabs_key = settings_manager.get("elevenlabs_api_key")
+    profile = _load_creator_profile()
 
     if not clip_id:
         clip_id = f"clip-{uuid.uuid4().hex[:8]}"
 
-    base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "videos")
+    base_dir = os.path.join(os.environ.get("DATA_DIR", os.path.dirname(os.path.abspath(__file__))), "videos")
     os.makedirs(base_dir, exist_ok=True)
 
-    render_tmp_dir = os.path.join(VIDEO_ENGINE_DIR, "public", "render_tmp", clip_id)
+    engine_dir = os.environ.get("VIDEO_ENGINE_DIR", VIDEO_ENGINE_DIR)
+    render_asset_root = "render_jobs"
+    render_tmp_dir = os.path.join(engine_dir, "public", render_asset_root, clip_id)
     os.makedirs(render_tmp_dir, exist_ok=True)
 
     if not output_path:
@@ -240,16 +264,23 @@ def render_short_video(
 
     # Step 1: Generate human voiceover using ElevenLabs API
     used_elevenlabs = False
+    voice_id = ""
+    voice_engine = ""
     audio_path = os.path.join(render_tmp_dir, "voice.mp3")
     if elevenlabs_key:
-        used_elevenlabs = _generate_elevenlabs_audio(narration, elevenlabs_key, audio_path)
+        available_voices = _available_elevenlabs_voice_ids(elevenlabs_key)
+        preferred_voices = profile.get("elevenlabs_voices") or DEFAULT_ELEVENLABS_VOICES
+        voices = [voice for voice in preferred_voices if voice in available_voices]
+        voices = voices or available_voices[:4] or preferred_voices
+        voice_id = voices[int(hashlib.sha256(title.encode("utf-8")).hexdigest(), 16) % len(voices)]
+        used_elevenlabs = _generate_elevenlabs_audio(
+            narration, elevenlabs_key, audio_path, voice_id
+        )
 
     if not used_elevenlabs:
-        audio_path = os.path.join(render_tmp_dir, "voice.wav")
-        subprocess.run(
-            ["say", "-o", audio_path, "--data-format=LEF32@22050", narration],
-            check=True, timeout=15
-        )
+        audio_path, voice_engine = _system_tts(narration, render_tmp_dir)
+    else:
+        voice_engine = "ElevenLabs"
 
     # Get duration
     duration_sec = 10.0
@@ -268,7 +299,7 @@ def render_short_video(
     if demo:
         demo_cmd, demo_logs, metric_label, metric_val, metric_unit = demo
     else:
-        demo_cmd, demo_logs, metric_label, metric_val, metric_unit = _pick_demo_content(title, hook_text)
+        demo_cmd, demo_logs, metric_label, metric_val, metric_unit = _signal_demo_content(signal_context)
 
     # Real recorded terminal demo (VHS) when available; synthetic card otherwise.
     demo_video_rel = ""
@@ -278,16 +309,19 @@ def render_short_video(
 
             demo_mp4 = os.path.join(render_tmp_dir, "demo.mp4")
             if demo_recorder.record_demo(evidence, demo_mp4):
-                demo_video_rel = f"render_tmp/{clip_id}/demo.mp4"
+                demo_video_rel = f"{render_asset_root}/{clip_id}/demo.mp4"
         except Exception as e:
             print(f"[video_renderer] demo recording skipped: {e}")
 
     words = narration.split()
     duration_in_frames = max(1, int(round(duration_sec * FPS)))
-    voice_rel_path = f"render_tmp/{clip_id}/{os.path.basename(audio_path)}"
+    voice_rel_path = f"{render_asset_root}/{clip_id}/{os.path.basename(audio_path)}"
 
     props = {
-        "brandLabel": "HACKER NEWS • BREAKOUT REPORT",
+        "brandLabel": profile.get("brand_label") or profile.get("channel_name") or "DAILYDEX • AI REPORT",
+        "accentColor": profile.get("video_accent_color") or "#F0B72F",
+        "ctaLabel": profile.get("video_cta") or "FOLLOW FOR MORE AI REPORTS",
+        "demoMode": "source_backed" if demo else "illustrative",
         "title": title,
         "demoCmd": demo_cmd,
         "demoLogs": demo_logs,
@@ -306,63 +340,25 @@ def render_short_video(
     with open(props_path, "w") as f:
         json.dump(props, f)
 
-    engine_dir = os.environ.get("VIDEO_ENGINE_DIR", VIDEO_ENGINE_DIR)
     render_cmd = _resolve_render_command()
 
     try:
-        if render_cmd[0] == "npx":
-            # Local: npx remotion render BreakoutShort <output> --props=<path>
-            cmd = list(render_cmd) + [
-                "remotion", "render", "BreakoutShort",
-                output_path,
-                f"--props={props_path}",
-            ]
-            subprocess.run(cmd, check=True, capture_output=True, timeout=180, cwd=engine_dir)
-        else:
-            # Docker: the video container shares /app/data via the volume.
-            # Write props + audio into the shared data dir so the container
-            # can read them, then invoke `docker compose run --rm video`.
-            data_dir = os.environ.get("DATA_DIR", "/app/data")
-            shared_render_dir = os.path.join(data_dir, "render_tmp", clip_id)
-            os.makedirs(shared_render_dir, exist_ok=True)
-
-            # Copy props and audio to the shared location
-            shared_props = os.path.join(shared_render_dir, "props.json")
-            shutil.copy2(props_path, shared_props)
-
-            # Copy audio if it exists
-            shared_audio = os.path.join(shared_render_dir, os.path.basename(audio_path))
-            shutil.copy2(audio_path, shared_audio)
-
-            # Copy demo video if recorded
-            if demo_video_rel:
-                demo_src = os.path.join(render_tmp_dir, "demo.mp4")
-                if os.path.exists(demo_src):
-                    shutil.copy2(demo_src, os.path.join(shared_render_dir, "demo.mp4"))
-
-            shared_output = os.path.join(data_dir, "videos", f"{clip_id}.mp4")
-            os.makedirs(os.path.dirname(shared_output), exist_ok=True)
-
-            # The video container's public/ is mounted to /app/data/render_tmp/{clip_id}
-            # via the shared volume, so Remotion can find the audio/props there.
-            # We pass a relative props path from the container's perspective.
-            container_props_path = f"/app/data/render_tmp/{clip_id}/props.json"
-            container_output_path = f"/app/data/videos/{clip_id}.mp4"
-
-            cmd = list(render_cmd) + [
-                "npx", "remotion", "render", "BreakoutShort",
-                container_output_path,
-                f"--props={container_props_path}",
-                "--browser-executable=/usr/bin/chromium",
-            ]
-            subprocess.run(cmd, check=True, capture_output=True, timeout=300, cwd=engine_dir)
-            output_path = shared_output
+        cmd = list(render_cmd) + [
+            "remotion", "render", "BreakoutShort", output_path,
+            f"--props={props_path}",
+        ]
+        browser = os.environ.get("REMOTION_BROWSER_EXECUTABLE")
+        if browser:
+            cmd.append(f"--browser-executable={browser}")
+        subprocess.run(cmd, check=True, capture_output=True, timeout=300, cwd=engine_dir)
         file_size = os.path.getsize(output_path)
         return {
             "success": True,
             "clip_id": clip_id,
             "video_path": output_path,
-            "voice_engine": "ElevenLabs (Charlie)" if used_elevenlabs else "System TTS",
+            "voice_engine": voice_engine,
+            "voice_id": voice_id,
+            "demo_mode": props["demoMode"],
             "has_animated_demo": True,
             "duration_sec": round(duration_sec, 2),
             "file_size_bytes": file_size

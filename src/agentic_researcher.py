@@ -71,7 +71,8 @@ def recursive_dive(topic: str) -> Dict[str, Any]:
     leads_prompt = (
         f"Research the AI topic '{topic}'. Identify:\n"
         "1. The primary technical framework or repo driving this trend.\n"
-        "2. The Munger Inversion: what are the risks, failure modes, or counter-arguments?\n"
+        "2. The Operational Reality Check: what fails first, how is failure detected, "
+        "can it recover, and what security, cost, or governance constraint blocks adoption?\n"
         "3. The Creator Opportunity: what concrete demo would prove or disprove the hype?\n"
         "Return a concise technical summary (no preamble, no markdown headings)."
     )
@@ -90,7 +91,7 @@ def recursive_dive(topic: str) -> Dict[str, Any]:
         "hook_speed (1 sentence),\n"
         "narrative_beats (array of 5 short strings),\n"
         "thumbnail_visuals (array of 3 short strings),\n"
-        "inversion (1 sentence: the critical risk).\n"
+        "operational_reality (2-4 sentences: failure boundary, detection, recovery, and adoption constraint).\n"
         "Output JSON only. No commentary, no code fences."
     )
     raw = llm_summary.query_llm(
@@ -186,7 +187,7 @@ class AgenticResearcher:
             f"**Strategic title:** {brief.get('strategic_title', '')}",
             f"**Shift:** {brief.get('shift', '')}",
             f"**Superpower:** {brief.get('superpower', '')}",
-            f"**Munger Inversion:** {brief.get('inversion', '')}",
+            f"**Operational Reality Check:** {brief.get('operational_reality') or brief.get('inversion', '')}",
             "",
             "**Hooks:**",
             f"- Contrarian: {brief.get('hook_contrarian', '')}",

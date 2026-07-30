@@ -14,6 +14,9 @@ const SettingsView = ({ tweaks, setTweak, onJump }) => {
   const [msg, setMsg] = React.useState({ text: "", ok: true });
   const [showSecret, setShowSecret] = React.useState({});
   const [identity, setIdentity] = React.useState(window.DD_DATA?.creator_identity || {});
+  const [billing, setBilling] = React.useState(null);
+  const [billingBusy, setBillingBusy] = React.useState(false);
+  const [youtubeStatus, setYoutubeStatus] = React.useState(null);
 
   const handleResetOnboarding = async () => {
     if (!confirm("Reset the creator setup? This clears the linked creator identity and restarts the onboarding wizard, but keeps your login account.")) return;
@@ -42,6 +45,8 @@ const SettingsView = ({ tweaks, setTweak, onJump }) => {
   React.useEffect(() => {
     loadSettings();
     loadProviderInfo();
+    loadBilling();
+    fetch("/api/integrations/youtube/status").then(res => res.json()).then(setYoutubeStatus).catch(() => {});
   }, []);
 
   const loadSettings = async () => {
@@ -62,6 +67,31 @@ const SettingsView = ({ tweaks, setTweak, onJump }) => {
       const res = await fetch("/api/settings/provider-info");
       if (res.ok) setProviderInfo(await res.json());
     } catch (_) {}
+  };
+
+  const loadBilling = async () => {
+    try {
+      const res = await fetch("/api/billing/status");
+      if (res.ok) setBilling(await res.json());
+    } catch (_) {}
+  };
+
+  const openBilling = async (plan) => {
+    setBillingBusy(true);
+    try {
+      const res = await fetch(plan ? "/api/billing/checkout" : "/api/billing/portal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(plan ? { plan } : {}),
+      });
+      const data = await res.json();
+      if (data.url) window.location.assign(data.url);
+      else setMsg({ text: data.error || "Billing is unavailable", ok: false });
+    } catch (e) {
+      setMsg({ text: `Billing error: ${e.message}`, ok: false });
+    } finally {
+      setBillingBusy(false);
+    }
   };
 
   const handleChange = (key, val) => {
@@ -145,6 +175,8 @@ const SettingsView = ({ tweaks, setTweak, onJump }) => {
     youtube:   { label: "YouTube Analytics", icon: "▶", color: "#FF0000", desc: "Connect your YouTube Data API v3 key to pull real view counts instead of HTML scraping. Free: 10,000 units/day." },
     image_gen: { label: "Image Generation (Flux)", icon: "🖼", color: "#8B5CF6", desc: "Connect your fal.ai key to generate real thumbnail JPEGs instead of text descriptions. ~$0.003/image via Flux Schnell." },
     llm:       { label: "LLM Provider (AI Engine)", icon: "⚡", color: "var(--signal)", desc: "Configure which AI model powers your creator agents. BYOK: OpenAI, Anthropic, NVIDIA NIM, or use free local options (Gemini CLI, Claude CLI, Ollama)." },
+    voice:     { label: "Voice Generation", icon: "VO", color: "var(--signal)", desc: "Use ElevenLabs for rotating natural narration voices. DailyDex falls back to local speech when unavailable." },
+    github:    { label: "GitHub Signals", icon: "GH", color: "var(--text-hi)", desc: "Use the GitHub API for reliable repository discovery and higher rate limits. HTML Trending remains the fallback." },
   };
 
   const LLM_PROVIDER_DOCS = {
@@ -228,6 +260,39 @@ const SettingsView = ({ tweaks, setTweak, onJump }) => {
           fontSize: 13,
         }}>
           {msg.text}
+        </div>
+      )}
+
+      {billing?.enabled && (
+        <div style={{
+          padding: "18px", borderRadius: 10, border: "1px solid rgba(240,183,47,0.28)",
+          background: "linear-gradient(135deg, rgba(240,183,47,0.08), var(--bg-1))",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap",
+        }}>
+          <div>
+            <span className="micro">Billing</span>
+            <div style={{ color: "var(--text-hi)", fontWeight: 700, fontSize: 16, marginTop: 5 }}>
+              {billing.plan ? `${billing.plan[0].toUpperCase()}${billing.plan.slice(1)} plan` : "14-day free trial"}
+            </div>
+            <div style={{ color: "var(--text-lo)", fontSize: 12, marginTop: 4 }}>
+              {billing.status === "trialing" && !billing.plan
+                ? `${billing.trial_days_left} day(s) remaining. No card required.`
+                : billing.status === "active"
+                  ? `Active${billing.cancel_at_period_end ? "; cancels at period end" : ""}`
+                  : "Subscription required to continue."}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {!billing.can_checkout ? (
+              <button className="btn primary" disabled={billingBusy} onClick={() => openBilling(null)}>Manage or change plan</button>
+            ) : (
+              <>
+                {billing.has_customer && <button className="btn ghost" disabled={billingBusy} onClick={() => openBilling(null)}>Billing history</button>}
+                <button className="btn ghost" disabled={billingBusy} onClick={() => openBilling("creator")}>Creator $12.99</button>
+                <button className="btn primary" disabled={billingBusy} onClick={() => openBilling("studio")}>Studio $33.99</button>
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -338,11 +403,14 @@ const SettingsView = ({ tweaks, setTweak, onJump }) => {
                 <div style={{ color: "var(--text-lo)", fontSize: 12, marginTop: 3, lineHeight: 1.4 }}>{gm.desc}</div>
               </div>
               {group === "youtube" && (
-                <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com"
-                   target="_blank" rel="noopener"
-                   style={{ fontSize: 11, color: "var(--signal)", textDecoration: "none", padding: "4px 8px", border: "1px solid rgba(240,183,47,0.3)", borderRadius: 4 }}>
-                  Get Key ↗
-                </a>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <span className="mono" style={{ fontSize: 10, color: youtubeStatus?.connected ? "var(--signal-up)" : "var(--text-lo)" }}>
+                    {youtubeStatus?.connected ? "CHANNEL CONNECTED" : "NOT CONNECTED"}
+                  </span>
+                  <button className="btn ghost" onClick={() => window.location.assign("/api/integrations/youtube/connect")}>
+                    {youtubeStatus?.connected ? "Reconnect" : "Connect YouTube"}
+                  </button>
+                </div>
               )}
               {group === "image_gen" && (
                 <a href="https://fal.ai" target="_blank" rel="noopener"

@@ -186,3 +186,66 @@ def test_main(mock_run, capsys):
     mock_run.side_effect = Exception("Crash")
     assert studio_job.main() == 1
     assert "FAILED" in capsys.readouterr().out
+
+
+def _rescue_publication(app_env):
+    db = app_env["module"].intel_db
+    item_id = db.save_item({
+        "title": "Test Underperforming Video Title",
+        "working_title": "Test Underperforming Video Title",
+        "url": "dailydex://rescue-test",
+        "status": "published",
+        "pipeline_type": "creator",
+        "published_url": "https://youtube.com/watch?v=1234567890a",
+    })
+    db.create_or_update_publication(item_id, "youtube", video_id="1234567890a")
+    publication = db.get_publication_for_item(item_id)
+    db.record_publication_metrics(publication["id"], {
+        "views": 300,
+        "impressions": 5000,
+        "ctr": 0.02,
+        "rescue_status": "low_ctr",
+        "source": "test",
+    })
+    return item_id
+
+
+def test_api_studio_rescue_pack(app_env, monkeypatch):
+    client = app_env["module"].app.test_client()
+    item_id = _rescue_publication(app_env)
+    monkeypatch.setattr(
+        "rescue_engine.query_llm",
+        lambda *_args, **_kwargs: '{"titles":["Title A","Title B","Title C"],"thumbnail_prompts":["Prompt A","Prompt B"]}',
+    )
+    resp = client.post("/api/studio/rescue-pack", json={"item_id": item_id})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert len(data["titles"]) == 3
+    assert len(data["thumbnail_prompts"]) == 2
+
+
+def test_api_studio_rescue_apply(app_env):
+    client = app_env["module"].app.test_client()
+    item_id = _rescue_publication(app_env)
+    resp = client.post("/api/studio/rescue-apply", json={
+        "item_id": item_id, "new_title": "Better Title", "push_to_youtube": False,
+    })
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert data["new_title"] == "Better Title"
+    assert app_env["module"].intel_db.get_saved_item(item_id)["working_title"] == "Better Title"
+    assert app_env["module"].intel_db.get_publication_for_item(item_id)["rescue_status"] == "applied"
+
+
+def test_api_studio_rescue_apply_propagates_youtube_failure(app_env, monkeypatch):
+    client = app_env["module"].app.test_client()
+    item_id = _rescue_publication(app_env)
+    monkeypatch.setattr("youtube_oauth.update_video_title", lambda **_kwargs: {"error": "forbidden"})
+    response = client.post("/api/studio/rescue-apply", json={
+        "item_id": item_id, "new_title": "Unsafe Remote Title", "push_to_youtube": True,
+    })
+    assert response.status_code == 502
+    assert response.get_json()["ok"] is False
+    assert app_env["module"].intel_db.get_saved_item(item_id)["working_title"] != "Unsafe Remote Title"

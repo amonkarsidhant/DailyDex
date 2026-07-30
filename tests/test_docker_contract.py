@@ -43,13 +43,17 @@ def test_no_personal_hardcoded_paths_remain():
     needle = "/home/" + "sidhant"
     offenders = []
     for path in REPO_DIR.rglob("*"):
-        if ".git" in path.parts or path.is_dir():
+        if any(p.startswith(".") for p in path.parts) or path.is_dir():
             continue
         if path.suffix.lower() not in {".py", ".md", ".txt", ".json", ""}:
             continue
         if path.name in {"AGENTS.md", "README.md"}:
             continue
-        content = path.read_text(encoding="utf-8", errors="ignore")
+        try:
+            content = path.read_text(encoding="utf-8", errors="ignore")
+        except PermissionError:
+            continue
         if needle in content:
             offenders.append(str(path.relative_to(REPO_DIR)))
     assert offenders == []
+

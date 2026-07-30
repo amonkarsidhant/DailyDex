@@ -32,7 +32,14 @@ auth_bp = Blueprint("auth", __name__)
 
 _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 _UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
-_PUBLIC_ENDPOINTS = {"auth.login", "auth.signup", "health"}
+_PUBLIC_ENDPOINTS = {
+    "auth.login",
+    "auth.signup",
+    "billing.webhook",
+    "health",
+    "integrations.api_youtube_callback",
+}
+_CSRF_EXEMPT_ENDPOINTS = {"billing.webhook"}
 
 
 class AuthStore:
@@ -78,7 +85,7 @@ class AuthStore:
         conn = self._connect()
         row = conn.cursor().execute(
             """
-            SELECT id, email, display_name, password_hash, is_active, session_version
+            SELECT id, email, display_name, password_hash, is_active, session_version, created_at
             FROM auth_users WHERE email = ?
             """,
             (email.strip().lower(),),
@@ -93,6 +100,7 @@ class AuthStore:
             "password_hash": row[3],
             "is_active": bool(row[4]),
             "session_version": int(row[5]),
+            "created_at": row[6],
         }
 
     def create_user(self, email: str, display_name: str, password: str) -> bool:
@@ -311,6 +319,9 @@ def signup():
 
     limiter.clear(key)
     user = config["store"].get_user(email)
+    billing = current_app.extensions.get("dailydex_billing")
+    if billing and billing.get("enabled"):
+        billing["store"].ensure_account(user)
     _start_session(user)
     return redirect("/")
 
@@ -347,6 +358,7 @@ def init_auth(app, db_path: str) -> None:
     enabled = raw_enabled == "1"
     app.config["DAILYDEX_AUTH_ENABLED"] = enabled
     if not enabled:
+        app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
         return
 
     secret_key = os.environ.get("FLASK_SECRET_KEY", "")
@@ -399,7 +411,9 @@ def init_auth(app, db_path: str) -> None:
         if request.method == "OPTIONS":
             return None
         if endpoint in _PUBLIC_ENDPOINTS:
-            if request.method in _UNSAFE_METHODS and not _valid_csrf():
+            if (request.method in _UNSAFE_METHODS
+                    and endpoint not in _CSRF_EXEMPT_ENDPOINTS
+                    and not _valid_csrf()):
                 return jsonify({"error": "csrf_failed"}), 400
             return None
 

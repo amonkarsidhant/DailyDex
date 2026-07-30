@@ -118,7 +118,6 @@ const App = () => {
   const navigate = (nextView, clusterSlug) => {
     const normalizedView = nextView === "pulse" ? "today" : nextView;
     if (clusterSlug) setSelectedClusterSlug(clusterSlug);
-    else if (normalizedView === "today") setSelectedClusterSlug(window.DD_DATA?.clusters?.[0]?.slug || null);
     React.startTransition(() => setView(normalizedView));
     setNavOpen(false);
   };
@@ -134,7 +133,6 @@ const App = () => {
     studio:   StudioView,
     benchmarks: BenchmarksView,
     profile:  ProfileView,
-    copilot:  CopilotChatView,
     settings: SettingsView,
   };
   const CurrentView = Views[view] || TodayView;
@@ -146,7 +144,7 @@ const App = () => {
   return (
     <div className={`app${railOpen ? " app--rail-open" : ""}${navOpen ? " app--nav-open" : ""}`}>
       <Nav view={view} setView={navigate} onClose={() => setNavOpen(false)}/>
-      {navOpen && <button className="nav-backdrop" aria-label="Close navigation" onClick={() => setNavOpen(false)}/>}
+      {navOpen && <button className="nav-backdrop" aria-label="Dismiss navigation overlay" onClick={() => setNavOpen(false)}/>}
       <Topbar now={now} onOpenSettings={() => navigate("settings")}
               onRefresh={onRefresh} refreshing={refreshing}
               onToggleAgents={() => setRailOpen(open => !open)} railOpen={railOpen}
@@ -160,7 +158,6 @@ const App = () => {
         </div>
       </main>
       {railOpen && <AgentRail selectedClusterSlug={selectedClusterSlug} onClose={() => setRailOpen(false)}/>}
-      <CopilotDock context={view} selectedClusterSlug={selectedClusterSlug}/>
     </div>
   );
 };

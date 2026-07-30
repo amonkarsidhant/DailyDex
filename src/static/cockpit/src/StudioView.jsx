@@ -532,7 +532,7 @@ const StudioView = ({ onJump }) => {
                 if (res.ok) await window.DDX.reload();
               } catch (e) { alert("Simulate failed: " + e.message); }
             }}>
-              ⚡ Simulate 48h
+              Sync YouTube analytics
             </button>
 
             <button className={`btn ${showSteering ? "primary" : "ghost"}`} onClick={() => setShowSteering(!showSteering)}>

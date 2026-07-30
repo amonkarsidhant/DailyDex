@@ -22,6 +22,9 @@ const { fontFamily: monoFont } = loadMonoFont("normal", { weights: ["400", "500"
 
 export type BreakoutShortProps = {
   brandLabel: string;
+  accentColor?: string;
+  ctaLabel?: string;
+  demoMode?: "source_backed" | "illustrative";
   title: string;
   demoCmd: string;
   demoLogs: string[];
@@ -57,19 +60,19 @@ const dotStyle = (color: string): React.CSSProperties => ({
   backgroundColor: color,
 });
 
-const BackgroundDrift: React.FC<{ frame: number }> = ({ frame }) => {
+const BackgroundDrift: React.FC<{ frame: number; accentColor: string }> = ({ frame, accentColor }) => {
   const nx = noise2D("bg-drift-x", frame * 0.004, 0);
   const ny = noise2D("bg-drift-y", 0, frame * 0.004);
   return (
     <AbsoluteFill
       style={{
-        background: `radial-gradient(circle at ${50 + nx * 10}% ${36 + ny * 8}%, rgba(240,183,47,0.14), rgba(9,11,14,0) 55%)`,
+        background: `radial-gradient(circle at ${50 + nx * 10}% ${36 + ny * 8}%, ${accentColor}24, rgba(9,11,14,0) 55%)`,
       }}
     />
   );
 };
 
-const IntroScene: React.FC<{ brandLabel: string; title: string }> = ({ brandLabel, title }) => {
+const IntroScene: React.FC<{ brandLabel: string; title: string; accentColor: string }> = ({ brandLabel, title, accentColor }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const pop = spring({ fps, frame, config: { damping: 14, mass: 0.6 } });
@@ -78,7 +81,7 @@ const IntroScene: React.FC<{ brandLabel: string; title: string }> = ({ brandLabe
 
   return (
     <AbsoluteFill style={{ backgroundColor: COLORS.bg, justifyContent: "center", alignItems: "center", padding: "0 70px" }}>
-      <div style={{ opacity: eyebrowOpacity, color: COLORS.amber, fontFamily: monoFont, fontSize: 30, fontWeight: 700, letterSpacing: 2, marginBottom: 24 }}>
+      <div style={{ opacity: eyebrowOpacity, color: accentColor, fontFamily: monoFont, fontSize: 30, fontWeight: 700, letterSpacing: 2, marginBottom: 24 }}>
         {brandLabel}
       </div>
       <div
@@ -90,7 +93,7 @@ const IntroScene: React.FC<{ brandLabel: string; title: string }> = ({ brandLabe
           color: COLORS.text,
           lineHeight: 1.15,
           transform: `scale(${pop}) translateX(${jitterX}px)`,
-          textShadow: "0 0 40px rgba(240,183,47,0.25)",
+          textShadow: `0 0 40px ${accentColor}40`,
         }}
       >
         {title.toUpperCase()}
@@ -108,7 +111,9 @@ const EvidenceScene: React.FC<{
   bars: number[];
   middleFrames: number;
   demoVideoSrc?: string;
-}> = ({ demoCmd, demoLogs, metricLabel, metricVal, metricUnit, bars, middleFrames, demoVideoSrc }) => {
+  demoMode?: "source_backed" | "illustrative";
+  accentColor: string;
+}> = ({ demoCmd, demoLogs, metricLabel, metricVal, metricUnit, bars, middleFrames, demoVideoSrc, demoMode, accentColor }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const progressRatio = frame / Math.max(1, middleFrames);
@@ -138,7 +143,7 @@ const EvidenceScene: React.FC<{
           <div style={dotStyle("#FFBD2E")} />
           <div style={dotStyle("#27C93F")} />
           <div style={{ marginLeft: 15, color: COLORS.dim, fontSize: 22, fontFamily: monoFont }}>
-            EMPIRICAL DEBATE PROOF • LIVE
+            {demoMode === "source_backed" ? "SOURCE-BACKED EVIDENCE" : "ILLUSTRATIVE • OBSERVED SIGNALS ONLY"}
           </div>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "flex-end", gap: 3, height: 26 }}>
             {bars.map((b, i) => (
@@ -193,18 +198,18 @@ const EvidenceScene: React.FC<{
         <div style={{ color: COLORS.label, fontSize: 30, fontWeight: 700, fontFamily: displayFont, textTransform: "uppercase" }}>
           {metricLabel}
         </div>
-        <div style={{ color: COLORS.amber, fontSize: 70, fontWeight: 900, fontFamily: displayFont, marginTop: 20 }}>
+        <div style={{ color: accentColor, fontSize: 70, fontWeight: 900, fontFamily: displayFont, marginTop: 20 }}>
           {`${currentVal.toFixed(1)} ${metricUnit}`}
         </div>
         <div style={{ marginTop: 45, height: 38, borderRadius: 19, backgroundColor: "#1E293B", overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${barFillPct}%`, borderRadius: 19, backgroundColor: COLORS.amber }} />
+          <div style={{ height: "100%", width: `${barFillPct}%`, borderRadius: 19, backgroundColor: accentColor }} />
         </div>
       </div>
     </AbsoluteFill>
   );
 };
 
-const OutroScene: React.FC<{ words: string[] }> = ({ words }) => {
+const OutroScene: React.FC<{ words: string[]; accentColor: string; ctaLabel: string }> = ({ words, accentColor, ctaLabel }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const pop = spring({ fps, frame, config: { damping: 12 } });
@@ -229,7 +234,7 @@ const OutroScene: React.FC<{ words: string[] }> = ({ words }) => {
       <div
         style={{
           marginTop: 40,
-          color: COLORS.amber,
+          color: accentColor,
           fontFamily: monoFont,
           fontSize: 28,
           fontWeight: 700,
@@ -237,7 +242,7 @@ const OutroScene: React.FC<{ words: string[] }> = ({ words }) => {
           opacity: ctaOpacity,
         }}
       >
-        MORE BREAKOUT REPORTS DAILY →
+        {ctaLabel}
       </div>
     </AbsoluteFill>
   );
@@ -246,6 +251,9 @@ const OutroScene: React.FC<{ words: string[] }> = ({ words }) => {
 export const BreakoutShort: React.FC<BreakoutShortProps> = (props) => {
   const {
     brandLabel,
+    accentColor = COLORS.amber,
+    ctaLabel = "FOLLOW FOR MORE AI REPORTS",
+    demoMode = "illustrative",
     title,
     demoCmd,
     demoLogs,
@@ -294,11 +302,11 @@ export const BreakoutShort: React.FC<BreakoutShortProps> = (props) => {
       {voiceSrc ? <Audio src={staticFile(voiceSrc)} /> : null}
       {bgMusicSrc ? <Audio src={staticFile(bgMusicSrc)} volume={0.18} loop /> : null}
 
-      <BackgroundDrift frame={frame} />
+      <BackgroundDrift frame={frame} accentColor={accentColor} />
 
       <TransitionSeries>
         <TransitionSeries.Sequence durationInFrames={introFrames}>
-          <IntroScene brandLabel={brandLabel} title={title} />
+          <IntroScene brandLabel={brandLabel} title={title} accentColor={accentColor} />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition
           presentation={slide({ direction: "from-bottom" })}
@@ -314,6 +322,8 @@ export const BreakoutShort: React.FC<BreakoutShortProps> = (props) => {
             bars={bars}
             middleFrames={middleFrames}
             demoVideoSrc={demoVideoSrc}
+            demoMode={demoMode}
+            accentColor={accentColor}
           />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition
@@ -321,12 +331,12 @@ export const BreakoutShort: React.FC<BreakoutShortProps> = (props) => {
           timing={linearTiming({ durationInFrames: transitionFrames })}
         />
         <TransitionSeries.Sequence durationInFrames={outroFrames}>
-          <OutroScene words={words} />
+          <OutroScene words={words} accentColor={accentColor} ctaLabel={ctaLabel} />
         </TransitionSeries.Sequence>
       </TransitionSeries>
 
       {/* Persistent top progress bar -- survives scene transitions */}
-      <div style={{ position: "absolute", top: 0, left: 0, height: 8, width: `${topBarPct}%`, backgroundColor: COLORS.amber }} />
+      <div style={{ position: "absolute", top: 0, left: 0, height: 8, width: `${topBarPct}%`, backgroundColor: accentColor }} />
 
       {/* Persistent kinetic subtitles -- survives scene transitions, hidden during the intro hero beat */}
       <div
@@ -353,7 +363,7 @@ export const BreakoutShort: React.FC<BreakoutShortProps> = (props) => {
             <span
               key={absIdx}
               style={{
-                color: isActive ? COLORS.amber : COLORS.text,
+                color: isActive ? accentColor : COLORS.text,
                 display: "inline-block",
                 transform: isActive ? `scale(${0.7 + wordPop * 0.3})` : "scale(1)",
               }}

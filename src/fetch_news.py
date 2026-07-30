@@ -3,8 +3,10 @@
 
 import json
 import os
+import re
 import sys
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
@@ -121,7 +123,9 @@ def get_youtube_feeds():
     channel_error = None
     ydl_opts = {"quiet": True, "no_warnings": True, "extract_flat": True, "js_runtime": "node"}
     for ch in channels:
-        name, url = ch.get("name", ""), ch.get("url", "")
+        name = ch.get("name", "")
+        channel_id = str(ch.get("channel_id") or "").strip()
+        url = f"https://www.youtube.com/channel/{channel_id}/videos" if channel_id else ch.get("url", "")
         if not url:
             continue
         try:
@@ -143,11 +147,87 @@ def get_youtube_feeds():
     if channels and not results and channel_error is not None:
         raise RuntimeError(f"YouTube fetch failed: {channel_error}")
     return results
-def get_github_trending():
+def _github_token():
+    try:
+        import settings_manager
+        return settings_manager.get("github_token")
+    except Exception:
+        return os.environ.get("GITHUB_TOKEN", "")
+
+
+def _normalize_github_repo(title, url, description="", stars=0, language="",
+                           source="GitHub Trending"):
+    return {
+        "source": source,
+        "title": str(title or "").strip(),
+        "url": str(url or ""),
+        "description": str(description or ""),
+        "stars": str(stars or 0).replace(",", "").strip(),
+        "language": str(language or ""),
+    }
+
+
+def _github_request(url, **kwargs):
+    import requests
+
+    retryable = {429, 500, 502, 503, 504}
+    last_error = None
+    for attempt in range(3):
+        try:
+            response = requests.get(url, **kwargs)
+            if response.status_code in retryable and attempt < 2:
+                time.sleep(0.5 * (2 ** attempt))
+                continue
+            response.raise_for_status()
+            return response
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            last_error = exc
+            if attempt == 2:
+                raise
+            time.sleep(0.5 * (2 ** attempt))
+    if last_error:
+        raise last_error
+    raise RuntimeError("GitHub request failed")
+
+
+def _get_github_trending_api(config):
+    github = config.get("github", {})
+    limit = min(100, max(1, int(github.get("limit", 15))))
+    cutoff = (datetime.now() - timedelta(days=max(1, int(github.get("lookback_days", 7))))).date().isoformat()
+    headers = {
+        "User-Agent": "DailyDex/1.0 (creator signal fetcher)",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    token = _github_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    response = _github_request(
+        github.get("api_url", "https://api.github.com/search/repositories"),
+        headers=headers,
+        params={
+            "q": f"created:>={cutoff}", "sort": "stars", "order": "desc",
+            "per_page": limit,
+        },
+        timeout=15,
+    )
+    items = response.json().get("items", [])
+    if not isinstance(items, list) or not items:
+        raise RuntimeError("GitHub API returned no repositories")
+    return [
+        _normalize_github_repo(
+            repo.get("full_name"), repo.get("html_url"), repo.get("description"),
+            repo.get("stargazers_count", 0), repo.get("language"),
+            source="GitHub Emerging (API)",
+        )
+        for repo in items[:limit]
+    ]
+
+
+def _get_github_trending_html(config):
     import requests
     from bs4 import BeautifulSoup
 
-    config = load_config()
     url = config.get("github", {}).get(
         "url", "https://github.com/trending?since=weekly"
     )
@@ -164,27 +244,55 @@ def get_github_trending():
         title_elem = article.select_one("h2 a.Link")
         if title_elem:
             href = title_elem.get("href", "")
-            repos.append(
-                {
-                    "source": "GitHub Trending",
-                    "title": href.lstrip("/")
-                    if href
-                    else title_elem.get_text(strip=True),
-                    "url": "https://github.com" + href,
-                    "description": article.select_one("p").text.strip()
-                    if article.select_one("p")
-                    else "",
-                    "stars": article.select_one("a.Link--muted")
-                    .text.strip()
-                    .split()[0]
-                    if article.select_one("a.Link--muted")
-                    else "0",
-                    "language": article.select_one("span[itemprop]").text.strip()
-                    if article.select_one("span[itemprop]")
-                    else "",
-                }
-            )
+            repos.append(_normalize_github_repo(
+                href.lstrip("/") if href else title_elem.get_text(strip=True),
+                "https://github.com" + href,
+                article.select_one("p").text.strip() if article.select_one("p") else "",
+                article.select_one("a.Link--muted").text.strip().split()[0]
+                if article.select_one("a.Link--muted") else "0",
+                article.select_one("span[itemprop]").text.strip()
+                if article.select_one("span[itemprop]") else "",
+            ))
     return repos
+
+
+def get_github_trending():
+    config = load_config()
+    api_items = []
+    html_items = []
+    api_error = None
+    html_error = None
+    try:
+        api_items = _get_github_trending_api(config)
+    except Exception as exc:
+        api_error = exc
+        print(f"  GitHub API discovery failed: {exc}")
+    try:
+        html_items = _get_github_trending_html(config)
+    except Exception as exc:
+        html_error = exc
+        print(f"  GitHub Trending scraper failed: {exc}")
+    if not api_items and not html_items:
+        raise RuntimeError(f"GitHub API and Trending failed: {api_error}; {html_error}")
+
+    limit = max(1, int(config.get("github", {}).get("limit", 15)))
+    merged = []
+    seen = set()
+    api_slots = max(1, limit // 3) if api_items and limit > 1 else 0
+    html_slots = limit - api_slots
+    ordered = (
+        html_items[:html_slots] + api_items[:api_slots]
+        + html_items[html_slots:] + api_items[api_slots:]
+    )
+    # Reserve space for API discoveries without displacing actual Trending.
+    for item in ordered:
+        identity = (item.get("url") or item.get("title") or "").lower()
+        if identity and identity not in seen:
+            seen.add(identity)
+            merged.append(item)
+        if len(merged) >= limit:
+            break
+    return merged
 
 
 def get_huggingface():
@@ -381,6 +489,7 @@ def get_reddit():
 
     results = []
     headers = {"User-Agent": "DailyDex/1.0 (signal fetcher)"}
+    json_error = None
 
     for sub in subreddits:
         try:
@@ -405,8 +514,37 @@ def get_reddit():
                     "published": datetime.fromtimestamp(p.get("created_utc", 0)).isoformat(),
                     "type": "social",
                 })
-        except Exception as e:
-            print(f"  Reddit r/{sub}: {e}")
+        except Exception as exc:
+            json_error = exc
+            break
+
+    if not results and subreddits and json_error is not None:
+        try:
+            import feedparser
+
+            joined = "+".join(subreddits)
+            rss_url = f"https://www.reddit.com/r/{joined}/top/.rss?t=day"
+            rss = requests.get(rss_url, headers=headers, timeout=10)
+            rss.raise_for_status()
+            feed = feedparser.parse(rss.content)
+            for entry in feed.entries[:limit_per_sub * len(subreddits)]:
+                title = str(entry.get("title") or "")
+                if not any(kw in title.lower() for kw in keywords):
+                    continue
+                link = str(entry.get("link") or "")
+                match = re.search(r"/r/([^/]+)/", link, flags=re.I)
+                source_sub = match.group(1) if match else "combined"
+                results.append({
+                    "source": f"Reddit r/{source_sub}",
+                    "title": title,
+                    "url": link,
+                    "score": 0,
+                    "comments": 0,
+                    "published": str(entry.get("published") or entry.get("updated") or ""),
+                    "type": "social",
+                })
+        except Exception as rss_error:
+            print(f"  Reddit: JSON failed ({json_error}); RSS failed ({rss_error})")
 
     results.sort(key=lambda x: x.get("score", 0), reverse=True)
     return results

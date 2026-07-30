@@ -6,6 +6,13 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["src/dashboard_new.py"],
       "port": 8888
+    },
+    {
+      "name": "video-engine",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "video-engine",
+      "port": 3000
     }
   ]
 }

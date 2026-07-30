@@ -294,6 +294,8 @@ def _seed_publication(db, title, views):
         "signal_score": 80,
     })
     db.create_or_update_publication(item_id, "youtube", views=views)
+    publication = db.get_publication_for_item(item_id)
+    db.record_publication_metrics(publication["id"], {"views": views, "source": "test"})
     return item_id
 
 
