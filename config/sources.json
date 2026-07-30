@@ -1,8 +1,19 @@
 {
   "github": {
     "trending_url": "https://github.com/trending?since=weekly",
-    "categories": ["", "machine-learning", "artificial-intelligence", "python"],
-    "languages": ["Python", "JavaScript", "TypeScript", "Rust", "Go"]
+    "categories": [
+      "",
+      "machine-learning",
+      "artificial-intelligence",
+      "python"
+    ],
+    "languages": [
+      "Python",
+      "JavaScript",
+      "TypeScript",
+      "Rust",
+      "Go"
+    ]
   },
   "huggingface": {
     "base_url": "https://huggingface.co/api/models",
@@ -11,31 +22,182 @@
   },
   "youtube": {
     "channels": [
-      {"name": "Matt Wolfe", "url": "https://www.youtube.com/@mreflow/videos"},
-      {"name": "Two Minute Papers", "url": "https://www.youtube.com/@TwoMinutePapers/videos"},
-      {"name": "Tina Huang", "url": "https://www.youtube.com/@TinaHuang1/videos"},
-      {"name": "Matthew Berman", "url": "https://www.youtube.com/@matthewberman/videos"},
-      {"name": "Anthropic", "url": "https://www.youtube.com/@AnthropicAI/videos"},
-      {"name": "OpenAI", "url": "https://www.youtube.com/@OpenAI/videos"},
-      {"name": "DeepLearningAI", "url": "https://www.youtube.com/@DeepLearningAI/videos"},
-      {"name": "AI Explained", "url": "https://www.youtube.com/@AIExplained/videos"}
+      {
+        "name": "Matt Wolfe",
+        "url": "https://www.youtube.com/@mreflow/videos",
+        "channel_id": "UChpleBmo18P08aKCIgti38g"
+      },
+      {
+        "name": "Two Minute Papers",
+        "url": "https://www.youtube.com/@TwoMinutePapers/videos",
+        "channel_id": "UCbfYPyITQ-7l4upoX8nvctg"
+      },
+      {
+        "name": "Tina Huang",
+        "url": "https://www.youtube.com/@TinaHuang1/videos",
+        "channel_id": "UC2UXDak6o7rBm23k3Vv5dww"
+      },
+      {
+        "name": "Matthew Berman",
+        "url": "https://www.youtube.com/@matthewberman/videos",
+        "channel_id": "UCzi5kcwU8aT4aLR7LcYhfWQ"
+      },
+      {
+        "name": "Anthropic",
+        "url": "https://www.youtube.com/@anthropic-ai/videos",
+        "channel_id": "UCrDwWp7EBBv4NwvScIpBDOA"
+      },
+      {
+        "name": "OpenAI",
+        "url": "https://www.youtube.com/@OpenAI/videos",
+        "channel_id": "UCXZCJLdBC09xxGZ6gcdrc6A"
+      },
+      {
+        "name": "DeepLearningAI",
+        "url": "https://www.youtube.com/@DeepLearningAI/videos",
+        "channel_id": "UCcIXc5mJsHVYTZR1maL5l9w"
+      },
+      {
+        "name": "AI Explained",
+        "url": "https://www.youtube.com/@AIExplained/videos",
+        "channel_id": "UCNJ1Ymd5yFuUPtn21xtRbbw"
+      },
+      {
+        "name": "Andrej Karpathy",
+        "url": "https://www.youtube.com/@AndrejKarpathy/videos",
+        "channel_id": "UCYO_jab_esuFRV4b17AJtAw"
+      },
+      {
+        "name": "Yannic Kilcher",
+        "url": "https://www.youtube.com/@YannicKilcher/videos",
+        "channel_id": "UCHmD-oSpV0sNfAUnpYpj8KA"
+      },
+      {
+        "name": "Sam Witteveen",
+        "url": "https://www.youtube.com/@samwitteveenai/videos",
+        "channel_id": "UC55ODQSvARtgSyc8ThfiepQ"
+      },
+      {
+        "name": "David Shapiro",
+        "url": "https://www.youtube.com/@DaveShap/videos",
+        "channel_id": "UCvKRFNawVcuz4b9ihUTApCg"
+      },
+      {
+        "name": "Prompt Engineering",
+        "url": "https://www.youtube.com/@engineerprompt/videos",
+        "channel_id": "UCDq7SjbgRKty5TgGafW8Clg"
+      },
+      {
+        "name": "1littlecoder",
+        "url": "https://www.youtube.com/@1littlecoder/videos",
+        "channel_id": "UCpV_X0VrL8-jg3t6wYGS-1g"
+      }
     ]
   },
   "blogs": {
     "rss_feeds": [
-      {"name": "OpenAI", "url": "https://openai.com/blog/rss.xml"},
-      {"name": "Google AI", "url": "https://blog.google/technology/ai/rss/"},
-        {"name": "TechCrunch", "url": "https://techcrunch.com/category/artificial-intelligence/feed/"},
-        {"name": "The Verge", "url": "https://www.theverge.com/rss/ai/index.xml"},
-        {"name": "MIT Tech Review", "url": "https://www.technologyreview.com/feed/"},
-        {"name": "HuggingFace", "url": "https://huggingface.co/blog/rss.xml"},
-        {"name": "NVIDIA Dev", "url": "https://developer.nvidia.com/blog/feed/"},
-        {"name": "AWS Machine Learning Blog", "url": "https://aws.amazon.com/blogs/machine-learning/feed/"},
-        {"name": "Microsoft Research AI", "url": "https://www.microsoft.com/en-us/research/blog/category/artificial-intelligence/feed/"},
-        {"name": "MarkTechPost", "url": "https://www.marktechpost.com/feed/"},
-        {"name": "Berkeley BAIR", "url": "https://bair.berkeley.edu/blog/feed.xml"}
-      ]
-    },
+      {
+        "name": "OpenAI",
+        "url": "https://openai.com/news/rss.xml"
+      },
+      {
+        "name": "Google AI",
+        "url": "https://blog.google/technology/ai/rss/"
+      },
+      {
+        "name": "TechCrunch AI",
+        "url": "https://techcrunch.com/category/artificial-intelligence/feed/"
+      },
+      {
+        "name": "The Verge AI",
+        "url": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"
+      },
+      {
+        "name": "MIT Tech Review",
+        "url": "https://www.technologyreview.com/feed/"
+      },
+      {
+        "name": "HuggingFace",
+        "url": "https://huggingface.co/blog/feed.xml"
+      },
+      {
+        "name": "NVIDIA Dev Blog",
+        "url": "https://developer.nvidia.com/blog/feed"
+      },
+      {
+        "name": "AWS Machine Learning Blog",
+        "url": "https://aws.amazon.com/blogs/machine-learning/feed/"
+      },
+      {
+        "name": "Microsoft Research AI",
+        "url": "https://www.microsoft.com/en-us/research/blog/category/artificial-intelligence/feed/"
+      },
+      {
+        "name": "MarkTechPost",
+        "url": "https://www.marktechpost.com/feed/"
+      },
+      {
+        "name": "Berkeley BAIR",
+        "url": "https://bair.berkeley.edu/blog/feed.xml"
+      },
+      {
+        "name": "Simon Willison",
+        "url": "https://simonwillison.net/atom/everything/"
+      },
+      {
+        "name": "Weights & Biases",
+        "url": "https://wandb.ai/fully-connected/feed.xml"
+      },
+      {
+        "name": "Latent Space",
+        "url": "https://www.latent.space/feed"
+      },
+      {
+        "name": "VentureBeat AI",
+        "url": "https://venturebeat.com/category/ai/feed/"
+      },
+      {
+        "name": "Ahead of AI",
+        "url": "https://magazine.sebastianraschka.com/feed"
+      },
+      {
+        "name": "Last Week in AI",
+        "url": "https://lastweekin.ai/feed"
+      },
+      {
+        "name": "Interconnects (Nathan Lambert)",
+        "url": "https://www.interconnects.ai/feed"
+      },
+      {
+        "name": "Towards Data Science",
+        "url": "https://towardsdatascience.com/feed"
+      },
+      {
+        "name": "Lil'Log (Lilian Weng)",
+        "url": "https://lilianweng.github.io/index.xml"
+      },
+      {
+        "name": "Google DeepMind",
+        "url": "https://deepmind.google/blog/rss.xml"
+      },
+      {
+        "name": "Qwen Blog",
+        "url": "https://qwenlm.github.io/blog/index.xml"
+      },
+      {
+        "name": "GitHub Blog AI",
+        "url": "https://github.blog/ai-and-ml/feed/"
+      },
+      {
+        "name": "AINews (smol.ai)",
+        "url": "https://news.smol.ai/rss.xml"
+      },
+      {
+        "name": "Lobsters AI",
+        "url": "https://lobste.rs/t/ai.rss"
+      }
+    ]
+  },
   "arxiv": {
     "categories": [
       "cs.AI",
@@ -47,8 +209,14 @@
   },
   "models": {
     "sources": [
-      {"name": "HuggingFace", "url": "https://huggingface.co/models"},
-      {"name": "Ollama", "url": "https://ollama.com/library"}
+      {
+        "name": "HuggingFace",
+        "url": "https://huggingface.co/models"
+      },
+      {
+        "name": "Ollama",
+        "url": "https://ollama.com/library"
+      }
     ],
     "filters": {
       "local_only": false,
@@ -58,5 +226,28 @@
       "agent_ready": true,
       "open_weight": true
     }
+  },
+  "reddit": {
+    "subreddits": [
+      "LocalLLaMA",
+      "MachineLearning",
+      "artificial",
+      "selfhosted",
+      "ChatGPTCoding"
+    ],
+    "limit_per_subreddit": 5
+  },
+  "signals": {
+    "hn_queries": [
+      "AI agent",
+      "local LLM",
+      "coding assistant"
+    ],
+    "hn_min_points": 50,
+    "subreddits": [
+      "LocalLLaMA",
+      "MachineLearning",
+      "ChatGPTCoding"
+    ]
   }
 }

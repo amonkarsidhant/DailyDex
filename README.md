@@ -181,7 +181,7 @@ source .venv/bin/activate
 pytest
 ```
 
-Current: **59 passed**, 29 skipped across 15 test files covering routes, analytics sync, command validation, deployment modes, enrichment pipeline, and Docker contracts.
+Current: **235 passed**, 35 skipped across 36 test files covering routes, auth, billing, the news factory and its guardrails, evidence-fetch security, the compile engine, analytics sync, command validation, deployment modes, enrichment pipeline, and Docker contracts.
 
 ---
 

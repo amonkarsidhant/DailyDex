@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 *.log
+.coverage
+.coverage.*
 
 # ─── Data files (runtime, never commit) ─────────
 *.db
@@ -15,7 +17,7 @@ data/*.json
 data/*.db
 data/cache/*.json
 data/digests/*.md
-data/research_packs/*.md
+data/research_packs/
 data.json
 data_scored.json
 
@@ -58,8 +60,12 @@ node_modules/
 
 # ─── Video build outputs ────────────────────────
 video-engine/*.mp4
-src/data/videos/*.mp4
+video-engine/public/render_jobs/
+src/data/videos/
 src/test.mp4
+
+# ─── Frontend build output (Vite) ───────────────
+frontend/dist/
 
 # ─── Root content scripts (belong in scratch/) ──
 /blog-*.md
