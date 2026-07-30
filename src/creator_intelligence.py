@@ -158,6 +158,7 @@ def build_topic_clusters(scored_data: Dict, intel_db=None) -> List[Dict]:
                 cluster["related_items"].append({
                     "title": item.get("title", ""),
                     "url": item.get("url", ""),
+                    "description": item.get("description") or item.get("abstract") or "",
                     "source_type": source_type,
                     "source_label": SOURCE_LABELS.get(source_type, source_type.title()),
                     "signal_score": item.get("signal_score", 0),
@@ -200,8 +201,9 @@ def build_topic_clusters(scored_data: Dict, intel_db=None) -> List[Dict]:
             "average_signal_score": avg_signal,
             "creator_score": avg_creator,
             "affinity_bonus": affinity_bonus,
-            "why_this_is_a_story": f"{topic} is showing up across {source_count} source families, which usually means audience curiosity is already forming.",
-            "recommended_angle": "Show what changed, who it matters for, and the fastest concrete demo." if cluster["demoable"] else "Explain the shift, show supporting evidence, and call out what is still uncertain.",
+            # Editorial reasoning is compiled live after creator selection.
+            "why_this_is_a_story": "",
+            "recommended_angle": "",
             "best_content_format": best_format,
             "has_demoable_item": cluster["demoable"],
             "momentum_24h_pct": _momentum_pct(history),
@@ -570,7 +572,10 @@ def build_topic_performance(intel_db, min_views: int = 10) -> Dict[str, float]:
     except Exception:
         return {}
 
-    view_rows = [p for p in pubs if (p.get("views") or 0) >= min_views and p.get("title")]
+    view_rows = [
+        p for p in pubs
+        if p.get("sync_source") and (p.get("views") or 0) >= min_views and p.get("title")
+    ]
     if len(view_rows) < 2:
         return {}
 

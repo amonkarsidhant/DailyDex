@@ -1,5 +1,5 @@
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 def test_saved_routes_and_lifecycle(client, app_env):
@@ -226,7 +226,7 @@ def test_editorial_and_publishing_routes(client, app_env, monkeypatch):
     })
     assert publish_resp.status_code == 200
     assert publish_resp.get_json()["ok"] is True
-    assert publish_resp.get_json()["status"] == "publishing"
+    assert publish_resp.get_json()["status"] == "ready_to_publish"
 
     # 5. Simulate analytics
     # First, let's manually upsert a 'live' publication in the db to make sure simulate updates it
@@ -239,6 +239,16 @@ def test_editorial_and_publishing_routes(client, app_env, monkeypatch):
         engagement_rate=0.05,
         status="live"
     )
+    monkeypatch.setattr("analytics_sync.sync_publication_metrics", lambda pub: {
+        "video_id": "1234567890a",
+        "views": 250,
+        "impressions": pub["impressions"],
+        "ctr": pub["ctr"],
+        "engagement_rate": 0.05,
+        "status": "live",
+        "source": "test",
+        "synced_at": datetime.now().isoformat(),
+    })
 
     simulate_resp = client.post("/api/analytics/simulate")
     assert simulate_resp.status_code == 200
@@ -304,6 +314,7 @@ def test_analytics_sync_route(client, app_env, monkeypatch):
             
     dummy_html = '<html><head><meta itemprop="interactionCount" content="98765"></head></html>'
     monkeypatch.setattr("urllib.request.urlopen", lambda req, timeout=None: MockResponse(dummy_html))
+    monkeypatch.setattr("youtube_oauth.get_video_analytics", lambda *_args, **_kwargs: {"error": "not connected"})
     
     # Save item with published_url
     item_id = module.intel_db.save_item({
@@ -312,7 +323,7 @@ def test_analytics_sync_route(client, app_env, monkeypatch):
         "source": "GitHub Trending",
         "source_type": "github",
         "status": "recording",
-        "published_url": "https://www.youtube.com/watch?v=realvideo",
+        "published_url": "https://www.youtube.com/watch?v=1234567890a",
     })
     
     # Create live publication row
@@ -336,8 +347,44 @@ def test_analytics_sync_route(client, app_env, monkeypatch):
     sync_pub = next((p for p in pubs if p["item_id"] == item_id and p["platform"] == "youtube"), None)
     assert sync_pub is not None
     assert sync_pub["views"] == 98765
-    assert sync_pub["impressions"] == 98765 * 12
-    assert sync_pub["status"] == "completed"
+    assert sync_pub["impressions"] == 100
+    assert sync_pub["status"] == "live"
+    assert len(module.intel_db.get_publication_samples(sync_pub["id"])) == 1
+
+
+def test_observed_ctr_drives_cockpit_rescue_status(client, app_env):
+    module = app_env["module"]
+    item_id = module.intel_db.save_item({
+        "title": "Observed low CTR video",
+        "url": "dailydex://observed-low-ctr",
+        "pipeline_type": "creator",
+        "status": "published",
+        "published_url": "https://youtube.com/watch?v=1234567890a",
+    })
+    module.intel_db.create_or_update_publication(
+        item_id, "youtube", status="live", video_id="1234567890a",
+    )
+    import db_compat as sqlite3
+    conn = sqlite3.connect(module.intel_db.db_path)
+    conn.cursor().execute(
+        "UPDATE publication_analytics SET published_at = ? WHERE item_id = ?",
+        ((datetime.now() - timedelta(hours=72)).isoformat(), item_id),
+    )
+    conn.commit()
+    conn.close()
+
+    response = client.post("/api/analytics/observations", json={
+        "item_id": item_id,
+        "views": 500,
+        "impressions": 5000,
+        "ctr": 0.02,
+    })
+    assert response.status_code == 200
+    assert response.get_json()["assessment"]["status"] == "low_ctr"
+    published = module.build_cockpit_data()["pipeline"]["published"]
+    row = next(item for item in published if item["id"] == str(item_id))
+    assert row["rescue_status"] == "low_ctr"
+    assert row["ctr"] == 0.02
 
 
 def test_onboarding_flow(client, app_env, monkeypatch, tmp_path):
@@ -401,6 +448,39 @@ def test_onboarding_flow(client, app_env, monkeypatch, tmp_path):
     with open(mock_profile_path, "r", encoding="utf-8") as f:
         prof_data_reset = json.load(f)
     assert "creator_identity" not in prof_data_reset
+
+
+def test_profile_update_validates_and_writes_atomically(client, app_env, monkeypatch, tmp_path):
+    import json
+    import llm_summary
+
+    profile_path = tmp_path / "creator_profile.json"
+    original = {"channel_name": "Original"}
+    profile_path.write_text(json.dumps(original), encoding="utf-8")
+    monkeypatch.setattr(llm_summary, "CREATOR_PROFILE_PATH", str(profile_path))
+
+    invalid = client.post("/api/profile", json={"channel_name": "Incomplete"})
+    assert invalid.status_code == 400
+    assert "niche" in invalid.get_json()["error"]
+    assert json.loads(profile_path.read_text(encoding="utf-8")) == original
+
+    valid = {
+        "channel_name": "Sidhant Amonkar",
+        "niche": "Practical AI systems",
+        "audience": "Builders",
+        "tone": "Evidence-led",
+        "perspective": "Separate facts from judgment",
+        "preferred_words": ["test"],
+        "banned_phrases": ["game changer"],
+        "signature_angles": ["What can we verify?"],
+        "format_rules": {"hook_max_chars": 140},
+        "schedule": {"publish_days": ["Sat"]},
+        "copilot": {"provider": "nvidia", "compile_model": "meta/llama-3.3-70b-instruct"},
+    }
+    response = client.post("/api/profile", json=valid)
+    assert response.status_code == 200
+    assert json.loads(profile_path.read_text(encoding="utf-8")) == valid
+    assert not list(tmp_path.glob(".creator-profile-*.json"))
 
 
 def test_advanced_creator_integrations(client, app_env, monkeypatch):
@@ -499,15 +579,21 @@ def test_advanced_creator_integrations(client, app_env, monkeypatch):
     assert sim_resp.status_code == 200
     assert sim_resp.get_json()["ok"] is True
 
-    # Verify metrics went up in A/B test row
+    # Analytics sync no longer fabricates A/B performance.
     active_resp_after = client.get(f"/api/integrations/ab-test/active?item_id={item_id}")
     assert active_resp_after.status_code == 200
     active_test_after = active_resp_after.get_json()["test"]
-    assert active_test_after["variant_a_views"] > 0
-    assert active_test_after["variant_b_views"] > 0
+    assert active_test_after["variant_a_views"] == 0
+    assert active_test_after["variant_b_views"] == 0
 
 
-def test_codebase_graph_routes(client, app_env):
+def test_codebase_graph_routes(client, app_env, monkeypatch, tmp_path):
+    mock_dist = tmp_path / "ua_dist"
+    mock_dist.mkdir(parents=True, exist_ok=True)
+    (mock_dist / "index.html").write_text("<!doctype html><html><body>Code Graph</body></html>", encoding="utf-8")
+    import routes.code_graph as cg
+    monkeypatch.setattr(cg, "UA_DASHBOARD_DIST", str(mock_dist))
+
     # 1. Accessing without token redirects to tokenized URL
     graph_resp = client.get("/code-graph")
     assert graph_resp.status_code == 302
@@ -544,6 +630,3 @@ def test_codebase_graph_routes(client, app_env):
     # 7. Path traversal prevention check
     bad_path_resp = client.get("/file-content.json?token=daily-dex-code-graph&path=../../etc/passwd")
     assert bad_path_resp.status_code == 403
-
-
-

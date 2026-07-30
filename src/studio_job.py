@@ -88,7 +88,7 @@ def _deepen(research: str, topic: str) -> str:
                 f"### Strategic Title: {brief.get('strategic_title', '')}",
                 f"**Fundamentally why it matters:** {brief.get('shift', '')}",
                 f"**Unique superpower:** {brief.get('superpower', '')}",
-                f"**Munger Inversion (Critical Risk):** {brief.get('inversion', '')}",
+                f"**Operational Reality Check:** {brief.get('operational_reality') or brief.get('inversion', '')}",
                 "",
                 "**Potential Hooks:**",
                 f"- Contrarian perspective: {brief.get('hook_contrarian', '')}",

@@ -49,8 +49,8 @@ def test_creator_brief_opportunities_and_clusters_are_built(creator_app_env):
     cluster = context["creator_clusters"][0]
     assert cluster["source_count"] >= 2
     assert cluster["related_items"]
-    assert cluster["why_this_is_a_story"]
-    assert cluster["recommended_angle"]
+    assert cluster["why_this_is_a_story"] == ""
+    assert cluster["recommended_angle"] == ""
     assert cluster["best_content_format"]
 
 

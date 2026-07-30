@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
+import threading
 import re
 import urllib.error
 import urllib.parse
@@ -37,6 +39,7 @@ from typing import Any, Dict, Optional
 _DEFAULT_SETTINGS_DIR = Path.home() / ".dailydex"
 SETTINGS_DIR = Path(os.environ.get("DAILYDEX_SETTINGS_DIR", str(_DEFAULT_SETTINGS_DIR)))
 SETTINGS_FILE = SETTINGS_DIR / "settings.json"
+_SETTINGS_LOCK = threading.RLock()
 
 # ── Key schema ────────────────────────────────────────────────────────────────
 
@@ -49,6 +52,45 @@ SCHEMA: Dict[str, Dict[str, Any]] = {
         "help": "Get it from console.cloud.google.com → APIs & Services → YouTube Data API v3 → Credentials",
         "placeholder": "AIza...",
     },
+    "google_client_id": {
+        "label": "Google OAuth Client ID",
+        "group": "youtube",
+        "secret": False,
+        "help": "OAuth web client ID used to connect the creator's YouTube channel.",
+        "placeholder": "000000000000-….apps.googleusercontent.com",
+    },
+    "google_client_secret": {
+        "label": "Google OAuth Client Secret",
+        "group": "youtube",
+        "secret": True,
+        "help": "OAuth web client secret. Prefer the GOOGLE_CLIENT_SECRET environment variable in production.",
+        "placeholder": "GOCSPX-...",
+    },
+    "google_access_token": {
+        "label": "Google OAuth Access Token",
+        "group": "youtube",
+        "secret": True,
+        "internal": True,
+    },
+    "google_refresh_token": {
+        "label": "Google OAuth Refresh Token",
+        "group": "youtube",
+        "secret": True,
+        "internal": True,
+    },
+    "google_token_expiry": {
+        "label": "Google OAuth Token Expiry",
+        "group": "youtube",
+        "secret": True,
+        "internal": True,
+    },
+    "rescue_ctr_sensitivity": {
+        "label": "Rescue CTR Sensitivity",
+        "group": "youtube",
+        "secret": False,
+        "help": "Percentage below the rolling channel median that triggers a rescue after 48 hours.",
+        "placeholder": "-25",
+    },
     # fal.ai / Flux
     "fal_api_key": {
         "label": "fal.ai API Key (Flux Image Gen)",
@@ -56,6 +98,20 @@ SCHEMA: Dict[str, Dict[str, Any]] = {
         "secret": True,
         "help": "Sign up at fal.ai — free $1 credit on signup. Flux Schnell costs ~$0.003/image.",
         "placeholder": "fal-...",
+    },
+    "elevenlabs_api_key": {
+        "label": "ElevenLabs API Key",
+        "group": "voice",
+        "secret": True,
+        "help": "Optional. Powers natural voiceovers; a local system voice is used if unavailable.",
+        "placeholder": "sk_...",
+    },
+    "github_token": {
+        "label": "GitHub API Token",
+        "group": "github",
+        "secret": True,
+        "help": "Optional. Raises GitHub API rate limits and improves source reliability.",
+        "placeholder": "github_pat_...",
     },
     # LLM
     "deployment_mode": {
@@ -181,9 +237,19 @@ def _load_raw() -> Dict[str, str]:
 
 
 def _save_raw(data: Dict[str, str]) -> None:
-    """Persist raw settings dict to disk."""
+    """Atomically persist raw settings with owner-only permissions."""
     SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
-    SETTINGS_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    descriptor, temp_name = tempfile.mkstemp(prefix=".settings-", suffix=".json", dir=SETTINGS_DIR)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temp_name, 0o600)
+        os.replace(temp_name, SETTINGS_FILE)
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
 
 
 def _mask(value: str) -> str:
@@ -206,7 +272,15 @@ def get_all() -> Dict[str, str]:
     # Env var mapping for each key
     _env_map = {
         "youtube_api_key": "YOUTUBE_API_KEY",
+        "google_client_id": "GOOGLE_CLIENT_ID",
+        "google_client_secret": "GOOGLE_CLIENT_SECRET",
+        "google_access_token": "GOOGLE_ACCESS_TOKEN",
+        "google_refresh_token": "GOOGLE_REFRESH_TOKEN",
+        "google_token_expiry": "GOOGLE_TOKEN_EXPIRY",
+        "rescue_ctr_sensitivity": "RESCUE_CTR_SENSITIVITY",
         "fal_api_key":     "FAL_API_KEY",
+        "elevenlabs_api_key": "ELEVENLABS_API_KEY",
+        "github_token": "GITHUB_TOKEN",
         "llm_provider":    "LLM_PROVIDER",
         "llm_model":       "LLM_MODEL",
         "llm_api_key":     "LLM_API_KEY",
@@ -241,19 +315,21 @@ def update(updates: Dict[str, str]) -> Dict[str, str]:
     Merge updates into the settings file.
     Returns the new full settings dict (unmasked — used internally).
     """
-    stored = _load_raw()
-    for key, value in updates.items():
-        if key in SCHEMA:
-            stored[key] = (value or "").strip()
-    _save_raw(stored)
+    with _SETTINGS_LOCK:
+        stored = _load_raw()
+        for key, value in updates.items():
+            if key in SCHEMA:
+                stored[key] = (value or "").strip()
+        _save_raw(stored)
     return get_all()
 
 
 def delete(key: str) -> None:
     """Remove a key from the settings file."""
-    stored = _load_raw()
-    stored.pop(key, None)
-    _save_raw(stored)
+    with _SETTINGS_LOCK:
+        stored = _load_raw()
+        stored.pop(key, None)
+        _save_raw(stored)
 
 
 def get_for_api() -> Dict[str, Any]:
@@ -266,7 +342,15 @@ def get_for_api() -> Dict[str, Any]:
     raw = get_all()
     _env_map = {
         "youtube_api_key": "YOUTUBE_API_KEY",
+        "google_client_id": "GOOGLE_CLIENT_ID",
+        "google_client_secret": "GOOGLE_CLIENT_SECRET",
+        "google_access_token": "GOOGLE_ACCESS_TOKEN",
+        "google_refresh_token": "GOOGLE_REFRESH_TOKEN",
+        "google_token_expiry": "GOOGLE_TOKEN_EXPIRY",
+        "rescue_ctr_sensitivity": "RESCUE_CTR_SENSITIVITY",
         "fal_api_key":     "FAL_API_KEY",
+        "elevenlabs_api_key": "ELEVENLABS_API_KEY",
+        "github_token": "GITHUB_TOKEN",
         "llm_provider":    "LLM_PROVIDER",
         "llm_model":       "LLM_MODEL",
         "llm_api_key":     "LLM_API_KEY",
@@ -284,8 +368,9 @@ def get_for_api() -> Dict[str, Any]:
         "hermes_path": "HERMES_PATH",
     }
 
-    result = {"schema": SCHEMA, "values": {}}
-    for key, meta in SCHEMA.items():
+    public_schema = {key: meta for key, meta in SCHEMA.items() if not meta.get("internal")}
+    result = {"schema": public_schema, "values": {}}
+    for key, meta in public_schema.items():
         value = raw.get(key, "")
         env_override = bool(os.environ.get(_env_map.get(key, ""), ""))
         result["values"][key] = {

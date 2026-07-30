@@ -333,8 +333,9 @@ class EnrichmentService:
         ]
         if dive.get("shift"):
             notes_lines.append(f"Shift: {dive.get('shift')}")
-        if dive.get("inversion"):
-            notes_lines.append(f"Inversion: {dive.get('inversion')}")
+        operational_reality = dive.get("operational_reality") or dive.get("inversion")
+        if operational_reality:
+            notes_lines.append(f"Operational reality: {operational_reality}")
         if pack.get("caveats"):
             notes_lines.append(f"Caveats: {pack.get('caveats')}")
 
@@ -388,7 +389,7 @@ class EnrichmentService:
             f"- Strategic title: {dive.get('strategic_title', '')}",
             f"- Shift: {dive.get('shift', '')}",
             f"- Superpower: {dive.get('superpower', '')}",
-            f"- Inversion: {dive.get('inversion', '')}",
+            f"- Operational reality: {dive.get('operational_reality') or dive.get('inversion', '')}",
             f"- Narrative beats: {' | '.join(dive.get('narrative_beats', []) or [])}",
             "",
             "RELATED EVIDENCE:",
@@ -729,7 +730,8 @@ class AgentRunner:
             leads_prompt += (
                 "For this listicle compilation, identify and explain:\n"
                 "1. The underlying developer trend or friction driving interest in this cluster (why now?).\n"
-                "2. The Munger Inversion for the theme: what is the counter-hype risk or trade-off of using these open-source tools instead of proprietary ones?\n"
+                "2. The Operational Reality Check: what fails first, how would a builder detect it, "
+                "can the workflow recover, and where do security, cost, or governance change the recommendation?\n"
                 "3. The Creator Opportunity: how can a creator showcase these tools in a single video without losing viewer attention (e.g. comparing setup times or memory usage)?\n\n"
                 "Be technical, direct, and source-aware. No preamble. No markdown headings. Max 500 words."
             )
@@ -741,7 +743,8 @@ class AgentRunner:
                 f"Research the AI topic: '{label}'\n\n"
                 "Identify and explain:\n"
                 "1. The primary technical framework, repo, or paper driving this trend — be specific.\n"
-                "2. The Munger Inversion: what are the real risks, failure modes, or counter-arguments?\n"
+                "2. The Operational Reality Check: what fails first, how is failure detected, "
+                "can it recover, and what security, cost, or governance constraint blocks adoption?\n"
                 "3. The Creator Opportunity: what concrete demo would prove or disprove the hype?\n"
                 "4. Who are the key people / organizations involved?\n"
                 "5. What should a YouTube creator make about this — and what angle is most under-served?\n\n"
@@ -757,7 +760,7 @@ class AgentRunner:
         leads = (res.get("text") or "").strip()
 
         if not leads:
-            self._log(run_id, "LLM returned nothing — check ANTHROPIC_API_KEY")
+            self._log(run_id, "LLM returned nothing — check the configured provider, model, and credentials")
             self._stage(run_id, "Failed", 1.0)
             raise RuntimeError(f"no LLM response for research leads on '{label}'")
 
@@ -770,9 +773,10 @@ class AgentRunner:
             '{"strategic_title": "...", "shift": "...", "superpower": "...", '
             '"hook_contrarian": "...", "hook_speed": "...", '
             '"narrative_beats": ["...", "...", "...", "...", "..."], '
-            '"thumbnail_visuals": ["...", "...", "..."], "inversion": "..."}\n\n'
+            '"thumbnail_visuals": ["...", "...", "..."], "operational_reality": "..."}\n\n'
             "strategic_title: 38-62 char high-CTR title. shift: 1 sentence why this matters. "
-            "superpower: 1 sentence the unique technical edge. inversion: 1 sentence the key risk. "
+            "superpower: 1 sentence the unique technical edge. operational_reality: 2-4 sentences covering "
+            "the failure boundary, detection signal, recovery path, and adoption constraint. "
             "narrative_beats: 5 short talking-point strings. thumbnail_visuals: 3 visual concept strings."
         )
         syn_res = _cr.generate(
@@ -810,7 +814,7 @@ class AgentRunner:
                 f"**Title:** {brief.get('strategic_title', '')}",
                 f"**The Shift:** {brief.get('shift', '')}",
                 f"**Superpower:** {brief.get('superpower', '')}",
-                f"**Munger Inversion:** {brief.get('inversion', '')}",
+                f"**Operational Reality Check:** {brief.get('operational_reality') or brief.get('inversion', '')}",
                 "",
                 "**Hooks:**",
                 f"- Contrarian: {brief.get('hook_contrarian', '')}",

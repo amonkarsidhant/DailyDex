@@ -84,7 +84,9 @@ def test_merge_weekly_data():
 @patch("yt_dlp.YoutubeDL")
 def test_get_youtube_feeds(mock_ydl_class, tmp_path, monkeypatch):
     config_file = tmp_path / "config.json"
-    config_file.write_text(json.dumps({"youtube": {"channels": [{"name": "Test", "url": "https://youtube.com/@test"}]}}))
+    config_file.write_text(json.dumps({"youtube": {"channels": [{
+        "name": "Test", "url": "https://youtube.com/@old-handle", "channel_id": "UC-stable"
+    }]}}))
     monkeypatch.setattr(fetch_news, "CONFIG_FILE", str(config_file))
     
     mock_ydl = MagicMock()
@@ -97,6 +99,9 @@ def test_get_youtube_feeds(mock_ydl_class, tmp_path, monkeypatch):
     assert len(results) == 1
     assert results[0]["title"] == "Vid Title"
     assert results[0]["url"] == "https://youtube.com/watch?v=vid1"
+    mock_ydl.extract_info.assert_called_once_with(
+        "https://www.youtube.com/channel/UC-stable/videos", download=False,
+    )
 
 @patch("requests.get")
 def test_get_github_trending(mock_get, tmp_path, monkeypatch):
@@ -111,6 +116,59 @@ def test_get_github_trending(mock_get, tmp_path, monkeypatch):
     results = fetch_news.get_github_trending()
     assert len(results) == 1
     assert results[0]["title"] == "acme/repo"
+
+
+def test_github_api_normalizes_results_and_uses_token(monkeypatch):
+    captured = {}
+    response = MagicMock()
+    response.json.return_value = {"items": [{
+        "full_name": "acme/new-agent", "html_url": "https://github.com/acme/new-agent",
+        "description": "Agent runtime", "stargazers_count": 4321, "language": "Python",
+    }]}
+
+    def fake_request(url, **kwargs):
+        captured.update(kwargs)
+        return response
+
+    monkeypatch.setattr(fetch_news, "_github_request", fake_request)
+    monkeypatch.setattr(fetch_news, "_github_token", lambda: "github_pat_test")
+    results = fetch_news._get_github_trending_api({"github": {"limit": 1}})
+    assert results == [{
+        "source": "GitHub Emerging (API)", "title": "acme/new-agent",
+        "url": "https://github.com/acme/new-agent", "description": "Agent runtime",
+        "stars": "4321", "language": "Python",
+    }]
+    assert captured["headers"]["Authorization"] == "Bearer github_pat_test"
+
+
+def test_github_api_failure_uses_html_fallback(monkeypatch):
+    monkeypatch.setattr(fetch_news, "load_config", lambda: {"github": {}})
+    monkeypatch.setattr(fetch_news, "_get_github_trending_api", lambda config: (_ for _ in ()).throw(RuntimeError("rate limit")))
+    monkeypatch.setattr(fetch_news, "_get_github_trending_html", lambda config: [{"title": "fallback/repo"}])
+    assert fetch_news.get_github_trending() == [{"title": "fallback/repo"}]
+
+
+def test_github_combines_trending_with_api_discovery(monkeypatch):
+    monkeypatch.setattr(fetch_news, "load_config", lambda: {"github": {"limit": 2}})
+    monkeypatch.setattr(fetch_news, "_get_github_trending_html", lambda config: [
+        {"title": "established/breakout", "url": "https://github.com/established/breakout"}
+    ])
+    monkeypatch.setattr(fetch_news, "_get_github_trending_api", lambda config: [
+        {"title": "new/emerging", "url": "https://github.com/new/emerging"}
+    ])
+    assert [item["title"] for item in fetch_news.get_github_trending()] == [
+        "established/breakout", "new/emerging"
+    ]
+
+
+@patch("requests.get")
+def test_github_request_retries_rate_limit(mock_get, monkeypatch):
+    limited = MagicMock(status_code=429)
+    success = MagicMock(status_code=200)
+    mock_get.side_effect = [limited, success]
+    monkeypatch.setattr(fetch_news.time, "sleep", lambda _: None)
+    assert fetch_news._github_request("https://api.github.test", timeout=1) is success
+    assert mock_get.call_count == 2
 
 @patch("requests.get")
 def test_get_huggingface(mock_get, tmp_path, monkeypatch):
@@ -243,6 +301,34 @@ def test_get_reddit(mock_get, tmp_path, monkeypatch):
     assert results[0]["source"] == "Reddit r/LocalLLaMA"
     assert results[0]["url"] == "https://www.reddit.com/r/LocalLLaMA/comments/abc/new_llm"
     assert results[0]["score"] == 200
+
+
+@patch("requests.get")
+def test_get_reddit_falls_back_to_rss_when_json_is_blocked(mock_get, tmp_path, monkeypatch):
+    config_file = tmp_path / "config.json"
+    config_file.write_text(json.dumps({
+        "reddit": {"subreddits": ["LocalLLaMA"], "limit_per_subreddit": 3}
+    }))
+    monkeypatch.setattr(fetch_news, "CONFIG_FILE", str(config_file))
+
+    blocked = MagicMock()
+    blocked.raise_for_status.side_effect = RuntimeError("403 blocked")
+    rss = MagicMock()
+    rss.content = b"""<?xml version="1.0" encoding="UTF-8"?>
+    <feed xmlns="http://www.w3.org/2005/Atom">
+      <entry><title>Local LLM benchmark on a mini PC</title>
+      <link href="https://www.reddit.com/r/LocalLLaMA/comments/test"/>
+      <updated>2026-07-18T05:00:00Z</updated></entry>
+      <entry><title>Off-topic cooking thread</title>
+      <link href="https://www.reddit.com/r/LocalLLaMA/comments/cooking"/></entry>
+    </feed>"""
+    mock_get.side_effect = [blocked, rss]
+
+    results = fetch_news.get_reddit()
+    assert len(results) == 1
+    assert results[0]["title"] == "Local LLM benchmark on a mini PC"
+    assert results[0]["url"].endswith("/comments/test")
+    assert results[0]["score"] == 0
 
 @patch("fetch_news.get_intel_db")
 def test_update_source_health_exception(mock_db):

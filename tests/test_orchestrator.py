@@ -76,7 +76,7 @@ def test_enrichment_service_run_once_processes_job(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_orchestrator_steps_exist():
-    """All 4 pipeline steps should be defined in the orchestrator module."""
+    """All scheduled pipeline steps should be defined in the orchestrator module."""
     # Read the source file and check the step functions are defined
     src = Path(__file__).resolve().parent.parent / "src" / "orchestrator.py"
     content = src.read_text()
@@ -84,6 +84,7 @@ def test_orchestrator_steps_exist():
     assert "def step_enrich(" in content
     assert "def step_studio(" in content
     assert "def step_sync_notion(" in content
+    assert "def step_sync_analytics(" in content
     assert "def run_full_cycle(" in content
     assert "def run_daemon(" in content
     assert "--daemon" in content
@@ -148,6 +149,20 @@ def test_orchestrator_run_full_cycle_logic():
     assert results["fetch"]["scored_items"] == 10
     assert results["enrich"]["processed"] == 5
     assert results["studio"]["ok"] is True
+
+
+def test_orchestrator_syncs_publication_analytics(monkeypatch):
+    import orchestrator
+    import types
+
+    db = MagicMock()
+    sync = MagicMock(return_value={"updated": 2, "failed": 0, "skipped": 1})
+    monkeypatch.setitem(sys.modules, "dashboard_new", types.SimpleNamespace(intel_db=db))
+    monkeypatch.setitem(sys.modules, "analytics_sync", types.SimpleNamespace(sync_all_publications=sync))
+
+    result = orchestrator.step_sync_analytics()
+    assert result["updated"] == 2
+    sync.assert_called_once_with(db)
 
 
 def test_orchestrator_notion_sync_skipped_when_disabled(monkeypatch):

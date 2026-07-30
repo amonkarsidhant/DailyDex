@@ -8,7 +8,7 @@ import time
 import uuid
 import queue
 import hashlib
-import threading
+import tempfile
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context, send_from_directory
@@ -52,12 +52,33 @@ def _ensure_persistent_config():
     profile_target = os.environ.get("CREATOR_PROFILE_PATH")
     if profile_target:
         target_path = Path(profile_target)
+        source_path = Path(BASE_DIR) / "config" / "creator_profile.json"
         if not target_path.exists():
             target_path.parent.mkdir(parents=True, exist_ok=True)
-            source_path = Path(BASE_DIR) / "config" / "creator_profile.json"
             if source_path.exists():
                 shutil.copy2(source_path, target_path)
                 print(f"Initialized persistent creator profile at {target_path}", file=sys.stderr)
+        elif source_path.exists():
+            try:
+                current = json.loads(target_path.read_text(encoding="utf-8"))
+                defaults = json.loads(source_path.read_text(encoding="utf-8"))
+
+                def merge_missing(target, source):
+                    changed = False
+                    for key, value in source.items():
+                        if key not in target:
+                            target[key] = value
+                            changed = True
+                        elif isinstance(target[key], dict) and isinstance(value, dict):
+                            changed = merge_missing(target[key], value) or changed
+                    return changed
+
+                if merge_missing(current, defaults):
+                    temp_path = target_path.with_suffix(target_path.suffix + ".tmp")
+                    temp_path.write_text(json.dumps(current, indent=2), encoding="utf-8")
+                    temp_path.replace(target_path)
+            except (OSError, ValueError):
+                pass
 
 _ensure_persistent_config()
 
@@ -276,11 +297,23 @@ app.config["AGENT_RUNNER"] = agent_runner
 app.config["ENRICHMENT_SERVICE"] = enrichment_service
 from routes.api_auth import init_auth
 init_auth(app, DB_PATH)
+from routes.api_billing import init_billing
+init_billing(app)
 try:
     from routes.api_factory import factory_bp
     app.register_blueprint(factory_bp)
 except Exception as e:
     print(f"Warning: Could not register factory blueprint: {e}")
+try:
+    from routes.api_compile import compile_bp
+    app.register_blueprint(compile_bp)
+except Exception as e:
+    print(f"Warning: Could not register compile blueprint: {e}")
+try:
+    from routes.api_refresh import init_refresh
+    init_refresh(app)
+except Exception as e:
+    print(f"Warning: Could not register refresh blueprint: {e}")
 
 
 _enrichment_last_version = {"value": None}
@@ -873,12 +906,20 @@ def _cockpit_source_health():
     return out
 
 
-def _cockpit_pipeline(saved_items):
+def _cockpit_pipeline(saved_items, publications=None):
     lanes = {k: [] for k in _COCKPIT_PIPELINE_LANES}
+    publication_by_item = {
+        str(row.get("item_id")): row
+        for row in (publications or [])
+        if str(row.get("platform", "")).lower() == "youtube"
+    }
     for item in saved_items:
         status = item.get("status")
         if status not in lanes:
             continue
+        publication = publication_by_item.get(str(item.get("id"))) or {}
+        average_percentage = publication.get("average_view_percentage")
+        retention = float(average_percentage) / 100 if average_percentage is not None else None
         lanes[status].append({
             "id": str(item.get("id")),
             "topic": item.get("category") or item.get("topic") or "",
@@ -888,9 +929,18 @@ def _cockpit_pipeline(saved_items):
             "creator_score": item.get("creator_score") or item.get("signal_score") or 0,
             "due": item.get("due") or "—",
             "research_pct": item.get("research_pct"),
-            "published_at": item.get("published_at"),
-            "views": item.get("views"),
-            "retention": item.get("retention"),
+            "published_at": publication.get("published_at"),
+            "published_url": publication.get("published_url") or item.get("published_url"),
+            "publication_id": publication.get("id"),
+            "video_id": publication.get("video_id"),
+            "views": publication.get("views"),
+            "impressions": publication.get("impressions"),
+            "ctr": publication.get("ctr") or None,
+            "retention": retention,
+            "rescue_status": publication.get("rescue_status") or "pending",
+            "analytics_source": publication.get("sync_source"),
+            "analytics_error": publication.get("sync_error"),
+            "last_synced_at": publication.get("last_synced_at"),
         })
     return lanes
 
@@ -1047,6 +1097,10 @@ def _cockpit_factory_queue(limit=5):
         "status": row.get("status", "pending_review"),
         "created_at": row.get("created_at"),
         "error": row.get("error", ""),
+        "video_url": (
+            f"/api/videos/{os.path.basename(row.get('video_path', ''))}"
+            if row.get("video_path") else ""
+        ),
     } for row in summary.get("items", [])]
     return items, int(summary.get("total", 0))
 
@@ -1163,6 +1217,7 @@ def build_cockpit_data():
         opp_by_slug.setdefault(slug, opp)
     clusters = _cockpit_clusters(scored_data, clusters_raw)
     saved_items = intel_db.get_saved_items(pipeline_type="creator") if intel_db else []
+    publications = intel_db.get_publication_analytics() if intel_db else []
     creator_brief = build_creator_brief(opportunities, clusters_raw, saved_items)
     profile = _load_creator_profile_safe()
     persona = profile.get("persona", "multi")
@@ -1194,7 +1249,7 @@ def build_cockpit_data():
         "titleSets": _cockpit_title_sets(clusters, opp_by_slug),
         "sourceHealth": source_health,
         "agents": agents,
-        "pipeline": _cockpit_pipeline(saved_items),
+        "pipeline": _cockpit_pipeline(saved_items, publications),
         "calendar": _cockpit_calendar(),
         "thumbnails": _cockpit_thumbnails(clusters, opp_by_slug),
         "studio": _cockpit_studio(),
@@ -1573,16 +1628,43 @@ def api_profile_get():
 
 @app.route("/api/profile", methods=["POST"])
 def api_profile_update():
-    """Save the updated creator profile to JSON."""
+    """Validate and atomically save the creator profile JSON."""
     try:
         import llm_summary
         profile_path = llm_summary.CREATOR_PROFILE_PATH
         body = request.get_json(silent=True) or {}
-        if not body:
-            return jsonify({"error": "Empty profile content"}), 400
-        
-        with open(profile_path, "w", encoding="utf-8") as f:
-            json.dump(body, f, indent=2)
+        if not isinstance(body, dict) or not body:
+            return jsonify({"error": "Profile must be a non-empty JSON object"}), 400
+
+        for key in ("channel_name", "niche", "audience", "tone", "perspective"):
+            value = body.get(key)
+            if not isinstance(value, str) or not value.strip() or len(value) > 2000:
+                return jsonify({"error": f"{key} must be a non-empty string under 2000 characters"}), 400
+        for key in ("preferred_words", "banned_phrases", "signature_angles"):
+            values = body.get(key)
+            if not isinstance(values, list) or len(values) > 100 or any(
+                not isinstance(value, str) or not value.strip() or len(value) > 240
+                for value in values
+            ):
+                return jsonify({"error": f"{key} must be a list of short, non-empty strings"}), 400
+        for key in ("format_rules", "schedule", "copilot"):
+            if not isinstance(body.get(key), dict):
+                return jsonify({"error": f"{key} must be an object"}), 400
+
+        profile_dir = os.path.dirname(profile_path) or "."
+        os.makedirs(profile_dir, exist_ok=True)
+        descriptor, temp_path = tempfile.mkstemp(prefix=".creator-profile-", suffix=".json", dir=profile_dir)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as profile_file:
+                json.dump(body, profile_file, indent=2)
+                profile_file.write("\n")
+                profile_file.flush()
+                os.fsync(profile_file.fileno())
+            os.replace(temp_path, profile_path)
+        except Exception:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+            raise
         return jsonify({"ok": True, "profile": body})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1978,111 +2060,6 @@ def api_agent_run():
 
 
 # ── ignore/track routes: extracted to routes/api_saved.py ──────────────────
-
-
-@app.route("/api/source-health")
-def api_source_health():
-    """Get source health status"""
-    source_cards, daily_summary = build_source_health_response()
-    return jsonify({"sources": source_cards, "summary": daily_summary})
-
-
-@app.route("/api/dashboard-meta")
-def api_dashboard_meta():
-    """Return a lightweight snapshot for live dashboard refresh checks."""
-    state = build_dashboard_context()["dashboard_state"]
-    return jsonify({
-        "snapshot_id": state["snapshot_id"],
-        "last_updated_raw": state["last_updated_raw"],
-        "last_updated_display": state["last_updated_display"],
-        "live_interval_seconds": state["live_interval_seconds"],
-        "daily_summary": state["daily_summary"],
-        "status_warning": state["status_warning"],
-        "counts": state["counts"],
-    })
-
-
-# Background refresh job state. Fetching all sources can take ~60s; running it
-# inline blocks the request thread (and any client waiting on it). Run it in a
-# background thread and let the UI poll /api/refresh/status instead.
-_refresh_lock = threading.Lock()
-_refresh_state = {"running": False, "result": None}
-
-
-def _run_refresh_job():
-    previous_data = load_data()
-    try:
-        from fetch_news import fetch_all
-
-        fetch_all()
-        scored_data = load_scored_data(force=True)
-        source_cards, daily_summary = build_source_health_response()
-        status = "ok"
-        if any(card["status_key"] == "failed" for card in source_cards):
-            status = "failed"
-        elif any(card["status_key"] in ["cache", "stale"] for card in source_cards):
-            status = "partial"
-        result = {
-            "status": status,
-            "last_updated": format_timestamp(scored_data.get("last_updated")),
-            "source_health": source_cards,
-            "summary": daily_summary,
-            "message": daily_summary["freshness_message"],
-        }
-    except Exception as exc:
-        source_cards, daily_summary = build_source_health_response()
-        try:
-            ensure_parent_dir(DATA_FILE)
-            with open(DATA_FILE, "w", encoding="utf-8") as f:
-                json.dump(previous_data, f, indent=2)
-        except Exception:
-            pass
-        result = {
-            "status": "failed",
-            "last_updated": format_timestamp(previous_data.get("last_updated")),
-            "source_health": source_cards,
-            "summary": daily_summary,
-            "message": f"Refresh failed. Existing data preserved. {exc}",
-        }
-    with _refresh_lock:
-        _refresh_state["result"] = result
-        _refresh_state["running"] = False
-
-
-@app.route("/api/refresh", methods=["POST"])
-def api_refresh():
-    """Start a manual refresh in the background; poll /api/refresh/status."""
-    with _refresh_lock:
-        if _refresh_state["running"]:
-            return jsonify({"status": "running", "started": False})
-        _refresh_state["running"] = True
-        _refresh_state["result"] = None
-    t = threading.Thread(target=_run_refresh_job, daemon=True)
-    t.start()
-    return jsonify({"status": "running", "started": True})
-
-
-@app.route("/api/refresh/status", methods=["GET"])
-def api_refresh_status():
-    """Report background refresh progress; returns the result once finished."""
-    with _refresh_lock:
-        running = _refresh_state["running"]
-        result = _refresh_state["result"]
-    if running:
-        return jsonify({"running": True})
-    if result is None:
-        # No refresh has run this session — return current health snapshot.
-        source_cards, daily_summary = build_source_health_response()
-        return jsonify({
-            "running": False,
-            "status": "idle",
-            "source_health": source_cards,
-            "summary": daily_summary,
-            "message": daily_summary.get("freshness_message", ""),
-        })
-    payload = dict(result)
-    payload["running"] = False
-    return jsonify(payload)
 
 
 def _parse_model_json(raw):

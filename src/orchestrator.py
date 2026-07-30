@@ -18,6 +18,7 @@ Usage:
 Environment variables:
     ORCH_FETCH_INTERVAL    — seconds between fetch cycles (default: 7200 = 2h)
     ORCH_STUDIO_INTERVAL   — seconds between studio runs (default: 21600 = 6h)
+    ORCH_ANALYTICS_INTERVAL — seconds between YouTube analytics syncs (default: 21600 = 6h)
     ORCH_TOP_N             — top N clusters to generate content for (default: 3)
     ORCH_NOTION_SYNC       — "1" to enable Notion sync (default: "0")
     NOTION_API_TOKEN       — Notion integration token
@@ -47,6 +48,7 @@ sys.path.insert(0, os.path.join(BASE_DIR, "src"))
 
 FETCH_INTERVAL = int(os.environ.get("ORCH_FETCH_INTERVAL", "7200"))
 STUDIO_INTERVAL = int(os.environ.get("ORCH_STUDIO_INTERVAL", "21600"))
+ANALYTICS_INTERVAL = int(os.environ.get("ORCH_ANALYTICS_INTERVAL", "21600"))
 TOP_N = int(os.environ.get("ORCH_TOP_N", "3"))
 NOTION_SYNC = os.environ.get("ORCH_NOTION_SYNC", "0") == "1"
 RUNNING = True
@@ -188,6 +190,19 @@ def step_sync_notion() -> Dict[str, Any]:
     return {"synced": synced, "errors": errors}
 
 
+def step_sync_analytics() -> Dict[str, Any]:
+    """Persist observed YouTube metrics and immutable analytics samples."""
+    _log("STEP: analytics-sync — refreshing live YouTube publications")
+    import dashboard_new as dd
+    from analytics_sync import sync_all_publications
+
+    if dd.intel_db is None:
+        return {"error": "no_db"}
+    result = sync_all_publications(dd.intel_db)
+    _log(f"  analytics sync: {result['updated']} updated, {result['failed']} failed")
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Cycle orchestration
 # ---------------------------------------------------------------------------
@@ -197,6 +212,7 @@ STEPS = {
     "enrich": step_enrich,
     "studio": step_studio,
     "notion-sync": step_sync_notion,
+    "analytics-sync": step_sync_analytics,
 }
 
 
@@ -206,7 +222,7 @@ def run_full_cycle() -> Dict[str, Any]:
     _log("FULL CYCLE START")
     _log("=" * 60)
     results = {}
-    for step_name in ("fetch", "enrich", "studio", "notion-sync"):
+    for step_name in ("fetch", "enrich", "studio", "notion-sync", "analytics-sync"):
         try:
             results[step_name] = STEPS[step_name]()
         except Exception as exc:
@@ -232,6 +248,7 @@ def run_daemon():
     signal.signal(signal.SIGTERM, _shutdown)
 
     last_studio = 0.0
+    last_analytics = 0.0
     _log(f"Daemon started — fetch every {FETCH_INTERVAL}s, studio every {STUDIO_INTERVAL}s")
 
     while RUNNING:
@@ -246,6 +263,9 @@ def run_daemon():
                 step_studio()
                 step_sync_notion()
                 last_studio = now
+            if now - last_analytics >= ANALYTICS_INTERVAL:
+                step_sync_analytics()
+                last_analytics = now
 
         except Exception as exc:
             _log(f"Cycle failed: {exc}")

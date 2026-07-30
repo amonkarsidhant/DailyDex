@@ -2,7 +2,6 @@
 
 import json
 import os
-import random
 import threading
 import time
 import uuid
@@ -331,6 +330,15 @@ def api_publish():
 
     item_id = item["id"]
 
+    published_url = item.get("published_url") or ""
+    video_id = None
+    if str(platform).lower() == "youtube":
+        from analytics_sync import _extract_video_id
+        video_id = _extract_video_id(published_url)
+        publication_status = "live" if video_id else "ready_to_publish"
+    else:
+        publication_status = "live" if published_url else "ready_to_publish"
+
     db.create_or_update_publication(
         item_id=item_id,
         platform=platform,
@@ -338,94 +346,72 @@ def api_publish():
         impressions=0,
         ctr=0.0,
         engagement_rate=0.0,
-        status="publishing"
+        status=publication_status,
+        video_id=video_id,
     )
-
-    def _publisher_simulator():
-        time.sleep(3.0)
-        views = random.randint(10, 50)
-        impressions = random.randint(150, 400)
-        ctr = round(views / impressions, 4) if impressions > 0 else 0.0
-        engagement_rate = round(views * 0.08 / impressions, 4) if impressions > 0 else 0.0
-        try:
-            db.create_or_update_publication(
-                item_id=item_id,
-                platform=platform,
-                views=views,
-                impressions=impressions,
-                ctr=ctr,
-                engagement_rate=engagement_rate,
-                status="live"
-            )
-        except Exception as e:
-            print(f"[publish_sim] failed: {e}")
-
-    thread = threading.Thread(target=_publisher_simulator, name=f"publish-{item_id}-{platform}", daemon=True)
-    thread.start()
-
-    return jsonify({"ok": True, "status": "publishing"})
+    if publication_status == "live":
+        db.update_status(item_id, "published")
+    return jsonify({
+        "ok": True,
+        "status": publication_status,
+        "message": (
+            "Publication registered for analytics."
+            if publication_status == "live"
+            else "No verified publication URL is attached; item remains ready to publish."
+        ),
+    })
 
 
 # ── Analytics ─────────────────────────────────────────────────────────────────
 
+@content_bp.route("/api/analytics/sync", methods=["POST"])
 @content_bp.route("/api/analytics/simulate", methods=["POST"])
-def api_analytics_simulate():
+def api_analytics_sync():
     db = _db()
     if db is None:
         return jsonify({"error": "no_db"}), 503
 
     try:
-        publications = db.get_publication_analytics()
-        updated_count = 0
-        for pub in publications:
-            if pub.get("status") == "live":
-                from analytics_sync import sync_publication_metrics
-                synced = sync_publication_metrics(pub)
+        from analytics_sync import sync_all_publications
 
-                if synced:
-                    views = synced["views"]
-                    impressions = synced["impressions"]
-                    ctr = synced["ctr"]
-                    engagement_rate = synced["engagement_rate"]
-                    status = synced["status"]
-                else:
-                    views = pub.get("views", 0) + random.randint(120, 1400)
-                    impressions = pub.get("impressions", 0) + random.randint(1800, 12000)
-                    ctr = round(views / impressions, 4) if impressions > 0 else 0.0
-                    engagement_rate = round(views * 0.07 / impressions, 4) if impressions > 0 else 0.0
-                    status = "live"
-                    if views > 25000:
-                        status = "completed"
-
-                db.create_or_update_publication(
-                    item_id=pub.get("item_id"),
-                    platform=pub.get("platform"),
-                    views=views,
-                    impressions=impressions,
-                    ctr=ctr,
-                    engagement_rate=engagement_rate,
-                    status=status
-                )
-                updated_count += 1
-
-        try:
-            active_tests = db.list_all_active_ab_tests()
-            for ab in active_tests:
-                new_a_views = ab.get("variant_a_views", 0) + random.randint(20, 150)
-                new_b_views = ab.get("variant_b_views", 0) + random.randint(20, 150)
-                new_a_ctr = round(random.uniform(0.035, 0.070), 4)
-                new_b_ctr = round(random.uniform(0.045, 0.090), 4)
-                db.update_ab_test_metrics(
-                    ab["id"],
-                    variant_a_views=new_a_views,
-                    variant_b_views=new_b_views,
-                    variant_a_ctr=new_a_ctr,
-                    variant_b_ctr=new_b_ctr
-                )
-                updated_count += 1
-        except Exception as ab_err:
-            print(f"[ab_sim] failed: {ab_err}")
-
-        return jsonify({"ok": True, "updated": updated_count})
+        result = sync_all_publications(db)
+        return jsonify({"ok": True, **result})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@content_bp.route("/api/analytics/observations", methods=["POST"])
+def api_analytics_observation():
+    """Record observed thumbnail telemetry exported from YouTube Studio."""
+    db = _db()
+    if db is None:
+        return jsonify({"error": "no_db"}), 503
+    body = request.get_json(silent=True) or {}
+    try:
+        item_id = int(body.get("item_id"))
+        impressions = int(body.get("impressions"))
+        ctr = float(body.get("ctr"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "item_id, impressions, and ctr ratio are required"}), 400
+    if impressions < 0 or not 0 <= ctr <= 1:
+        return jsonify({"error": "impressions must be non-negative and ctr must be a ratio from 0 to 1"}), 400
+    publication = db.get_publication_for_item(item_id)
+    if not publication:
+        return jsonify({"error": "YouTube publication was not found"}), 404
+
+    from rescue_engine import DEFAULT_MEDIAN_CTR, evaluate_performance_status
+    assessment = evaluate_performance_status(
+        ctr,
+        int(body.get("views") or publication.get("views") or 0),
+        float(body.get("channel_median_ctr") or DEFAULT_MEDIAN_CTR),
+        impressions=impressions,
+        published_at=publication.get("published_at"),
+    )
+    db.record_publication_metrics(publication["id"], {
+        "views": body.get("views"),
+        "impressions": impressions,
+        "ctr": ctr,
+        "source": "youtube_studio_observation",
+        "rescue_status": assessment["status"],
+    })
+    return jsonify({"ok": True, "publication_id": publication["id"], "assessment": assessment})

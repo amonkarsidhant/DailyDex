@@ -148,8 +148,85 @@ def api_studio_regenerate(story_key, fmt):
     return jsonify(
         {
             "ok": result["ok"],
-            "format": fmt,
-            "provider": result.get("provider"),
-            "body": result.get("body", ""),
+            "story_key": story_key,
+            "fmt": fmt,
+            "error": result.get("error"),
         }
     )
+
+
+@studio_bp.route("/api/studio/rescue-pack", methods=["POST"])
+def api_studio_rescue_pack():
+    """Generate a 1-click Rescue Pack (3 alternative titles + 2 thumbnail prompts) for a published item."""
+    body = request.get_json(silent=True) or {}
+    item_id = body.get("item_id")
+    try:
+        item_id = int(item_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "item_id parameter is required"}), 400
+    db = _db()
+    item = db.get_saved_item(item_id) if db else None
+    publication = db.get_publication_for_item(item_id) if db else None
+    if not item or not publication:
+        return jsonify({"error": "Published item was not found"}), 404
+    if publication.get("rescue_status") != "low_ctr":
+        return jsonify({"error": "Rescue is only available after verified low-CTR telemetry"}), 409
+
+    title = item.get("working_title") or item.get("title") or ""
+    summary = item.get("notes") or item.get("hook") or ""
+    niche = item.get("category") or "software engineering"
+
+    from rescue_engine import generate_rescue_pack
+
+    pack = generate_rescue_pack(title=title, summary=summary, niche=niche)
+    return jsonify(pack)
+
+
+@studio_bp.route("/api/studio/rescue-apply", methods=["POST"])
+def api_studio_rescue_apply():
+    """Apply a selected title variant from a Rescue Pack to local state and optionally YouTube via API."""
+    body = request.get_json(silent=True) or {}
+    item_id = body.get("item_id")
+    new_title = body.get("new_title")
+    push_to_youtube = body.get("push_to_youtube") is True
+
+    try:
+        item_id = int(item_id)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "item_id parameter is required"}), 400
+    if not isinstance(new_title, str) or not new_title.strip() or len(new_title.strip()) > 100:
+        return jsonify({"error": "new_title parameter is required"}), 400
+    new_title = new_title.strip()
+
+    db = _db()
+    item = db.get_saved_item(item_id) if db else None
+    publication = db.get_publication_for_item(item_id) if db else None
+    if not item or not publication:
+        return jsonify({"ok": False, "error": "Published item was not found"}), 404
+
+    from analytics_sync import _extract_video_id
+
+    video_id = publication.get("video_id") or _extract_video_id(publication.get("published_url"))
+    result = {"ok": False, "new_title": new_title, "item_id": item_id, "video_id": video_id}
+
+    if push_to_youtube:
+        if not video_id:
+            return jsonify({**result, "error": "The publication has no valid YouTube video ID"}), 409
+        try:
+            import youtube_oauth
+
+            yt_res = youtube_oauth.update_video_title(
+                access_token=None,
+                video_id=video_id,
+                new_title=new_title,
+            )
+        except Exception as e:
+            yt_res = {"error": str(e)}
+        if yt_res.get("error"):
+            return jsonify({**result, "error": yt_res["error"], "youtube_update": yt_res}), 502
+        result["youtube_update"] = yt_res
+
+    db.update_item(item_id, {"working_title": new_title})
+    db.mark_rescue_applied(publication["id"])
+    result["ok"] = True
+    return jsonify(result)
