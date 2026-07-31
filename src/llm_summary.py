@@ -87,9 +87,15 @@ def get_llm_setting(key: str, default: str = "") -> str:
         return env_val
     try:
         import settings_manager
-        return settings_manager.get(key.lower())
+        # settings_manager.get returns "" for keys that were never set, so an
+        # unset key must fall through to default rather than shadowing it —
+        # otherwise int(get_llm_setting("GEMINI_TIMEOUT", "600")) sees "".
+        stored = settings_manager.get(key.lower())
+        if stored not in (None, ""):
+            return stored
     except Exception:
-        return default
+        pass
+    return default
 
 
 def _gemini_args(prompt: str) -> List[str]:

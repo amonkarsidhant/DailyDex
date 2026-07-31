@@ -9,9 +9,9 @@ import os
 import re
 import time
 import uuid
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 
 SOURCE_LABELS = {
@@ -214,6 +214,249 @@ def build_topic_clusters(scored_data: Dict, intel_db=None) -> List[Dict]:
         clusters.append(cluster_out)
     clusters.sort(key=lambda row: (row["source_count"], row["creator_score"], row["average_signal_score"]), reverse=True)
     return clusters
+
+
+# ── Story-level selection ────────────────────────────────────────────────
+#
+# build_topic_clusters groups by TOPIC_PATTERNS, which yields taxonomy labels
+# ("AI Tools", "Coding AI") and a "General" bucket from _fallback_topic. Those
+# name a category, not an event, so a factory run driven by them produces a
+# video *about a category*. Stories anchor on the single highest-signal item —
+# the thing that actually happened — and attach cross-source corroboration to
+# it, so the headline is "GPT-5.6 ships explicit prompt caching", not "AI Tools".
+
+SOURCE_ORDER = ["github", "huggingface", "youtube", "blogs", "papers", "hackernews", "reddit"]
+
+# Buckets that describe a shelf rather than a story. Never anchor on these.
+GENERIC_TOPICS = frozenset({"general", "ai story", "model", "models", "ai", "tool", "tools"})
+
+_STORY_STOPWORDS = frozenset("""
+a an the and or of for to in on with without your you we is are be was were been being
+new now how why what when which who that this these those it its from at by as vs versus
+via using use used can will just get got make makes made build builds built best top
+introducing announcing announces announced release releases released launch launches
+launched update updates updated first look guide tutorial review why here s don t
+http https www com org io net github huggingface co youtube watch arxiv abs pdf
+reddit comments news ycombinator item id blog blogs post posts article
+ai ml llm llms model models tool tools code coding source open free
+out good but part more than one two all not only into over after before still even
+much many most some any every own same other another back down off about really
+actually thing things way ways year years day days week weeks time times work works
+need needs want wants look looks come comes take takes give gives know knows think
+say says see sees feel right left long short big small hard easy real true false
+well better worse worst less least lot lots next last also them they their there
+what's here now today week month made does did done goes going gone say said
+vision policy update runtime system server client native simple modern custom
+support supports feature features project projects version library framework
+""".split())
+
+# Tokens that are rare purely because the corpus is small ("out", "part") must
+# not fuse unrelated stories. A token only earns single-token linking power if
+# it *looks* like a name or version: a separator, a digit, or real length.
+def _is_specific(token: str) -> bool:
+    alpha = sum(1 for ch in token if ch.isalpha())
+    if any(ch.isdigit() for ch in token):
+        # "gpt-5.6" names a thing; a bare version like "2.0" or "10x" does not,
+        # and would otherwise fuse NotebookLM 2.0 with K-EXAONE 2.0.
+        return alpha >= 3
+    if any(ch in token for ch in "-._+#"):
+        return len(token) >= 6
+    # Many product names are short ("ollama", "claude", "gemini"), so the bar
+    # sits at 6 and the stopword list carries the generic words of that length.
+    return len(token) >= 6
+
+
+def _looks_opaque(token: str) -> bool:
+    """Opaque identifiers (YouTube ids, hashes) carry no editorial meaning."""
+    if len(token) <= 8 or any(ch in token for ch in "-._+#"):
+        return False
+    has_digit = any(ch.isdigit() for ch in token)
+    has_alpha = any(ch.isalpha() for ch in token)
+    vowels = sum(1 for ch in token if ch in "aeiou")
+    return has_digit and has_alpha and vowels <= 1
+
+
+def _normalize_headline(value: str) -> str:
+    """Trim feed cruft from a title so it reads as a headline.
+
+    Blog feeds routinely append the publication ("Real headline | JuliaHub"),
+    which otherwise leaks into generated scripts verbatim.
+    """
+    text = re.sub(r"\s+", " ", _safe_text(value)).strip()
+    if "|" in text:
+        head = text.split("|")[0].strip()
+        if len(head.split()) >= 4:
+            text = head
+    text = re.sub(r"\s*[-–—]\s*(blog|news|home)\s*$", "", text, flags=re.IGNORECASE)
+    return text.strip()[:120]
+
+
+def _story_headline(item: Dict, source_type: str) -> str:
+    """Readable headline for a story anchor.
+
+    GitHub items arrive titled ``org/Repo``, which is a coordinate rather than a
+    headline, so pair the repo name with the first clause of its description.
+    """
+    title = _normalize_headline(item.get("title"))
+    if source_type == "github" and "/" in title and " " not in title:
+        repo = title.split("/")[-1]
+        blurb = _normalize_headline(item.get("description"))
+        blurb = re.split(r"[.·—|]", blurb)[0].strip() if blurb else ""
+        return f"{repo}: {blurb}"[:120] if blurb else repo
+    return title
+
+
+def _story_tokens(item: Dict) -> Set[str]:
+    """Significant tokens identifying *which* thing an item is about.
+
+    Includes URL path segments because a repo or model slug (``org/OmniRoute``)
+    is usually the most specific name available.
+    """
+    raw = _normalize_headline(item.get("title")).lower()
+    # Only the URL *path* — the host is the same for every item from a source
+    # and would corroborate everything with everything.
+    url = _safe_text(item.get("url"))
+    path = re.sub(r"^[a-z]+://[^/]+", "", url, flags=re.IGNORECASE)
+    raw = f"{raw} {re.sub(r'[^A-Za-z0-9]+', ' ', path).lower()}"
+
+    tokens = set()
+    for match in re.findall(r"[A-Za-z0-9][A-Za-z0-9.+#_-]{2,}", raw):
+        token = match.strip("._-")
+        if len(token) < 3 or token.isdigit() or token in _STORY_STOPWORDS:
+            continue
+        if _looks_opaque(token):
+            continue
+        tokens.add(token)
+    return tokens
+
+
+def _flatten_scored(scored_data: Dict) -> List[Tuple[Dict, str, int]]:
+    """All items as (item, source_type, score), strongest first."""
+    rows = []
+    for source_type in SOURCE_ORDER:
+        for item in scored_data.get(source_type, []) or []:
+            score = max(int(item.get("signal_score") or 0),
+                        int(item.get("creator_score") or 0))
+            rows.append((item, source_type, score))
+    rows.sort(key=lambda row: row[2], reverse=True)
+    return rows
+
+
+def _corroborates(anchor_tokens: Set[str], other_tokens: Set[str],
+                  doc_freq: Counter, rare_max: int, common_max: int) -> bool:
+    """True when two items are plausibly about the same thing.
+
+    One shared *rare* token (a product or repo name) is enough; otherwise two
+    shared moderately-common tokens are required, which keeps "agent" alone
+    from fusing every agent story into one blob.
+    """
+    shared = anchor_tokens & other_tokens
+    if not shared:
+        return False
+    if any(doc_freq[token] <= rare_max and _is_specific(token) for token in shared):
+        return True
+    return sum(1 for token in shared
+               if doc_freq[token] <= common_max and _is_specific(token)) >= 2
+
+
+def build_story_candidates(scored_data: Dict, intel_db=None, limit: int = 12,
+                           min_score: int = 45) -> List[Dict]:
+    """Rank concrete stories, each anchored on one real item.
+
+    Returns cluster-shaped dicts (``topic``/``slug``/``related_items``/
+    ``average_signal_score``/``source_count``/``sources``) so existing cluster
+    consumers such as the factory can take them unchanged.
+    """
+    rows = _flatten_scored(scored_data)
+    if not rows:
+        return []
+
+    token_sets = [_story_tokens(item) for item, _, _ in rows]
+    doc_freq: Counter = Counter()
+    for tokens in token_sets:
+        doc_freq.update(tokens)
+
+    corpus = len(rows)
+    # Floor of 2: a specific token appearing in exactly two documents means
+    # "these two and nobody else", which is the strongest corroboration signal
+    # there is. A floor of 1 makes corroboration impossible on small corpora.
+    rare_max = max(2, min(3, corpus // 40))
+    common_max = max(3, corpus // 10)
+
+    claimed = set()
+    stories = []
+    for index, (item, source_type, score) in enumerate(rows):
+        if index in claimed or score < min_score:
+            continue
+        anchor_tokens = token_sets[index]
+        # A title with fewer than two specific tokens ("We're frozen out") names
+        # nothing concrete, so it can neither anchor a story nor be researched.
+        if sum(1 for token in anchor_tokens if _is_specific(token)) < 2:
+            continue
+        headline = _story_headline(item, source_type)
+        if not headline or headline.lower() in GENERIC_TOPICS:
+            continue
+
+        members = [(index, item, source_type, score)]
+        claimed.add(index)
+        for other in range(index + 1, len(rows)):
+            if other in claimed:
+                continue
+            if _corroborates(anchor_tokens, token_sets[other], doc_freq, rare_max, common_max):
+                o_item, o_source, o_score = rows[other]
+                members.append((other, o_item, o_source, o_score))
+                claimed.add(other)
+
+        sources = sorted({member[2] for member in members})
+        related_items = [{
+            # The anchor carries the story headline so downstream consumers that
+            # read related_items[0] (the factory's lead item) get "OmniRoute:
+            # Never stop coding" rather than the bare "org/OmniRoute" slug.
+            "title": headline if m_index == index else _normalize_headline(m_item.get("title")),
+            "url": m_item.get("url", ""),
+            "description": m_item.get("description") or m_item.get("abstract") or "",
+            "source_type": m_source,
+            "source_label": SOURCE_LABELS.get(m_source, m_source.title()),
+            "signal_score": m_item.get("signal_score", 0),
+            "creator_score": m_item.get("creator_score", 0),
+        } for m_index, m_item, m_source, _ in members]
+
+        avg_signal = round(sum(m[3] for m in members) / len(members), 1)
+        demoable = any(_is_demoable(m_item, m_source) for _, m_item, m_source, _ in members)
+        # Corroboration across independent sources is the strongest signal that
+        # something actually happened, so it outweighs raw score here.
+        story_score = (
+            score
+            + 12 * (len(sources) - 1)
+            + 3 * (len(members) - 1)
+            + _story_tension_boost(item) // 2
+        )
+
+        stories.append({
+            "topic": headline,
+            "slug": slugify_topic(headline),
+            "anchor_url": item.get("url", ""),
+            "anchor_source": source_type,
+            "story_score": story_score,
+            "source_count": len(sources),
+            "sources": sources,
+            "related_items": related_items[:6],
+            "average_signal_score": avg_signal,
+            "creator_score": round(
+                sum(int(m[1].get("creator_score") or 0) for m in members) / len(members), 1
+            ),
+            "why_this_is_a_story": "",
+            "recommended_angle": "",
+            "best_content_format": (
+                "Comparison video" if len(sources) >= 3
+                else "Tutorial" if demoable else "Explainer"
+            ),
+            "has_demoable_item": demoable,
+            "corroborated": len(sources) >= 2,
+        })
+
+    stories.sort(key=lambda row: row["story_score"], reverse=True)
+    return stories[:limit]
 
 
 # ── Phase 1: trend math ──────────────────────────────────────────────────

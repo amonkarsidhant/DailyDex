@@ -20,6 +20,7 @@ from creator_intelligence import (
     build_creator_digest,
     build_creator_saved_groups,
     build_research_pack,
+    build_story_candidates,
     build_topic_clusters,
     build_weekly_compilations,
     enrich_scored_data_with_creator_fields,
@@ -1775,6 +1776,21 @@ def api_clusters():
             print(f"Warning: cluster snapshot failed: {e}")
     clusters = build_topic_clusters(scored_data, intel_db=intel_db)
     return jsonify({"clusters": clusters})
+
+
+@app.route("/api/stories")
+def api_stories():
+    """Concrete story candidates, each anchored on one real item.
+
+    /api/clusters groups by TOPIC_PATTERNS and answers "which categories are
+    busy". This answers "what happened", which is what a video gets named after.
+    """
+    try:
+        limit = max(1, min(50, int(request.args.get("limit", 12))))
+    except (TypeError, ValueError):
+        limit = 12
+    stories = build_story_candidates(load_scored_data(), intel_db=intel_db, limit=limit)
+    return jsonify({"stories": stories, "count": len(stories)})
 
 
 # ── Phase 2: agents ──────────────────────────────────────────────────────

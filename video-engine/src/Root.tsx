@@ -3,6 +3,7 @@ import { Composition } from "remotion";
 import { MyComposition } from "./Composition";
 import { ShortsTemplate } from "./ShortsTemplate";
 import { BreakoutShort } from "./BreakoutShort";
+import { CarouselSlide } from "./CarouselSlide";
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -24,6 +25,33 @@ export const RemotionRoot: React.FC = () => {
         height={1920}
         defaultProps={{
           backgroundUrl: "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e"
+        }}
+      />
+      {/* LinkedIn carousel: 4:5 document pages, one slide per frame at fps 1
+          so the whole deck renders from a single bundle as an image sequence. */}
+      <Composition
+        id="CarouselSlide"
+        component={CarouselSlide}
+        durationInFrames={8}
+        fps={1}
+        width={1080}
+        height={1350}
+        defaultProps={{
+          slides: [
+            "The free AI gateway that tells you the truth",
+            "The core shift — one endpoint in front of 290+ providers.",
+            "Why it matters — quota-aware auto-fallback keeps agents alive.",
+            "Follow for weekly AI signals.",
+          ],
+          brandLabel: "DAILYDEX • AI REPORT",
+          handle: "",
+          accentColor: "#F0B72F",
+          topic: "",
+        }}
+        calculateMetadata={async ({ props }) => {
+          const p = props as { slides?: unknown };
+          const count = Array.isArray(p.slides) ? p.slides.length : 0;
+          return { durationInFrames: Math.max(1, count), fps: 1 };
         }}
       />
       <Composition

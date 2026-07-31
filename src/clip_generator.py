@@ -451,16 +451,24 @@ def generate_clips(item: Dict[str, Any], num_clips: int = 3,
                 hook = str(raw_clip.get("hook_text") or raw_clip.get("hook") or "")[:140]
                 clip_title = str(raw_clip.get("title") or "")[:80]
 
-                # Use LLM's virality_score if plausible, otherwise compute ours
+                heuristic_score = score_clip_virality(hook, clip_title)
+
+                # Use LLM's virality_score if plausible, otherwise compute ours.
+                # Default must be None, not 0: float(0) passes the range check,
+                # so a *missing* field would score 0 and drag the blend down to
+                # 0.3x the heuristic — penalising clips the LLM simply didn't
+                # self-rate.
                 try:
-                    llm_score = float(raw_clip.get("virality_score", 0))
+                    raw_score = raw_clip.get("virality_score")
+                    if raw_score is None:
+                        raise ValueError
+                    llm_score = float(raw_score)
                     if not (0 <= llm_score <= 100):
                         raise ValueError
                 except (TypeError, ValueError):
-                    llm_score = score_clip_virality(hook, clip_title)
+                    llm_score = heuristic_score
 
                 # Blend: 70 % LLM + 30 % heuristic for robustness
-                heuristic_score = score_clip_virality(hook, clip_title)
                 blended = round(0.7 * llm_score + 0.3 * heuristic_score, 1)
 
                 clips.append({

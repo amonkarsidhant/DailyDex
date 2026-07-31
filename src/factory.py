@@ -21,7 +21,7 @@ import threading
 import uuid
 from typing import Any, Callable, Dict, List, Optional
 
-from creator_intelligence import build_topic_clusters
+from creator_intelligence import build_story_candidates, build_topic_clusters
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CREATOR_PROFILE_PATH = os.environ.get(
@@ -89,6 +89,24 @@ def _cluster_lead_item(cluster: Dict) -> Dict:
     }
 
 
+def _cluster_source_urls(cluster: Dict, lead: Optional[Dict] = None, limit: int = 6) -> List[str]:
+    """URLs the script was grounded in, lead first, de-duplicated.
+
+    Carried onto the queue row so a published video can credit its sources
+    instead of asserting claims with nothing to point at.
+    """
+    urls: List[str] = []
+    candidates = []
+    if lead and lead.get("url"):
+        candidates.append(lead["url"])
+    candidates.extend(item.get("url", "") for item in (cluster.get("related_items") or []))
+    for url in candidates:
+        url = str(url or "").strip()
+        if url and url not in urls and url.lower().startswith(("http://", "https://")):
+            urls.append(url)
+    return urls[:limit]
+
+
 def run_factory(intel_db,
                  scored_data: Dict,
                  limit: int = 3,
@@ -96,11 +114,16 @@ def run_factory(intel_db,
                  auto_approve: bool = True,
                 render_fn: Optional[Callable] = None,
                 generate_clips_fn: Optional[Callable] = None,
-                gather_evidence_fn: Optional[Callable] = None) -> Dict[str, Any]:
-    """One factory pass: pick top clusters, ground, script, gate, render, enqueue.
+                gather_evidence_fn: Optional[Callable] = None,
+                use_stories: bool = True) -> Dict[str, Any]:
+    """One factory pass: pick top stories, ground, script, gate, render, enqueue.
 
     render_fn / generate_clips_fn / gather_evidence_fn injectable for tests;
     default to the real video_renderer / clip_generator / evidence modules.
+
+    ``use_stories`` selects story anchors (a real headline) over TOPIC_PATTERNS
+    clusters (a category label such as "AI Tools"). Pass False for the legacy
+    taxonomy behaviour.
     """
     if render_fn is None:
         from video_renderer import render_short_video as render_fn
@@ -113,7 +136,12 @@ def run_factory(intel_db,
     topics_config = _load_json(TOPICS_CONFIG_PATH)
     auto_approve_score = profile.get("automation", {}).get("auto_forge_score", 82)
 
-    clusters = build_topic_clusters(scored_data, intel_db=intel_db)
+    if use_stories:
+        clusters = build_story_candidates(scored_data, intel_db=intel_db, limit=max(limit * 4, 12))
+        if not clusters:
+            clusters = build_topic_clusters(scored_data, intel_db=intel_db)
+    else:
+        clusters = build_topic_clusters(scored_data, intel_db=intel_db)
     skip_topics = set(intel_db.factory_active_topics())
     if cluster_slug:
         clusters = [c for c in clusters if c.get("slug") == cluster_slug]
@@ -124,6 +152,7 @@ def run_factory(intel_db,
     for cluster in candidates:
         topic = cluster.get("topic", "Unknown")
         lead = _cluster_lead_item(cluster)
+        source_urls = _cluster_source_urls(cluster, lead)
         try:
             try:
                 lead_evidence = gather_evidence_fn(lead)
@@ -138,6 +167,7 @@ def run_factory(intel_db,
                 row_id = intel_db.factory_enqueue(
                     topic, lead["title"], status="blocked",
                     error="No source evidence was available; render blocked by creator safety settings.",
+                    source_urls=source_urls,
                 )
                 results["blocked"].append({
                     "id": row_id,
@@ -160,6 +190,7 @@ def run_factory(intel_db,
                 row_id = intel_db.factory_enqueue(
                     topic, title, hook, script,
                     status="blocked", error="; ".join(violations), virality_score=virality,
+                    source_urls=source_urls,
                 )
                 results["blocked"].append({"id": row_id, "topic": topic, "violations": violations})
                 continue
@@ -179,7 +210,7 @@ def run_factory(intel_db,
                 row_id = intel_db.factory_enqueue(
                     topic, title, hook, script,
                     status="render_failed", error=str(render.get("error", "unknown")),
-                    virality_score=virality,
+                    virality_score=virality, source_urls=source_urls,
                 )
                 results["failed"].append({"id": row_id, "topic": topic, "error": render.get("error")})
                 continue
@@ -188,7 +219,7 @@ def run_factory(intel_db,
             row_id = intel_db.factory_enqueue(
                 topic, title, hook, script,
                 video_path=render.get("video_path", ""),
-                virality_score=virality, status=status,
+                virality_score=virality, status=status, source_urls=source_urls,
             )
             results["queued"].append({"id": row_id, "topic": topic, "status": status,
                                       "virality": virality, "video_path": render.get("video_path", "")})

@@ -290,6 +290,45 @@ def api_integrations_ab_test_active():
     return jsonify({"success": True, "test": test})
 
 
+@integrations_bp.route("/api/integrations/linkedin/carousel", methods=["POST"])
+def api_linkedin_carousel():
+    """Render carousel copy to the PDF LinkedIn accepts for a document post.
+
+    Accepts either ``slides`` (a list) or ``text`` (generated copy to parse).
+    Rendering only — publishing stays a separate, explicit step.
+    """
+    import carousel_renderer
+
+    payload = request.get_json(silent=True) or {}
+    slides = payload.get("slides")
+    if not isinstance(slides, list) or not slides:
+        slides = carousel_renderer.parse_slides(str(payload.get("text") or ""))
+    slides = [str(s).strip() for s in slides if str(s).strip()]
+    if not slides:
+        return jsonify({"error": "no slides supplied"}), 400
+
+    import llm_summary
+    profile = llm_summary.load_creator_profile()
+    result = carousel_renderer.render_carousel_pdf(
+        slides,
+        brand_label=(payload.get("brand_label") or profile.get("brand_label")
+                     or profile.get("channel_name") or "DAILYDEX • AI REPORT"),
+        handle=payload.get("handle") or profile.get("linkedin_handle", ""),
+        accent_color=profile.get("video_accent_color") or "#F0B72F",
+        topic=str(payload.get("topic") or "")[:40],
+    )
+    if not result.get("success"):
+        return jsonify({"error": result.get("error", "render failed")}), 502
+    result["download_url"] = f"/api/carousels/{os.path.basename(result['pdf_path'])}"
+    return jsonify(result)
+
+
+@integrations_bp.route("/api/carousels/<filename>", methods=["GET"])
+def serve_rendered_carousel(filename):
+    data_dir = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "data"))
+    return send_from_directory(os.path.join(data_dir, "carousels"), filename)
+
+
 @integrations_bp.route("/api/videos/<filename>", methods=["GET"])
 def serve_rendered_video(filename):
     data_dir = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "data"))
