@@ -7,6 +7,9 @@ gunicorn>=21.0.0
 # Assembles rendered carousel pages into the PDF LinkedIn document posts need.
 Pillow>=10.0.0
 pytest>=8.0.0
+# tests/test_telegram_bot.py uses @pytest.mark.asyncio; without this plugin
+# pytest reports "async def functions are not natively supported".
+pytest-asyncio>=0.23.0
 python-telegram-bot[job-queue]>=20.7
 yfinance>=0.2.0
 

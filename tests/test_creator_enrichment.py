@@ -285,6 +285,14 @@ def test_weekly_compilations_and_listicle_script_writer(stub_llm, tmp_path, monk
     }
     
     monkeypatch.setattr(creator_intelligence, "build_weekly_compilations", lambda *args, **kwargs: [mocked_compilation])
+
+    # _run_script_writer only looks for a compilation when a scored-data file
+    # exists on disk, falling back to the relative "data/data_scored.json".
+    # data/ is gitignored, so without this the agent silently takes the
+    # non-compilation branch anywhere the developer has not run a fetch.
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir(exist_ok=True)
+    (tmp_path / "data" / "data_scored.json").write_text(json.dumps(scored_data), encoding="utf-8")
     
     # Mock LLM generation
     def mock_generate(prompt, system=None, *, prefer=None, timeout=240, **kwargs):
