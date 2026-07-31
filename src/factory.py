@@ -89,6 +89,59 @@ def _cluster_lead_item(cluster: Dict) -> Dict:
     }
 
 
+def _shape_item(row: Dict, cluster: Dict) -> Dict:
+    """A cluster's related_item shaped like a saved item."""
+    return {
+        "id": 0,
+        "title": row.get("title") or cluster.get("topic", ""),
+        "url": row.get("url", ""),
+        "source_type": row.get("source_type", ""),
+        "description": row.get("description", ""),
+        "signal_score": row.get("signal_score", 0),
+    }
+
+
+def _has_evidence(record: Optional[Dict]) -> bool:
+    if not record:
+        return False
+    return bool(record.get("facts") or record.get("quotes")
+                or str(record.get("excerpt") or "").strip())
+
+
+def gather_cluster_evidence(cluster: Dict, lead: Dict, gather_evidence_fn) -> Dict[str, Any]:
+    """Evidence for a story, falling back through its corroborating sources.
+
+    Major publishers block automated fetching — Axios and friends answer 403 to
+    anything that is not a browser, and harder still from a datacenter IP. A
+    story corroborated across three sources should not be unrenderable because
+    the single highest-scoring one happens to sit behind a bot wall, so try each
+    member in turn and keep the first that yields something citable.
+    """
+    seen = set()
+    attempts = []
+    for candidate in [lead] + [_shape_item(row, cluster)
+                               for row in (cluster.get("related_items") or [])]:
+        url = str(candidate.get("url") or "").strip()
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        try:
+            record = gather_evidence_fn(candidate)
+        except Exception as exc:
+            attempts.append(f"{url}: {exc}")
+            continue
+        if _has_evidence(record):
+            record = dict(record)
+            record["evidence_source_url"] = url
+            record["evidence_attempts"] = attempts
+            return record
+        # A fetcher may legitimately return None rather than an error record.
+        reason = (record or {}).get("error") or "no citable content"
+        attempts.append(f"{url}: {reason}")
+    return {"facts": [], "quotes": [], "excerpt": "", "evidence_attempts": attempts,
+            "error": "; ".join(attempts[-3:]) or "no source could be retrieved"}
+
+
 def _cluster_source_urls(cluster: Dict, lead: Optional[Dict] = None, limit: int = 6) -> List[str]:
     """URLs the script was grounded in, lead first, de-duplicated.
 
@@ -154,19 +207,14 @@ def run_factory(intel_db,
         lead = _cluster_lead_item(cluster)
         source_urls = _cluster_source_urls(cluster, lead)
         try:
-            try:
-                lead_evidence = gather_evidence_fn(lead)
-            except Exception:
-                lead_evidence = None
-            has_evidence = bool(lead_evidence and any([
-                lead_evidence.get("facts"),
-                lead_evidence.get("quotes"),
-                str(lead_evidence.get("excerpt") or "").strip(),
-            ]))
+            lead_evidence = gather_cluster_evidence(cluster, lead, gather_evidence_fn)
+            has_evidence = _has_evidence(lead_evidence)
             if not has_evidence and profile.get("automation", {}).get("block_unevidenced_renders", True):
+                detail = str(lead_evidence.get("error") or "")[:300]
                 row_id = intel_db.factory_enqueue(
                     topic, lead["title"], status="blocked",
-                    error="No source evidence was available; render blocked by creator safety settings.",
+                    error=("No source evidence was available; render blocked by creator "
+                           f"safety settings. Tried: {detail}"),
                     source_urls=source_urls,
                 )
                 results["blocked"].append({

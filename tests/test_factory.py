@@ -166,7 +166,11 @@ def test_run_factory_passes_evidence_to_clip_generator(tmp_path, monkeypatch):
         render_fn=_fake_render, generate_clips_fn=spy_clips,
         gather_evidence_fn=lambda item: fake_evidence)
     assert len(result["queued"]) == 1
-    assert seen["evidence"] == fake_evidence
+    # The fetched record reaches the clip generator intact; gather_cluster_evidence
+    # additionally stamps which source it came from.
+    for key, value in fake_evidence.items():
+        assert seen["evidence"][key] == value
+    assert seen["evidence"]["evidence_source_url"]
 
 
 def test_run_factory_targets_selected_cluster(tmp_path, monkeypatch):
@@ -353,6 +357,82 @@ def test_factory_publish_without_oauth_fails_cleanly(client, app_env):
     # No Google OAuth configured in test env -> 400 with clear error
     assert resp.status_code == 400
     assert "OAuth" in resp.get_json()["error"] or "token" in resp.get_json()["error"].lower()
+
+
+# ── evidence fallback across corroborating sources ────────────────────────
+
+def _cluster_with_blocked_anchor():
+    return {
+        "topic": "Rogue agent incident",
+        "related_items": [
+            {"title": "Axios piece", "url": "https://blocked.example/a",
+             "source_type": "blogs", "signal_score": 95},
+            {"title": "HN thread", "url": "https://news.ycombinator.com/item?id=1",
+             "source_type": "hackernews", "signal_score": 80},
+        ],
+    }
+
+
+def _lead_of(cluster):
+    return factory_mod._cluster_lead_item(cluster)
+
+
+def test_evidence_falls_back_when_the_anchor_blocks_bots(tmp_path):
+    """Publishers answer 403 to non-browsers; corroborating sources still work."""
+    cluster = _cluster_with_blocked_anchor()
+
+    def gather(item):
+        if "blocked.example" in item["url"]:
+            return {"facts": [], "quotes": [], "excerpt": "", "error": "HTTP 403"}
+        return {"facts": ["fact from the discussion"], "quotes": [], "excerpt": "text"}
+
+    ev = factory_mod.gather_cluster_evidence(cluster, _lead_of(cluster), gather)
+
+    assert factory_mod._has_evidence(ev)
+    assert ev["evidence_source_url"] == "https://news.ycombinator.com/item?id=1"
+    assert any("403" in a for a in ev["evidence_attempts"])
+
+
+def test_evidence_prefers_the_anchor_when_it_works(tmp_path):
+    cluster = _cluster_with_blocked_anchor()
+    ev = factory_mod.gather_cluster_evidence(
+        cluster, _lead_of(cluster),
+        lambda item: {"facts": [f"fact from {item['url']}"], "quotes": [], "excerpt": "x"})
+
+    assert ev["evidence_source_url"] == "https://blocked.example/a"
+    assert ev["evidence_attempts"] == []
+
+
+def test_evidence_survives_a_fetcher_that_raises(tmp_path):
+    cluster = _cluster_with_blocked_anchor()
+
+    def gather(item):
+        if "blocked.example" in item["url"]:
+            raise ConnectionError("connection reset")
+        return {"facts": ["recovered"], "quotes": [], "excerpt": "x"}
+
+    ev = factory_mod.gather_cluster_evidence(cluster, _lead_of(cluster), gather)
+    assert ev["facts"] == ["recovered"]
+
+
+def test_blocked_row_records_what_was_attempted(tmp_path, monkeypatch):
+    """A blocked render must say why, not just that it was blocked."""
+    db = _db(tmp_path)
+    monkeypatch.setattr(factory_mod, "_load_json", lambda p: (
+        {"automation": {"block_unevidenced_renders": True, "auto_forge_score": 95},
+         "banned_phrases": []}
+        if "profile" in p else {"blocked_keywords": []}
+    ))
+    result = factory_mod.run_factory(
+        db, _scored(), limit=1,
+        render_fn=_fake_render, generate_clips_fn=_fake_clips,
+        gather_evidence_fn=lambda item: {"facts": [], "quotes": [], "excerpt": "",
+                                         "error": "HTTP 403"},
+    )
+
+    assert result["blocked"]
+    row = db.factory_get(result["blocked"][0]["id"])
+    assert "403" in row["error"]
 
 
 # ── source attribution ────────────────────────────────────────────────────
