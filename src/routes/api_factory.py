@@ -79,9 +79,32 @@ def api_factory_reject(row_id):
     return jsonify({"success": True, "status": "rejected"})
 
 
+VALID_PRIVACY = ("private", "unlisted", "public")
+
+
+def _publication_description(row):
+    """Video description: the hook, then the script body it was read from."""
+    parts = [part for part in (row.get("hook", ""), row.get("script", "")) if part]
+    # The hook usually opens the script verbatim; repeating it reads as a stutter.
+    if len(parts) == 2 and parts[1].startswith(parts[0]):
+        parts = [parts[1]]
+    return "\n\n".join(parts)[:5000]
+
+
 @factory_bp.route("/api/factory/<int:row_id>/publish", methods=["POST"])
 def api_factory_publish(row_id):
-    """Upload an approved short to YouTube via the existing OAuth uploader."""
+    """Upload an approved short to YouTube via the existing OAuth uploader.
+
+    On success the video is also registered as a publication so analytics_sync
+    and the 48-hour rescue_engine can see it; without that bridge a factory
+    upload is invisible to every downstream analytics path.
+    """
+    payload = request.get_json(silent=True) or {}
+    privacy = str(payload.get("privacy") or "unlisted").lower()
+    if privacy not in VALID_PRIVACY:
+        return jsonify({"success": False,
+                        "error": f"privacy must be one of {', '.join(VALID_PRIVACY)}"}), 400
+
     row = _db().factory_get(row_id)
     if not row:
         return jsonify({"success": False, "error": "not found"}), 404
@@ -100,8 +123,9 @@ def api_factory_publish(row_id):
         result = youtube_oauth.upload_video(
             access_token=token["access_token"],
             title=row["title"],
-            description=row.get("hook", ""),
+            description=_publication_description(row),
             file_path=row["video_path"],
+            privacy=privacy,
             is_short=True,
         )
     except Exception as exc:
@@ -114,4 +138,40 @@ def api_factory_publish(row_id):
 
     url = result.get("url", "")
     _db().factory_update_status(row_id, "published", published_url=url)
-    return jsonify({"success": True, "status": "published", "published_url": url})
+
+    # Bridge factory_queue -> saved_items -> publication_analytics.
+    # publication_analytics.item_id references saved_items, so a factory row
+    # cannot be recorded directly. Keying the saved item on the video URL makes
+    # a re-publish update the same row rather than accumulating duplicates.
+    item_id = None
+    try:
+        item_id = _db().save_item({
+            "title": row["title"],
+            "url": url or f"dailydex://factory/{row_id}",
+            "source": "DailyDex Factory",
+            "source_type": "factory",
+            "status": "published",
+            "hook": row.get("hook", ""),
+            "pipeline_type": "creator",
+            "published_url": url,
+            "signal_score": int(row.get("virality_score") or 0),
+        })
+        _db().create_or_update_publication(
+            item_id=item_id,
+            platform="youtube",
+            status="live",
+            video_id=result.get("video_id"),
+        )
+    except Exception as exc:
+        # The upload already succeeded; losing the analytics link must not be
+        # reported as a failed publish.
+        current_app.logger.warning("factory publish analytics link failed: %s", exc)
+
+    return jsonify({
+        "success": True,
+        "status": "published",
+        "published_url": url,
+        "video_id": result.get("video_id"),
+        "privacy": privacy,
+        "item_id": item_id,
+    })
