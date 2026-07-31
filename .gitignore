@@ -63,6 +63,7 @@ video-engine/*.mp4
 video-engine/public/render_jobs/
 src/data/videos/
 src/data/carousels/
+src/carousels/
 data/carousels/
 src/test.mp4
 
