@@ -4,8 +4,6 @@ import json
 import uuid
 
 from flask import Blueprint, current_app, jsonify, request
-from creator_intelligence import build_topic_clusters
-
 factory_bp = Blueprint("factory", __name__)
 
 VALID_TRANSITIONS = {
@@ -28,7 +26,10 @@ def api_factory_run():
     payload = request.get_json(silent=True) or {}
     cluster_slug = str(payload.get("cluster_slug") or "").strip()
     scored_data = _scored_data()
-    clusters = build_topic_clusters(scored_data, intel_db=_db())
+    # Must match what run_factory will select from, or a validated slug can be
+    # one the run itself never sees.
+    from factory import select_candidates
+    clusters = select_candidates(scored_data, intel_db=_db())
     if not cluster_slug and clusters:
         cluster_slug = clusters[0].get("slug", "")
     if not any(cluster.get("slug") == cluster_slug for cluster in clusters):

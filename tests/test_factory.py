@@ -555,3 +555,28 @@ def test_demo_from_evidence_hn_and_empty():
     assert any(l.startswith("[REPLY]") for l in logs)
 
     assert vr._demo_from_evidence({"facts": [], "quotes": [], "excerpt": "", "source_kind": "", "url": ""}) is None
+
+
+def test_run_route_validates_against_what_the_run_selects(tmp_path, monkeypatch):
+    """A slug accepted by /api/factory/run must be one run_factory can find.
+
+    The route used build_topic_clusters while the run selected stories, so a
+    validated taxonomy slug matched nothing and the job did nothing.
+    """
+    db = _db(tmp_path)
+    scored = _scored()
+    route_candidates = factory_mod.select_candidates(scored, intel_db=db)
+    slugs = {c["slug"] for c in route_candidates}
+
+    monkeypatch.setattr(factory_mod, "_load_json", lambda p: (
+        {"automation": {"auto_forge_score": 95, "block_unevidenced_renders": False},
+         "banned_phrases": []}
+        if "profile" in p else {"blocked_keywords": []}
+    ))
+    chosen = sorted(slugs)[0]
+    result = factory_mod.run_factory(
+        db, scored, limit=1, cluster_slug=chosen,
+        render_fn=_fake_render, generate_clips_fn=_fake_clips)
+
+    assert result["queued"] or result["blocked"], (
+        f"slug {chosen!r} validated by the route produced nothing in the run")

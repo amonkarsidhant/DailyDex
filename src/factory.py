@@ -89,6 +89,23 @@ def _cluster_lead_item(cluster: Dict) -> Dict:
     }
 
 
+def select_candidates(scored_data: Dict, intel_db=None, limit: int = 3,
+                      use_stories: bool = True) -> List[Dict]:
+    """The candidate list a factory run will choose from.
+
+    Callers that validate a slug before enqueuing a job must use this rather
+    than build_topic_clusters, or they will accept a taxonomy slug that the run
+    itself — selecting from stories — can never match, producing a job that
+    completes having done nothing.
+    """
+    if use_stories:
+        stories = build_story_candidates(scored_data, intel_db=intel_db,
+                                         limit=max(limit * 4, 12))
+        if stories:
+            return stories
+    return build_topic_clusters(scored_data, intel_db=intel_db)
+
+
 def _shape_item(row: Dict, cluster: Dict) -> Dict:
     """A cluster's related_item shaped like a saved item."""
     return {
@@ -189,12 +206,8 @@ def run_factory(intel_db,
     topics_config = _load_json(TOPICS_CONFIG_PATH)
     auto_approve_score = profile.get("automation", {}).get("auto_forge_score", 82)
 
-    if use_stories:
-        clusters = build_story_candidates(scored_data, intel_db=intel_db, limit=max(limit * 4, 12))
-        if not clusters:
-            clusters = build_topic_clusters(scored_data, intel_db=intel_db)
-    else:
-        clusters = build_topic_clusters(scored_data, intel_db=intel_db)
+    clusters = select_candidates(scored_data, intel_db=intel_db, limit=limit,
+                                 use_stories=use_stories)
     skip_topics = set(intel_db.factory_active_topics())
     if cluster_slug:
         clusters = [c for c in clusters if c.get("slug") == cluster_slug]
