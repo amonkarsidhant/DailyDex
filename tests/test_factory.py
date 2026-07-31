@@ -81,8 +81,10 @@ def test_run_factory_queues_and_auto_approves(tmp_path, monkeypatch):
         {"automation": {"auto_forge_score": 82, "block_unevidenced_renders": False}, "banned_phrases": []}
         if "profile" in p else {"blocked_keywords": []}
     ))
+    # Exercises queue/auto-approve mechanics against the taxonomy selector this
+    # test was written for; story selection has its own coverage below.
     result = factory_mod.run_factory(
-        db, _scored(), limit=2,
+        db, _scored(), limit=2, use_stories=False,
         render_fn=_fake_render, generate_clips_fn=_fake_clips)
 
     assert len(result["queued"]) == 2
@@ -177,11 +179,51 @@ def test_run_factory_targets_selected_cluster(tmp_path, monkeypatch):
     clusters = build_topic_clusters(_scored(), intel_db=db)
     selected = clusters[-1]
     result = factory_mod.run_factory(
-        db, _scored(), limit=1, cluster_slug=selected["slug"],
+        db, _scored(), limit=1, cluster_slug=selected["slug"], use_stories=False,
         render_fn=_fake_render, generate_clips_fn=_fake_clips,
         gather_evidence_fn=lambda item: {"facts": ["source fact"], "url": item["url"]},
     )
     assert result["queued"][0]["topic"] == selected["topic"]
+
+
+def test_run_factory_defaults_to_story_topics(tmp_path, monkeypatch):
+    """The default run must name a video after an event, not a category."""
+    db = _db(tmp_path)
+    monkeypatch.setattr(factory_mod, "_load_json", lambda p: (
+        {"automation": {"auto_forge_score": 95, "block_unevidenced_renders": False},
+         "banned_phrases": []}
+        if "profile" in p else {"blocked_keywords": []}
+    ))
+    result = factory_mod.run_factory(
+        db, _scored(), limit=2,
+        render_fn=_fake_render, generate_clips_fn=_fake_clips)
+
+    topics = [q["topic"] for q in result["queued"]]
+    assert topics, "story selection produced no candidates"
+    for label in ("AI Agents", "Local AI", "Coding AI", "AI Tools", "General"):
+        assert label not in topics
+
+
+def test_run_factory_falls_back_to_clusters_without_stories(tmp_path, monkeypatch):
+    """Titles too vague to anchor must not leave the factory with nothing."""
+    db = _db(tmp_path)
+    monkeypatch.setattr(factory_mod, "_load_json", lambda p: (
+        {"automation": {"auto_forge_score": 95, "block_unevidenced_renders": False},
+         "banned_phrases": []}
+        if "profile" in p else {"blocked_keywords": []}
+    ))
+    vague = {
+        "github": [{"title": "we are so back", "signal_score": 90,
+                    "description": "agent demo", "url": "https://example.com/x",
+                    "has_code": True}],
+        "youtube": [{"title": "it is over", "signal_score": 88,
+                     "description": "agent demo", "url": "https://example.com/y"}],
+    }
+    result = factory_mod.run_factory(
+        db, vague, limit=1,
+        render_fn=_fake_render, generate_clips_fn=_fake_clips)
+
+    assert not result["failed"]
 
 
 def test_run_factory_blocks_missing_evidence_when_configured(tmp_path, monkeypatch):

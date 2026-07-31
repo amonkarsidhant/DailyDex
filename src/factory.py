@@ -21,7 +21,7 @@ import threading
 import uuid
 from typing import Any, Callable, Dict, List, Optional
 
-from creator_intelligence import build_topic_clusters
+from creator_intelligence import build_story_candidates, build_topic_clusters
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CREATOR_PROFILE_PATH = os.environ.get(
@@ -96,11 +96,16 @@ def run_factory(intel_db,
                  auto_approve: bool = True,
                 render_fn: Optional[Callable] = None,
                 generate_clips_fn: Optional[Callable] = None,
-                gather_evidence_fn: Optional[Callable] = None) -> Dict[str, Any]:
-    """One factory pass: pick top clusters, ground, script, gate, render, enqueue.
+                gather_evidence_fn: Optional[Callable] = None,
+                use_stories: bool = True) -> Dict[str, Any]:
+    """One factory pass: pick top stories, ground, script, gate, render, enqueue.
 
     render_fn / generate_clips_fn / gather_evidence_fn injectable for tests;
     default to the real video_renderer / clip_generator / evidence modules.
+
+    ``use_stories`` selects story anchors (a real headline) over TOPIC_PATTERNS
+    clusters (a category label such as "AI Tools"). Pass False for the legacy
+    taxonomy behaviour.
     """
     if render_fn is None:
         from video_renderer import render_short_video as render_fn
@@ -113,7 +118,12 @@ def run_factory(intel_db,
     topics_config = _load_json(TOPICS_CONFIG_PATH)
     auto_approve_score = profile.get("automation", {}).get("auto_forge_score", 82)
 
-    clusters = build_topic_clusters(scored_data, intel_db=intel_db)
+    if use_stories:
+        clusters = build_story_candidates(scored_data, intel_db=intel_db, limit=max(limit * 4, 12))
+        if not clusters:
+            clusters = build_topic_clusters(scored_data, intel_db=intel_db)
+    else:
+        clusters = build_topic_clusters(scored_data, intel_db=intel_db)
     skip_topics = set(intel_db.factory_active_topics())
     if cluster_slug:
         clusters = [c for c in clusters if c.get("slug") == cluster_slug]
