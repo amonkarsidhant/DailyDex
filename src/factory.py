@@ -89,6 +89,24 @@ def _cluster_lead_item(cluster: Dict) -> Dict:
     }
 
 
+def _cluster_source_urls(cluster: Dict, lead: Optional[Dict] = None, limit: int = 6) -> List[str]:
+    """URLs the script was grounded in, lead first, de-duplicated.
+
+    Carried onto the queue row so a published video can credit its sources
+    instead of asserting claims with nothing to point at.
+    """
+    urls: List[str] = []
+    candidates = []
+    if lead and lead.get("url"):
+        candidates.append(lead["url"])
+    candidates.extend(item.get("url", "") for item in (cluster.get("related_items") or []))
+    for url in candidates:
+        url = str(url or "").strip()
+        if url and url not in urls and url.lower().startswith(("http://", "https://")):
+            urls.append(url)
+    return urls[:limit]
+
+
 def run_factory(intel_db,
                  scored_data: Dict,
                  limit: int = 3,
@@ -134,6 +152,7 @@ def run_factory(intel_db,
     for cluster in candidates:
         topic = cluster.get("topic", "Unknown")
         lead = _cluster_lead_item(cluster)
+        source_urls = _cluster_source_urls(cluster, lead)
         try:
             try:
                 lead_evidence = gather_evidence_fn(lead)
@@ -148,6 +167,7 @@ def run_factory(intel_db,
                 row_id = intel_db.factory_enqueue(
                     topic, lead["title"], status="blocked",
                     error="No source evidence was available; render blocked by creator safety settings.",
+                    source_urls=source_urls,
                 )
                 results["blocked"].append({
                     "id": row_id,
@@ -170,6 +190,7 @@ def run_factory(intel_db,
                 row_id = intel_db.factory_enqueue(
                     topic, title, hook, script,
                     status="blocked", error="; ".join(violations), virality_score=virality,
+                    source_urls=source_urls,
                 )
                 results["blocked"].append({"id": row_id, "topic": topic, "violations": violations})
                 continue
@@ -189,7 +210,7 @@ def run_factory(intel_db,
                 row_id = intel_db.factory_enqueue(
                     topic, title, hook, script,
                     status="render_failed", error=str(render.get("error", "unknown")),
-                    virality_score=virality,
+                    virality_score=virality, source_urls=source_urls,
                 )
                 results["failed"].append({"id": row_id, "topic": topic, "error": render.get("error")})
                 continue
@@ -198,7 +219,7 @@ def run_factory(intel_db,
             row_id = intel_db.factory_enqueue(
                 topic, title, hook, script,
                 video_path=render.get("video_path", ""),
-                virality_score=virality, status=status,
+                virality_score=virality, status=status, source_urls=source_urls,
             )
             results["queued"].append({"id": row_id, "topic": topic, "status": status,
                                       "virality": virality, "video_path": render.get("video_path", "")})

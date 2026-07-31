@@ -473,6 +473,11 @@ class IntelligenceDB:
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Sources the script was grounded in, so a published video can cite them.
+        cursor.execute("PRAGMA table_info(factory_queue)")
+        factory_columns = {row[1] for row in cursor.fetchall()}
+        if "source_urls" not in factory_columns:
+            cursor.execute("ALTER TABLE factory_queue ADD COLUMN source_urls TEXT DEFAULT ''")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS factory_jobs (
                 id TEXT PRIMARY KEY,
@@ -1731,15 +1736,33 @@ class IntelligenceDB:
 
     # ── factory_queue helpers (autonomous news factory) ──
 
+    @staticmethod
+    def _factory_row(row) -> Dict:
+        """Row dict with source_urls decoded back into a list."""
+        item = dict(row)
+        raw = item.get("source_urls")
+        if isinstance(raw, str) and raw.strip():
+            try:
+                decoded = json.loads(raw)
+                item["source_urls"] = decoded if isinstance(decoded, list) else []
+            except (TypeError, ValueError):
+                item["source_urls"] = []
+        else:
+            item["source_urls"] = []
+        return item
+
     def factory_enqueue(self, topic: str, title: str, hook: str = "", script: str = "",
                         video_path: str = "", virality_score: float = 0.0,
-                        status: str = "pending_review", error: str = "") -> int:
+                        status: str = "pending_review", error: str = "",
+                        source_urls: Optional[List[str]] = None) -> int:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
+        encoded = json.dumps([str(u) for u in source_urls if u]) if source_urls else ""
         cursor.execute("""
-            INSERT INTO factory_queue (topic, title, hook, script, video_path, virality_score, status, error)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (topic, title, hook, script, video_path, virality_score, status, error))
+            INSERT INTO factory_queue (topic, title, hook, script, video_path, virality_score,
+                                       status, error, source_urls)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (topic, title, hook, script, video_path, virality_score, status, error, encoded))
         row_id = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -1753,7 +1776,7 @@ class IntelligenceDB:
             cursor.execute("SELECT * FROM factory_queue WHERE status = ? ORDER BY created_at DESC", (status,))
         else:
             cursor.execute("SELECT * FROM factory_queue ORDER BY created_at DESC")
-        rows = [dict(r) for r in cursor.fetchall()]
+        rows = [self._factory_row(r) for r in cursor.fetchall()]
         conn.close()
         return rows
 
@@ -1782,7 +1805,7 @@ class IntelligenceDB:
         cursor.execute("SELECT * FROM factory_queue WHERE id = ?", (row_id,))
         row = cursor.fetchone()
         conn.close()
-        return dict(row) if row else None
+        return self._factory_row(row) if row else None
 
     def factory_update_status(self, row_id: int, status: str,
                               published_url: Optional[str] = None,

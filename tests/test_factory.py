@@ -355,6 +355,92 @@ def test_factory_publish_without_oauth_fails_cleanly(client, app_env):
     assert "OAuth" in resp.get_json()["error"] or "token" in resp.get_json()["error"].lower()
 
 
+# ── source attribution ────────────────────────────────────────────────────
+
+def test_factory_row_round_trips_source_urls(tmp_path):
+    db = _db(tmp_path)
+    row_id = db.factory_enqueue("AI Agents", "Short", source_urls=[
+        "https://github.com/org/repo", "https://news.ycombinator.com/item?id=1"])
+
+    row = db.factory_get(row_id)
+    assert row["source_urls"] == [
+        "https://github.com/org/repo", "https://news.ycombinator.com/item?id=1"]
+    assert db.factory_list()[0]["source_urls"] == row["source_urls"]
+
+
+def test_factory_row_without_sources_reads_as_empty_list(tmp_path):
+    db = _db(tmp_path)
+    row_id = db.factory_enqueue("AI Agents", "Short")
+    assert db.factory_get(row_id)["source_urls"] == []
+
+
+def test_source_urls_column_is_added_to_an_existing_database(tmp_path):
+    """A pre-existing factory_queue must gain the column, not error."""
+    import sqlite3
+
+    db_path = tmp_path / "legacy.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("""
+        CREATE TABLE factory_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            topic TEXT NOT NULL,
+            title TEXT NOT NULL,
+            hook TEXT DEFAULT '',
+            script TEXT DEFAULT '',
+            video_path TEXT DEFAULT '',
+            virality_score REAL DEFAULT 0,
+            status TEXT DEFAULT 'pending_review',
+            error TEXT DEFAULT '',
+            published_url TEXT DEFAULT '',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("INSERT INTO factory_queue (topic, title) VALUES ('Old', 'Pre-existing row')")
+    conn.commit()
+    conn.close()
+
+    db = IntelligenceDB(str(db_path))
+    rows = db.factory_list()
+    assert any(r["title"] == "Pre-existing row" for r in rows)
+    assert all(r["source_urls"] == [] for r in rows)
+    # And the migrated table accepts new writes.
+    new_id = db.factory_enqueue("New", "Fresh row", source_urls=["https://example.com/a"])
+    assert db.factory_get(new_id)["source_urls"] == ["https://example.com/a"]
+
+
+def test_run_factory_records_the_sources_it_grounded_in(tmp_path, monkeypatch):
+    db = _db(tmp_path)
+    monkeypatch.setattr(factory_mod, "_load_json", lambda p: (
+        {"automation": {"auto_forge_score": 95, "block_unevidenced_renders": False},
+         "banned_phrases": []}
+        if "profile" in p else {"blocked_keywords": []}
+    ))
+    result = factory_mod.run_factory(
+        db, _scored(), limit=1,
+        render_fn=_fake_render, generate_clips_fn=_fake_clips)
+
+    assert result["queued"], "no rows queued"
+    row = db.factory_get(result["queued"][0]["id"])
+    assert row["source_urls"], "queued row carries no source attribution"
+    assert all(u.startswith("http") for u in row["source_urls"])
+
+
+def test_cluster_source_urls_dedupes_and_filters(tmp_path):
+    urls = factory_mod._cluster_source_urls(
+        {"related_items": [
+            {"url": "https://example.com/a"},
+            {"url": "https://example.com/a"},
+            {"url": "dailydex://internal"},
+            {"url": ""},
+            {"url": "https://example.com/b"},
+        ]},
+        lead={"url": "https://example.com/lead"},
+    )
+    assert urls[0] == "https://example.com/lead"
+    assert urls == ["https://example.com/lead", "https://example.com/a", "https://example.com/b"]
+
+
 # ── evidence → video demo card ────────────────────────────────────────────
 
 def test_demo_from_evidence_github():

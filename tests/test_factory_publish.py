@@ -122,3 +122,64 @@ def test_description_does_not_repeat_the_hook(app_env):
 
     both = _publication_description({"hook": "Standalone hook.", "script": "Different body."})
     assert "Standalone hook." in both and "Different body." in both
+
+
+# ── source attribution ────────────────────────────────────────────────────
+
+def test_description_cites_sources(app_env):
+    from routes.api_factory import _publication_description
+
+    text = _publication_description({
+        "hook": "A claim.",
+        "script": "A claim with detail.",
+        "source_urls": ["https://github.com/org/repo", "https://news.ycombinator.com/item?id=1"],
+    })
+    assert "Sources:" in text
+    assert "- https://github.com/org/repo" in text
+    assert "- https://news.ycombinator.com/item?id=1" in text
+
+
+def test_description_accepts_sources_still_encoded_as_json(app_env):
+    """Rows read outside the decoding helpers still carry a JSON string."""
+    from routes.api_factory import _publication_description
+
+    text = _publication_description({
+        "hook": "A claim.",
+        "source_urls": '["https://example.com/a"]',
+    })
+    assert "- https://example.com/a" in text
+
+
+def test_description_drops_non_http_and_duplicate_sources(app_env):
+    from routes.api_factory import _publication_description
+
+    text = _publication_description({
+        "hook": "A claim.",
+        "source_urls": ["https://example.com/a", "https://example.com/a",
+                        "javascript:alert(1)", "dailydex://internal", ""],
+    })
+    assert text.count("https://example.com/a") == 1
+    assert "javascript:" not in text
+    assert "dailydex://" not in text
+
+
+def test_description_omits_the_section_without_sources(app_env):
+    from routes.api_factory import _publication_description
+
+    assert "Sources:" not in _publication_description({"hook": "A claim.", "source_urls": []})
+
+
+def test_published_description_reaches_youtube_with_sources(client, app_env, ok_token):
+    db = app_env["module"].intel_db
+    row_id = db.factory_enqueue(
+        "AI Agents", "Incident short", hook="A claim.", script="A claim with detail.",
+        video_path="/videos/f.mp4",
+        source_urls=["https://github.com/org/repo"],
+    )
+    db.factory_update_status(row_id, "approved")
+
+    with patch("youtube_oauth.upload_video",
+               return_value={"video_id": "v", "url": "https://youtu.be/v"}) as upload:
+        client.post(f"/api/factory/{row_id}/publish")
+
+    assert "https://github.com/org/repo" in upload.call_args.kwargs["description"]

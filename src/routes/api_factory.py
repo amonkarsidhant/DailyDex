@@ -1,5 +1,6 @@
 """Factory approval-queue routes: run, review, publish."""
 
+import json
 import uuid
 
 from flask import Blueprint, current_app, jsonify, request
@@ -83,11 +84,32 @@ VALID_PRIVACY = ("private", "unlisted", "public")
 
 
 def _publication_description(row):
-    """Video description: the hook, then the script body it was read from."""
+    """Video description: the hook, the script body, then the sources cited.
+
+    Scripts are grounded in real fetched evidence, so the sources belong in the
+    description — a claim a viewer cannot check is indistinguishable from one
+    that was made up.
+    """
     parts = [part for part in (row.get("hook", ""), row.get("script", "")) if part]
     # The hook usually opens the script verbatim; repeating it reads as a stutter.
     if len(parts) == 2 and parts[1].startswith(parts[0]):
         parts = [parts[1]]
+
+    sources = row.get("source_urls") or []
+    if isinstance(sources, str):
+        try:
+            sources = json.loads(sources)
+        except (TypeError, ValueError):
+            sources = []
+    seen, cited = set(), []
+    for url in sources:
+        url = str(url or "").strip()
+        if url and url not in seen and url.lower().startswith(("http://", "https://")):
+            seen.add(url)
+            cited.append(url)
+    if cited:
+        parts.append("Sources:\n" + "\n".join(f"- {url}" for url in cited))
+
     return "\n\n".join(parts)[:5000]
 
 
