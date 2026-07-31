@@ -146,6 +146,12 @@ python3 dashboard_new.py            # Flask API + in-browser React on port 8888
 
 The React frontend compiles in-browser via Babel Standalone — no separate `npm` build step needed. Just open `http://localhost:8888/cockpit`.
 
+### VM / VPS Deployment
+
+See **[docs/DEPLOY.md](docs/DEPLOY.md)** for the full runbook: Docker Compose
+setup, the auth and TLS contract (a public deploy needs HTTPS or logins fail
+silently), reverse-proxy and SSH-tunnel options, and first-run steps.
+
 ### macOS launchd Service (Always-On)
 
 ```bash
