@@ -42,7 +42,10 @@ CLAUDE_TIMEOUT = int(os.environ.get("CLAUDE_TIMEOUT", "120"))
 # NVIDIA NIM — OpenAI-compatible endpoint (build.nvidia.com).
 NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", "")
 NVIDIA_BASE_URL = os.environ.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
-NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", "minimaxai/minimax-m2.7")
+# Keep this a currently-served model: it is the last-resort default, so an EOL
+# value here turns every call into a 410 before any fallback runs.
+NVIDIA_DEFAULT_MODEL = "meta/llama-3.3-70b-instruct"
+NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", NVIDIA_DEFAULT_MODEL)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CREATOR_PROFILE_PATH = os.environ.get(
@@ -462,7 +465,11 @@ def query_llm(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]
             provider = "nvidia" if (get_llm_setting("LLM_API_KEY") or get_llm_setting("NVIDIA_API_KEY")) else "anthropic"
 
     strategies = {
-        "nvidia": (query_nvidia, "LLM_MODEL", "minimaxai/minimax-m2.7"),
+        # Keyed on NVIDIA_MODEL, not LLM_MODEL: the resolved model is passed to
+        # query_nvidia explicitly and takes precedence over everything that
+        # function would otherwise consult, so keying it on the generic
+        # LLM_MODEL made NVIDIA_MODEL unreachable.
+        "nvidia": (query_nvidia, "NVIDIA_MODEL", NVIDIA_DEFAULT_MODEL),
         "openai": (query_openai, "LLM_MODEL", "gpt-4o-mini"),
         "anthropic": (query_anthropic, "LLM_MODEL", "claude-3-5-sonnet-latest"),
         "ollama": (query_ollama, "OLLAMA_MODEL", "phi3:mini"),
@@ -514,7 +521,7 @@ def llm_provider_label() -> str:
     if provider == "opencode":
         return f"opencode:{model or 'deepseek-v4-flash-free'}"
     if provider == "nvidia":
-        return f"nvidia:{model or 'minimaxai/minimax-m2.7'}"
+        return f"nvidia:{model or get_llm_setting('NVIDIA_MODEL', NVIDIA_DEFAULT_MODEL)}"
     if provider == "openai":
         return f"openai:{model or 'gpt-4o-mini'}"
     if provider == "anthropic":
