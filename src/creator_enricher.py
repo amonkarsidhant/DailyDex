@@ -1071,10 +1071,36 @@ class AgentRunner:
         except Exception as e:
             self._log(run_id, f"File write error: {e}")
 
+        # LinkedIn publishes carousels as document posts, so render the slides
+        # to the PDF it accepts. A render failure must not lose the copy.
+        pdf_path = ""
+        try:
+            self._stage(run_id, "Rendering carousel PDF", 0.95)
+            import carousel_renderer
+
+            profile = llm_summary.load_creator_profile()
+            rendered = carousel_renderer.render_carousel_from_text(
+                carousel,
+                brand_label=(profile.get("brand_label")
+                             or profile.get("channel_name") or "DAILYDEX • AI REPORT"),
+                handle=profile.get("linkedin_handle", ""),
+                accent_color=profile.get("video_accent_color") or "#F0B72F",
+                topic=label[:40],
+            )
+            if rendered.get("success"):
+                pdf_path = rendered["pdf_path"]
+                self._log(run_id, f"Carousel PDF: {os.path.basename(pdf_path)} "
+                                  f"({rendered['page_count']} pages)")
+                full_text += f"\n\n---\nRendered PDF: {pdf_path}\n"
+            else:
+                self._log(run_id, f"PDF render skipped: {rendered.get('error', '?')[:120]}")
+        except Exception as e:
+            self._log(run_id, f"PDF render error: {e}")
+
         self._store_result(run_id, full_text)
         self._log(run_id, "Carousel ready — click View to copy or download")
         self._stage(run_id, "Done", 1.0)
-        return f"carousel adapted · {label}"
+        return f"carousel adapted · {label}" + (" · pdf" if pdf_path else "")
 
     def _store_result(self, run_id: str, content: str) -> None:
         """Persist full generated content so the frontend can retrieve it."""
