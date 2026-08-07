@@ -129,6 +129,36 @@ def test_generic_ai_vocabulary_does_not_fuse_unrelated_stories():
             f"{[r['title'][:30] for r in story['related_items'][1:]]}")
 
 
+def test_an_uncommon_word_is_not_a_name():
+    """"insane" and "problem" are rare-ish English, not subjects.
+
+    Treating them as names grouped an "INSANE Week" roundup with "INSANE
+    prompts", and "Stupidity is the problem" with "The Problem with pandas".
+    """
+    for token in ("insane", "problem", "stupidity", "entropy", "compression"):
+        assert ci._is_strong_name(token) is False, f"{token} must not link alone"
+    for token in ("gpt-5.6", "lfm2.5-2.6b", "llama.cpp", "minimax-h3"):
+        assert ci._is_strong_name(token) is True, f"{token} should link alone"
+
+
+def test_a_bare_version_is_not_a_name():
+    for token in ("2.0", "10x", "26m", "100"):
+        assert ci._is_strong_name(token) is False
+
+
+def test_a_shared_name_links_even_when_widely_mentioned():
+    """A dozen articles naming gpt-5.6 are probably about GPT-5.6."""
+    scored = {"blogs": [
+        {"title": f"Coverage number {n} of the GPT-5.6 launch",
+         "signal_score": 80 - n, "url": f"https://example.com/{n}"}
+        for n in range(6)
+    ]}
+    stories = ci.build_story_candidates(scored)
+
+    assert len(stories) == 1, "one subject should yield one story"
+    assert len(stories[0]["related_items"]) > 1
+
+
 def test_topic_words_are_dropped_before_they_can_corroborate():
     """Stopwording happens in _story_tokens, upstream of the specificity test."""
     tokens = ci._story_tokens({
@@ -162,13 +192,13 @@ def _paper_vs_incident(paper_score=90, incident_score=90):
     # Both stories therefore get one corroborator — only the anchor differs.
     return {
         "papers": [
-            {"title": "Desbordante: discovering order dependencies at scale",
+            {"title": "Desbordante-2.1: discovering order dependencies at scale",
              "signal_score": paper_score, "url": "https://arxiv.org/abs/2501.1"},
         ],
         "hackernews": [
             {"title": "OmniRoute agents hacked a second account during testing",
              "signal_score": incident_score, "url": "https://news.ycombinator.com/item?id=9"},
-            {"title": "Desbordante discussion thread",
+            {"title": "Desbordante-2.1 discussion thread",
              "signal_score": 70, "url": "https://news.ycombinator.com/item?id=1"},
         ],
         "blogs": [

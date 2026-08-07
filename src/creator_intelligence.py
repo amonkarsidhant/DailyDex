@@ -277,6 +277,25 @@ benchmark benchmarks experiments results general generative automation
 # Tokens that are rare purely because the corpus is small ("out", "part") must
 # not fuse unrelated stories. A token only earns single-token linking power if
 # it *looks* like a name or version: a separator, a digit, or real length.
+# A version-marked name stays meaningful even when widely mentioned, so it is
+# capped in absolute terms rather than as a fraction of the corpus.
+NAME_DOC_FREQ_MAX = 12
+
+
+def _is_strong_name(token: str) -> bool:
+    """Distinctive enough that one shared occurrence implies the same subject.
+
+    Product and model names in this domain nearly always carry a version or
+    package marker — gpt-5.6, lfm2.5-2.6b, llama.cpp, minimax-h3. A purely
+    alphabetic word that merely happens to be uncommon is not a name, and
+    treating it as one grouped "Stupidity is the problem" with "The Problem
+    with pandas", and an "INSANE Week" roundup with "INSANE prompts".
+    """
+    if any(ch.isdigit() for ch in token):
+        return sum(1 for ch in token if ch.isalpha()) >= 3
+    return any(ch in token for ch in "-._+#") and len(token) >= 6
+
+
 def _is_specific(token: str) -> bool:
     alpha = sum(1 for ch in token if ch.isalpha())
     if any(ch.isdigit() for ch in token):
@@ -377,7 +396,12 @@ def _corroborates(anchor_tokens: Set[str], other_tokens: Set[str],
     shared = anchor_tokens & other_tokens
     if not shared:
         return False
-    if any(doc_freq[token] <= rare_max and _is_specific(token) for token in shared):
+    # A name and a rare word are different things. If a dozen articles mention
+    # gpt-5.6 they are probably about GPT-5.6, so a genuine name links on a much
+    # looser frequency bar than an ordinary word, which needs a second shared
+    # term before it counts as the same story at all.
+    if any(doc_freq[token] <= NAME_DOC_FREQ_MAX and _is_strong_name(token)
+           for token in shared):
         return True
     return sum(1 for token in shared
                if doc_freq[token] <= common_max and _is_specific(token)) >= 2
