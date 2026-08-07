@@ -59,6 +59,9 @@ NVIDIA_MAX_CONCURRENCY = max(1, int(os.environ.get("NVIDIA_MAX_CONCURRENCY", "4"
 NVIDIA_MAX_RETRIES = max(0, int(os.environ.get("NVIDIA_MAX_RETRIES", "4")))
 NVIDIA_BACKOFF_BASE = float(os.environ.get("NVIDIA_BACKOFF_BASE", "1.5"))
 NVIDIA_BACKOFF_CAP = float(os.environ.get("NVIDIA_BACKOFF_CAP", "30"))
+# A 70B model writing a full creator pack does not answer inside 60s; that
+# ceiling was timing out enrichment mid-generation and discarding the work.
+NVIDIA_TIMEOUT = float(os.environ.get("NVIDIA_TIMEOUT", "180"))
 
 _nvidia_slots = threading.Semaphore(NVIDIA_MAX_CONCURRENCY)
 
@@ -381,7 +384,8 @@ def query_nvidia(prompt: str, system_prompt: Optional[str] = None,
             # Held only around the call itself, so a backing-off caller frees
             # its slot for someone who can make progress.
             with _nvidia_slots:
-                resp = requests.post(endpoint, headers=headers, json=payload, timeout=60)
+                resp = requests.post(endpoint, headers=headers, json=payload,
+                                     timeout=NVIDIA_TIMEOUT)
         except Exception as exc:
             if attempt < NVIDIA_MAX_RETRIES:
                 time.sleep(_retry_delay(attempt))

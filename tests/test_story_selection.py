@@ -146,6 +146,36 @@ def test_a_bare_version_is_not_a_name():
         assert ci._is_strong_name(token) is False
 
 
+def test_a_hyphenated_english_compound_is_not_a_name():
+    """Regression: "ai-generated" grouped an Oracle OpenJDK ban with a super
+    PAC story, and "open-source"/"self-hosted" fused unrelated projects."""
+    for token in ("ai-generated", "open-source", "self-hosted", "on-device",
+                  "state-of-the-art"):
+        assert ci._is_strong_name(token) is False, f"{token} must not link alone"
+
+
+def test_dotted_package_names_still_count():
+    for token in ("llama.cpp", "next.js", "node.js"):
+        assert ci._is_strong_name(token) is True
+
+
+def test_a_shared_english_compound_does_not_group_projects():
+    scored = {"hackernews": [
+        {"title": "Prime Agent: an open-source agent runtime",
+         "signal_score": 90, "url": "https://news.ycombinator.com/item?id=1"},
+        {"title": "Safebucket: open-source file sharing",
+         "signal_score": 88, "url": "https://news.ycombinator.com/item?id=2"},
+        {"title": "Oracle bans AI-generated code from OpenJDK",
+         "signal_score": 86, "url": "https://news.ycombinator.com/item?id=3"},
+        {"title": "AI-generated images discourage me from reading",
+         "signal_score": 84, "url": "https://news.ycombinator.com/item?id=4"},
+    ]}
+    for story in ci.build_story_candidates(scored):
+        assert len(story["related_items"]) == 1, (
+            f"{story['topic'][:32]!r} absorbed "
+            f"{[r['title'][:28] for r in story['related_items'][1:]]}")
+
+
 def test_a_shared_name_links_even_when_widely_mentioned():
     """A dozen articles naming gpt-5.6 are probably about GPT-5.6."""
     scored = {"blogs": [

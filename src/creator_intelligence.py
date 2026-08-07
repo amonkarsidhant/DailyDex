@@ -293,7 +293,12 @@ def _is_strong_name(token: str) -> bool:
     """
     if any(ch.isdigit() for ch in token):
         return sum(1 for ch in token if ch.isalpha()) >= 3
-    return any(ch in token for ch in "-._+#") and len(token) >= 6
+    # A dotted package name (llama.cpp, next.js) is a name. A hyphen alone is
+    # not enough: "ai-generated", "open-source" and "self-hosted" are English
+    # compounds, and accepting them grouped an Oracle OpenJDK ban with a super
+    # PAC story, and three unrelated projects that merely called themselves
+    # open-source.
+    return "." in token and len(token) >= 6
 
 
 def _is_specific(token: str) -> bool:

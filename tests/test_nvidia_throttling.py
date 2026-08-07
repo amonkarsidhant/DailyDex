@@ -96,6 +96,20 @@ def test_network_errors_are_retried():
     assert post.call_count == 2
 
 
+def test_the_request_timeout_allows_a_long_generation():
+    """60s cut off a 70B model mid-pack and discarded the work."""
+    captured = {}
+
+    def capture(*args, **kwargs):
+        captured.update(kwargs)
+        return _ok()
+
+    with patch("llm_summary.requests.post", side_effect=capture):
+        llm_summary.query_nvidia("hi")
+
+    assert captured["timeout"] >= 120, "a full creator pack does not finish in 60s"
+
+
 def test_backoff_grows_and_is_jittered():
     delays = {llm_summary._retry_delay(2) for _ in range(20)}
     assert len(delays) > 1, "identical delays make every worker retry in lockstep"
