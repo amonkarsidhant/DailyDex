@@ -122,12 +122,19 @@ def step_enrich() -> Dict[str, Any]:
     from dashboard_new import _top_items_for_enrichment
     top = _top_items_for_enrichment(scored, limit=20)
     queued = svc.enqueue_batch(top, limit=20)
-    _log(f"  queued {queued} items for enrichment")
+    # Sharing the service means load_scored_data() has usually enqueued these
+    # already, so "0 new" is the normal healthy case rather than a failure —
+    # report what is actually pending so the log cannot be misread.
+    pending = int((svc.status() or {}).get("queued") or 0)
+    _log(f"  queued {queued} new ({pending} pending in the shared worker queue)")
 
-    # Process synchronously
+    # run_once drains alongside the background worker, so it accounts for only
+    # part of the work done in this window.
     processed = svc.run_once(timeout=300)
-    _log(f"  enriched {processed} items")
-    return {"queued": queued, "processed": processed}
+    remaining = int((svc.status() or {}).get("queued") or 0)
+    _log(f"  enriched {processed} items in this pass ({remaining} still queued)")
+    return {"queued": queued, "pending": pending,
+            "processed": processed, "remaining": remaining}
 
 
 def step_studio() -> Dict[str, Any]:
