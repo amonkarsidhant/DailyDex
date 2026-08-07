@@ -266,6 +266,12 @@ well better worse worst less least lot lots next last also them they their there
 what's here now today week month made does did done goes going gone say said
 vision policy update runtime system server client native simple modern custom
 support supports feature features project projects version library framework
+artificial intelligence machine learning training inference reasoning agents
+systems education research technology development performance evaluation
+analysis approach approaches method methods application applications platform
+architecture optimization generation detection classification prediction
+understanding knowledge language neural network networks dataset datasets
+benchmark benchmarks experiments results general generative automation
 """.split())
 
 # Tokens that are rare purely because the corpus is small ("out", "part") must
@@ -399,7 +405,13 @@ def build_story_candidates(scored_data: Dict, intel_db=None, limit: int = 12,
     # "these two and nobody else", which is the strongest corroboration signal
     # there is. A floor of 1 makes corroboration impossible on small corpora.
     rare_max = max(2, min(3, corpus // 40))
-    common_max = max(3, corpus // 10)
+    # Distinctiveness is near-absolute, not a fraction of the corpus. At
+    # corpus//10 this reached 85 on the production feed, so "artificial" (df 40)
+    # plus "intelligence" (df 31) counted as corroboration and fused a
+    # power-systems paper with a story about an OpenAI gadget. Scaling this term
+    # with corpus size makes clustering looser the more data is collected, which
+    # is backwards — a token in dozens of documents is a topic word, not a name.
+    common_max = min(8, max(3, corpus // 120))
 
     claimed = set()
     stories = []

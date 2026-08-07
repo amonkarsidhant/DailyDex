@@ -101,25 +101,78 @@ def test_opaque_identifiers_are_dropped_from_tokens():
     assert "youtube.com" not in tokens
 
 
+# ── topic words must not corroborate ──────────────────────────────────────
+
+def test_generic_ai_vocabulary_does_not_fuse_unrelated_stories():
+    """Regression: "artificial"+"intelligence" fused a power-systems paper with
+    an OpenAI gadget story, a rogue-agent story, and an AI-religion story."""
+    scored = {
+        "papers": [
+            {"title": "Bridging Artificial Intelligence and Power Systems Education Framework",
+             "signal_score": 95, "url": "https://arxiv.org/abs/2501.1"},
+        ],
+        "blogs": [
+            {"title": "Jony Ive's first OpenAI gadget is reportedly a hockey puck",
+             "signal_score": 80, "url": "https://example.com/1"},
+            {"title": "Artificial intelligence bots started a religion",
+             "signal_score": 78, "url": "https://example.com/2"},
+            {"title": "Intelligence is Free, Now What? Data Systems for Everyone",
+             "signal_score": 76, "url": "https://example.com/3"},
+        ],
+    }
+    stories = ci.build_story_candidates(scored)
+
+    # None of these items are about the same thing, so nothing may corroborate.
+    for story in stories:
+        assert story["source_count"] == 1, (
+            f"{story['topic'][:40]!r} wrongly absorbed "
+            f"{[r['title'][:30] for r in story['related_items'][1:]]}")
+
+
+def test_topic_words_are_dropped_before_they_can_corroborate():
+    """Stopwording happens in _story_tokens, upstream of the specificity test."""
+    tokens = ci._story_tokens({
+        "title": "Artificial Intelligence Systems: A Framework for Benchmark Evaluation",
+        "url": "https://example.com/x",
+    })
+    for word in ("artificial", "intelligence", "systems", "framework", "benchmark"):
+        assert word not in tokens, f"{word} survived as a linking token"
+
+    named = ci._story_tokens({"title": "OmniRoute and llama.cpp ship GPT-5.6 support",
+                              "url": "https://example.com/y"})
+    assert {"omniroute", "llama.cpp", "gpt-5.6"} <= named
+
+
+def test_distinctiveness_does_not_loosen_as_the_corpus_grows():
+    """common_max scaling with corpus size made clustering looser with more data."""
+    def common_max(corpus):
+        return min(8, max(3, corpus // 120))
+
+    assert common_max(200) <= common_max(1000) <= 8
+    # The production corpus (851) previously yielded 85.
+    assert common_max(851) <= 8
+
+
 # ── anchor-source weighting ───────────────────────────────────────────────
 
 def _paper_vs_incident(paper_score=90, incident_score=90):
     """A paper and an incident with matched signal and matched corroboration."""
+    # Each distinctive name appears in exactly two documents, which is what
+    # corroboration means; a name in most of a tiny corpus is not distinctive.
+    # Both stories therefore get one corroborator — only the anchor differs.
     return {
         "papers": [
-            {"title": "Bridging Artificial Intelligence and Power Systems Education Framework",
+            {"title": "Desbordante: discovering order dependencies at scale",
              "signal_score": paper_score, "url": "https://arxiv.org/abs/2501.1"},
         ],
         "hackernews": [
-            {"title": "OpenAI agents hacked a second account during model testing",
+            {"title": "OmniRoute agents hacked a second account during testing",
              "signal_score": incident_score, "url": "https://news.ycombinator.com/item?id=9"},
-            {"title": "Power Systems Education Framework discussion",
+            {"title": "Desbordante discussion thread",
              "signal_score": 70, "url": "https://news.ycombinator.com/item?id=1"},
         ],
         "blogs": [
-            {"title": "Notes on the Power Systems Education Framework paper",
-             "signal_score": 70, "url": "https://example.com/p"},
-            {"title": "OpenAI agents hacked a second account: timeline",
+            {"title": "OmniRoute incident: a reconstructed timeline",
              "signal_score": 70, "url": "https://example.com/h"},
         ],
     }
