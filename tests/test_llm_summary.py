@@ -76,3 +76,54 @@ def test_titles_at_the_stated_length_pass_validation():
     issues = llm_summary.validate_creator_pack(pack, profile)
 
     assert not [i for i in issues if "title." in i and "short" in i]
+
+
+# ── enrichment model override ─────────────────────────────────────────────
+
+def test_enrichment_uses_the_smaller_model_when_configured(monkeypatch):
+    """Bulk enrichment saturates a rate-limited account; scripts do not."""
+    import llm_summary
+
+    monkeypatch.setenv("ENRICHMENT_MODEL", "meta/llama-3.1-8b-instruct")
+    seen = {}
+
+    def fake_query(prompt, system=None, model=None):
+        seen["model"] = model
+        return "{}"
+
+    monkeypatch.setattr(llm_summary, "query_llm", fake_query)
+    llm_summary.generate_creator_pack({"title": "x", "url": "https://example.com"},
+                                      retries=0)
+
+    assert seen["model"] == "meta/llama-3.1-8b-instruct"
+
+
+def test_enrichment_falls_back_to_the_configured_model(monkeypatch):
+    import llm_summary
+
+    monkeypatch.delenv("ENRICHMENT_MODEL", raising=False)
+    monkeypatch.setattr(llm_summary, "get_llm_setting",
+                        lambda key, default="": "" if key == "ENRICHMENT_MODEL" else default)
+    assert llm_summary.enrichment_model() is None
+
+
+def test_an_explicit_model_beats_the_configured_one(monkeypatch):
+    """query_llm's override must win, or the bulk pass silently uses the big model."""
+    import llm_summary
+
+    captured = {}
+
+    def fake_nvidia(prompt, system_prompt=None, model=None, **kwargs):
+        captured["model"] = model
+        return "ok"
+
+    monkeypatch.setattr(llm_summary, "query_nvidia", fake_nvidia)
+    monkeypatch.setattr(llm_summary, "get_llm_setting",
+                        lambda key, default="": "nvidia" if key == "LLM_PROVIDER" else
+                        ("big-model" if key == "NVIDIA_MODEL" else default))
+
+    llm_summary.query_llm("hi", "sys", model="small-model")
+    assert captured["model"] == "small-model"
+
+    llm_summary.query_llm("hi", "sys")
+    assert captured["model"] == "big-model"

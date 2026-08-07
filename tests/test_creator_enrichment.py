@@ -54,7 +54,8 @@ CANNED_DIVE = {
 def _fake_query_llm_factory():
     """Returns a fake query_llm that switches output based on the system prompt."""
 
-    def fake(prompt, system_prompt=None):
+    # model= mirrors query_llm: enrichment passes a smaller model than scripts.
+    def fake(prompt, system_prompt=None, model=None):
         text = (system_prompt or "") + (prompt or "")
         if "production team" in text.lower() or "Forge the production assets" in text:
             return json.dumps({

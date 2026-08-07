@@ -518,7 +518,14 @@ def _strip_think(text: str) -> str:
 _last_used_provider_label: Optional[str] = None
 
 
-def query_llm(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:
+def query_llm(prompt: str, system_prompt: Optional[str] = None,
+              model: Optional[str] = None) -> Optional[str]:
+    """Run a prompt against the configured provider.
+
+    ``model`` overrides the configured model for this call, which lets bulk work
+    such as enrichment use a cheaper, faster model while scripts keep the large
+    one. It only reaches the REST providers; the CLI tools select their own.
+    """
     global _last_used_provider_label
     
     provider = get_llm_setting("LLM_PROVIDER", "gemini")
@@ -548,7 +555,7 @@ def query_llm(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]
     func, model_key, default_model = handler_info
     
     try:
-        model = get_llm_setting(model_key, default_model)
+        model = model or get_llm_setting(model_key, default_model)
         if func in (query_nvidia, query_openai, query_anthropic):
             res = func(prompt, system_prompt, model=model)
         else:
@@ -917,6 +924,17 @@ def validate_creator_pack(pack: Dict[str, Any], profile: Optional[Dict[str, Any]
 # Public API
 # ---------------------------------------------------------------------------
 
+def enrichment_model() -> Optional[str]:
+    """Model for bulk enrichment, or None to use the configured one.
+
+    Enrichment runs over every high-signal item on every fetch cycle, so it is
+    what saturates a rate-limited account; scripts are a handful of calls a day.
+    Pointing the bulk pass at a smaller model buys throughput where it is scarce
+    without touching the quality of the work that ships.
+    """
+    return get_llm_setting("ENRICHMENT_MODEL", "") or None
+
+
 def generate_creator_pack(item: Dict[str, Any], profile: Optional[Dict[str, Any]] = None, retries: int = 1) -> Dict[str, Any]:
     """Generate a full creator pack for one item. Returns a result dict:
         {"ok": bool, "pack": dict, "issues": list[str], "raw": str, "model": str}
@@ -932,7 +950,7 @@ def generate_creator_pack(item: Dict[str, Any], profile: Optional[Dict[str, Any]
             user + "\n\nIMPORTANT: Your previous reply was not valid JSON or violated the schema. "
             "Return ONLY a single JSON object with the required keys. No commentary. No code fences."
         )
-        raw = query_llm(prompt, system) or ""
+        raw = query_llm(prompt, system, model=enrichment_model()) or ""
         last_raw = raw
         obj = _extract_json_object(raw)
         if not obj:
