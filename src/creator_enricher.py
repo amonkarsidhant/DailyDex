@@ -1075,6 +1075,11 @@ class AgentRunner:
         # to the PDF it accepts. A render failure must not lose the copy.
         pdf_path = ""
         try:
+            # Rendering spawns Chromium via Remotion and takes seconds; it is
+            # switchable so a test run or a headless deploy without the video
+            # engine keeps the copy without paying for a render.
+            if os.environ.get("CAROUSEL_PDF_ENABLED", "1") != "1":
+                raise RuntimeError("carousel PDF rendering disabled")
             self._stage(run_id, "Rendering carousel PDF", 0.95)
             import carousel_renderer
 

@@ -55,10 +55,13 @@ NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", NVIDIA_DEFAULT_MODEL)
 # hold their own thread, and the web and orchestrator containers call
 # independently — together they cleared it easily. Cap concurrent calls per
 # process well under the account limit so several processes can share it.
-NVIDIA_MAX_CONCURRENCY = max(1, int(os.environ.get("NVIDIA_MAX_CONCURRENCY", "4")))
-NVIDIA_MAX_RETRIES = max(0, int(os.environ.get("NVIDIA_MAX_RETRIES", "4")))
+NVIDIA_MAX_CONCURRENCY = max(1, int(os.environ.get("NVIDIA_MAX_CONCURRENCY", "2")))
+NVIDIA_MAX_RETRIES = max(0, int(os.environ.get("NVIDIA_MAX_RETRIES", "5")))
 NVIDIA_BACKOFF_BASE = float(os.environ.get("NVIDIA_BACKOFF_BASE", "1.5"))
-NVIDIA_BACKOFF_CAP = float(os.environ.get("NVIDIA_BACKOFF_CAP", "30"))
+# 429 is a per-minute quota rather than a transient fault, so it is waited out
+# on the scale of that window instead of the few seconds a 5xx needs.
+NVIDIA_RATE_LIMIT_BASE = float(os.environ.get("NVIDIA_RATE_LIMIT_BASE", "8"))
+NVIDIA_BACKOFF_CAP = float(os.environ.get("NVIDIA_BACKOFF_CAP", "90"))
 # A 70B model writing a full creator pack does not answer inside 60s; that
 # ceiling was timing out enrichment mid-generation and discarding the work.
 NVIDIA_TIMEOUT = float(os.environ.get("NVIDIA_TIMEOUT", "180"))
@@ -70,16 +73,23 @@ _nvidia_slots = threading.Semaphore(NVIDIA_MAX_CONCURRENCY)
 NVIDIA_RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 
 
-def _retry_delay(attempt: int, retry_after: Optional[str] = None) -> float:
-    """Seconds to wait before retrying, preferring the server's Retry-After."""
+def _retry_delay(attempt: int, retry_after: Optional[str] = None,
+                 status: Optional[int] = None) -> float:
+    """Seconds to wait before retrying, preferring the server's Retry-After.
+
+    A 429 is a requests-per-minute limit, so it needs to be waited out on the
+    scale of that window; backing off ~12s against a 60s window just burns the
+    remaining attempts. A 5xx is usually transient and clears much sooner.
+    """
     if retry_after:
         try:
             return min(float(retry_after), NVIDIA_BACKOFF_CAP)
         except (TypeError, ValueError):
             pass
+    base = NVIDIA_RATE_LIMIT_BASE if status == 429 else NVIDIA_BACKOFF_BASE
     # Jitter matters: without it every throttled caller retries in lockstep and
     # recreates the burst that caused the throttling.
-    window = min(NVIDIA_BACKOFF_BASE * (2 ** attempt), NVIDIA_BACKOFF_CAP)
+    window = min(base * (2 ** attempt), NVIDIA_BACKOFF_CAP)
     return round(window / 2 + random.uniform(0, window / 2), 2)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -406,7 +416,8 @@ def query_nvidia(prompt: str, system_prompt: Optional[str] = None,
             return None
 
         if resp.status_code in NVIDIA_RETRY_STATUS and attempt < NVIDIA_MAX_RETRIES:
-            delay = _retry_delay(attempt, resp.headers.get("Retry-After"))
+            delay = _retry_delay(attempt, resp.headers.get("Retry-After"),
+                                 status=resp.status_code)
             print(f"NVIDIA NIM {resp.status_code}; retrying in {delay}s "
                   f"({attempt + 1}/{NVIDIA_MAX_RETRIES})")
             time.sleep(delay)

@@ -200,6 +200,10 @@ def _load_app_env(tmp_path, monkeypatch, raw_data, scored_data, selected_variant
     monkeypatch.setenv("SCORED_DATA_FILE", str(data_dir / "data_scored.json"))
     monkeypatch.setenv("CONFIG_FILE", str(config_path))
     monkeypatch.setenv("CONFIG_PATH", str(REPO_DIR / "config" / "topics.json"))
+    # The cross-poster agent renders a carousel PDF through Remotion. On a
+    # machine that has npx and the video engine that is a real Chromium render
+    # mid-test — slow enough to blow agent-completion timeouts.
+    monkeypatch.setenv("CAROUSEL_PDF_ENABLED", "0")
 
     (data_dir / "data.json").write_text(json.dumps(raw_data, indent=2), encoding="utf-8")
     (data_dir / "data_scored.json").write_text(json.dumps(scored_data, indent=2), encoding="utf-8")

@@ -110,6 +110,15 @@ def test_the_request_timeout_allows_a_long_generation():
     assert captured["timeout"] >= 120, "a full creator pack does not finish in 60s"
 
 
+def test_a_rate_limit_backs_off_further_than_a_transient_fault():
+    """429 is a per-minute quota; ~12s against a 60s window burns the attempts."""
+    rate_limited = max(llm_summary._retry_delay(3, status=429) for _ in range(20))
+    transient = max(llm_summary._retry_delay(3, status=503) for _ in range(20))
+
+    assert rate_limited > transient
+    assert rate_limited >= 20, "must be on the scale of a per-minute window"
+
+
 def test_backoff_grows_and_is_jittered():
     delays = {llm_summary._retry_delay(2) for _ in range(20)}
     assert len(delays) > 1, "identical delays make every worker retry in lockstep"
