@@ -101,6 +101,61 @@ def test_opaque_identifiers_are_dropped_from_tokens():
     assert "youtube.com" not in tokens
 
 
+# ── anchor-source weighting ───────────────────────────────────────────────
+
+def _paper_vs_incident(paper_score=90, incident_score=90):
+    """A paper and an incident with matched signal and matched corroboration."""
+    return {
+        "papers": [
+            {"title": "Bridging Artificial Intelligence and Power Systems Education Framework",
+             "signal_score": paper_score, "url": "https://arxiv.org/abs/2501.1"},
+        ],
+        "hackernews": [
+            {"title": "OpenAI agents hacked a second account during model testing",
+             "signal_score": incident_score, "url": "https://news.ycombinator.com/item?id=9"},
+            {"title": "Power Systems Education Framework discussion",
+             "signal_score": 70, "url": "https://news.ycombinator.com/item?id=1"},
+        ],
+        "blogs": [
+            {"title": "Notes on the Power Systems Education Framework paper",
+             "signal_score": 70, "url": "https://example.com/p"},
+            {"title": "OpenAI agents hacked a second account: timeline",
+             "signal_score": 70, "url": "https://example.com/h"},
+        ],
+    }
+
+
+def _rank_of(stories, source):
+    for index, story in enumerate(stories):
+        if story["anchor_source"] == source:
+            return index
+    return None
+
+
+def test_a_paper_does_not_outrank_an_incident_at_equal_signal():
+    """Papers corroborate easily, which floated them above real events."""
+    stories = ci.build_story_candidates(_paper_vs_incident())
+
+    assert _rank_of(stories, "hackernews") < _rank_of(stories, "papers")
+
+
+def test_a_clearly_bigger_paper_still_surfaces():
+    """The weighting is a thumb on the scale, not a ban on papers."""
+    stories = ci.build_story_candidates(_paper_vs_incident(paper_score=99, incident_score=40))
+
+    assert _rank_of(stories, "papers") == 0
+
+
+def test_weighting_keys_on_the_anchor_not_the_corroborating_sources():
+    """A paper corroborated by HN must not collect HN's bonus."""
+    stories = ci.build_story_candidates(_paper_vs_incident())
+    paper = next(s for s in stories if s["anchor_source"] == "papers")
+
+    assert "hackernews" in paper["sources"], "fixture should have HN corroboration"
+    # Anchor weight is the paper's, so the penalty applies despite HN support.
+    assert paper["story_score"] < paper["average_signal_score"] + 12 * (paper["source_count"] - 1) + 10
+
+
 def test_empty_input_returns_no_stories():
     assert ci.build_story_candidates({}) == []
     assert ci.build_story_candidates({"github": []}) == []

@@ -227,6 +227,24 @@ def build_topic_clusters(scored_data: Dict, intel_db=None) -> List[Dict]:
 
 SOURCE_ORDER = ["github", "huggingface", "youtube", "blogs", "papers", "hackernews", "reddit"]
 
+# Weighting by the source a story is *anchored* on, not the sources that
+# corroborate it. A paper is something written *about* work; an incident,
+# release, or thread is the thing itself. Papers also corroborate very easily —
+# a single arXiv posting gets picked up by blogs and HN within a day — so the
+# cross-source bonus alone floated academic write-ups above real events, and a
+# power-systems-education paper outranked "AI Agent Hacks Multiple Accounts".
+# Papers still surface when their raw signal is genuinely high; they just no
+# longer win by default.
+ANCHOR_SOURCE_WEIGHT = {
+    "hackernews": 10,
+    "github": 8,
+    "blogs": 6,
+    "reddit": 6,
+    "youtube": 4,
+    "huggingface": 4,
+    "papers": -18,
+}
+
 # Buckets that describe a shelf rather than a story. Never anchor on these.
 GENERIC_TOPICS = frozenset({"general", "ai story", "model", "models", "ai", "tool", "tools"})
 
@@ -430,6 +448,7 @@ def build_story_candidates(scored_data: Dict, intel_db=None, limit: int = 12,
             + 12 * (len(sources) - 1)
             + 3 * (len(members) - 1)
             + _story_tension_boost(item) // 2
+            + ANCHOR_SOURCE_WEIGHT.get(source_type, 0)
         )
 
         stories.append({
