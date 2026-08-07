@@ -323,6 +323,60 @@ def api_linkedin_carousel():
     return jsonify(result)
 
 
+@integrations_bp.route("/api/integrations/linkedin/status", methods=["GET"])
+def api_linkedin_status():
+    """Whether a usable LinkedIn token is configured, without exposing it."""
+    import linkedin_client
+
+    if not linkedin_client._token():
+        return jsonify({"connected": False, "reason": "LINKEDIN_ACCESS_TOKEN is not set"})
+    who = linkedin_client.get_author_urn()
+    if not who.get("ok"):
+        return jsonify({"connected": False, "reason": who.get("error")})
+    return jsonify({"connected": True, "author_urn": who["urn"], "name": who.get("name", "")})
+
+
+@integrations_bp.route("/api/integrations/linkedin/post", methods=["POST"])
+def api_linkedin_post():
+    """Publish a rendered carousel PDF as a LinkedIn document post.
+
+    Deliberately not reachable from the orchestrator or the factory: this
+    publishes public content under the creator's own name, so it stays an
+    explicit request. ``confirm: true`` is required so a stray call cannot post.
+    """
+    import linkedin_client
+
+    payload = request.get_json(silent=True) or {}
+    if payload.get("confirm") is not True:
+        return jsonify({"error": "confirmation_required",
+                        "detail": "pass confirm=true to publish publicly"}), 400
+
+    pdf_path = str(payload.get("pdf_path") or "").strip()
+    if not pdf_path:
+        return jsonify({"error": "pdf_path required"}), 400
+
+    # Confine reads to the carousel output directory; the caller must not be
+    # able to hand this route an arbitrary path on the host.
+    data_dir = os.environ.get("DATA_DIR", os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "data"))
+    carousels = os.path.realpath(os.path.join(data_dir, "carousels"))
+    resolved = os.path.realpath(pdf_path if os.path.isabs(pdf_path)
+                                else os.path.join(carousels, pdf_path))
+    if not (resolved == carousels or resolved.startswith(carousels + os.sep)):
+        return jsonify({"error": "pdf_path must be inside the carousels directory"}), 400
+
+    result = linkedin_client.publish_document_post(
+        pdf_path=resolved,
+        commentary=str(payload.get("commentary") or ""),
+        title=str(payload.get("title") or ""),
+        # Least public default: an explicit visibility is required to hit the feed.
+        visibility=str(payload.get("visibility") or "CONNECTIONS").upper(),
+    )
+    if not result.get("ok"):
+        return jsonify({"error": result.get("error"), "stage": result.get("stage")}), 502
+    return jsonify(result)
+
+
 @integrations_bp.route("/api/carousels/<filename>", methods=["GET"])
 def serve_rendered_carousel(filename):
     data_dir = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "data"))
