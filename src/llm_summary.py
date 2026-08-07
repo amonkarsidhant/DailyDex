@@ -716,9 +716,15 @@ def build_creator_system_prompt(profile: Dict[str, Any]) -> str:
         "- three_key_points: 3 concrete bullets, not generic\n"
         "- broll_list: 3 concrete visual ideas tied to the item (UI, terminal, diagram, etc.)\n"
         "- on_screen_cues: 3 short on-screen text strings\n"
-        f"- suggested_titles: each title {rules.get('title_min_chars', 30)}-"
+        # A small model reliably dropped the last key of an inline list, so the
+        # four are enumerated on their own lines with the requirement restated.
+        "- suggested_titles: an object with ALL FOUR of these keys. Omitting any "
+        "one makes the whole reply invalid:\n"
+        "    curiosity, practical, contrarian, tutorial\n"
+        f"  Every one of the four must be {rules.get('title_min_chars', 30)}-"
         f"{rules.get('title_max_chars', 70)} characters — a bare name like "
-        "\"Kimi K3 Explained\" is too short to earn a click\n\n"
+        "\"Kimi K3 Explained\" is too short to earn a click, and do not exceed "
+        "the upper bound\n\n"
         "Return ONLY a single valid JSON object with these exact keys:\n"
         "hook, intro_context, three_key_points (array of 3 strings), three_beat_structure (array of 3 strings), "
         "demo_segment, caveats, closing_takeaway, call_to_action, short_script, visual_idea, cta, "

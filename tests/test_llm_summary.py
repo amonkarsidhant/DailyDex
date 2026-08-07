@@ -61,6 +61,11 @@ def test_the_prompt_states_the_title_length_the_validator_enforces():
     assert "suggested_titles" in prompt
     assert f"{low}-{high} characters" in prompt, \
         "the title length constraint must reach the model, not just the validator"
+    # A small model dropped the last key of an inline list on every item, so
+    # each of the four must be named where it cannot be truncated away.
+    for key in llm_summary.SUGGESTED_TITLE_KEYS:
+        assert key in prompt, f"title key {key} is not named in the prompt"
+    assert "ALL FOUR" in prompt
 
 
 def test_titles_at_the_stated_length_pass_validation():
