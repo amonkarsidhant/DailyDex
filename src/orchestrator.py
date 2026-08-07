@@ -111,7 +111,11 @@ def step_enrich() -> Dict[str, Any]:
     if dd.intel_db is None:
         return {"error": "no_db"}
 
-    svc = EnrichmentService(dd.intel_db)
+    # Reuse the service dashboard_new already owns. Its dedup set is per
+    # instance, and load_scored_data() enqueues into that one, so constructing a
+    # second here meant every item was enriched twice — doubling the calls made
+    # against a rate-limited quota and halving how many distinct items got done.
+    svc = dd.enrichment_service or EnrichmentService(dd.intel_db)
     scored = dd.load_scored_data()
 
     # Pick top items for enrichment (same logic as dashboard_new)

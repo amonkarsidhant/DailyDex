@@ -219,3 +219,64 @@ def test_orchestrator_step_handles_failure():
     assert "kaboom" in results["fetch"]["error"]
     assert results["enrich"]["processed"] == 0
     assert results["studio"]["ok"] is False
+
+
+# ---------------------------------------------------------------------------
+# step_enrich must not run a second EnrichmentService
+# ---------------------------------------------------------------------------
+
+def test_step_enrich_reuses_the_running_service(monkeypatch):
+    """Two services keep separate dedup sets, so each item got enriched twice.
+
+    That doubled the calls made against a rate-limited quota and halved how
+    many distinct items completed.
+    """
+    import orchestrator
+    from creator_enricher import EnrichmentService
+
+    running = MagicMock(spec=EnrichmentService)
+    running.enqueue_batch.return_value = 3
+    running.run_once.return_value = 3
+
+    dash = MagicMock()
+    dash.intel_db = MagicMock()
+    dash.enrichment_service = running
+    dash.load_scored_data.return_value = {"github": []}
+    dash._top_items_for_enrichment.return_value = [{"url": "https://example.com/a"}]
+
+    constructed = []
+
+    class _Spy(EnrichmentService):
+        def __init__(self, *args, **kwargs):
+            constructed.append(1)
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setitem(sys.modules, "dashboard_new", dash)
+    monkeypatch.setattr("creator_enricher.EnrichmentService", _Spy)
+
+    result = orchestrator.step_enrich()
+
+    assert not constructed, "step_enrich built a second EnrichmentService"
+    running.enqueue_batch.assert_called_once()
+    assert result["processed"] == 3
+
+
+def test_step_enrich_falls_back_when_no_service_is_running(monkeypatch):
+    """A standby process (CREATOR_ENRICHER_PRIMARY=0) still needs one."""
+    import orchestrator
+
+    dash = MagicMock()
+    dash.intel_db = MagicMock()
+    dash.enrichment_service = None
+    dash.load_scored_data.return_value = {"github": []}
+    dash._top_items_for_enrichment.return_value = []
+
+    made = MagicMock()
+    made.enqueue_batch.return_value = 0
+    made.run_once.return_value = 0
+
+    monkeypatch.setitem(sys.modules, "dashboard_new", dash)
+    monkeypatch.setattr("creator_enricher.EnrichmentService", lambda *a, **k: made)
+
+    assert orchestrator.step_enrich()["processed"] == 0
+    made.run_once.assert_called_once()
