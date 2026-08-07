@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import re
 import subprocess
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -46,6 +48,36 @@ NVIDIA_BASE_URL = os.environ.get("NVIDIA_BASE_URL", "https://integrate.api.nvidi
 # value here turns every call into a 410 before any fallback runs.
 NVIDIA_DEFAULT_MODEL = "meta/llama-3.3-70b-instruct"
 NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", NVIDIA_DEFAULT_MODEL)
+
+# NVIDIA NIM enforces a per-account concurrency ceiling and answers
+# "ResourceExhausted: Worker local total request limit reached (17/16)" once it
+# is crossed. studio_job runs a four-worker pool, the enricher and each agent
+# hold their own thread, and the web and orchestrator containers call
+# independently — together they cleared it easily. Cap concurrent calls per
+# process well under the account limit so several processes can share it.
+NVIDIA_MAX_CONCURRENCY = max(1, int(os.environ.get("NVIDIA_MAX_CONCURRENCY", "4")))
+NVIDIA_MAX_RETRIES = max(0, int(os.environ.get("NVIDIA_MAX_RETRIES", "4")))
+NVIDIA_BACKOFF_BASE = float(os.environ.get("NVIDIA_BACKOFF_BASE", "1.5"))
+NVIDIA_BACKOFF_CAP = float(os.environ.get("NVIDIA_BACKOFF_CAP", "30"))
+
+_nvidia_slots = threading.Semaphore(NVIDIA_MAX_CONCURRENCY)
+
+# Throttling and transient upstream faults are worth retrying; a dead model
+# (410), a bad key (401/403) or a malformed request (400) never are.
+NVIDIA_RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
+
+
+def _retry_delay(attempt: int, retry_after: Optional[str] = None) -> float:
+    """Seconds to wait before retrying, preferring the server's Retry-After."""
+    if retry_after:
+        try:
+            return min(float(retry_after), NVIDIA_BACKOFF_CAP)
+        except (TypeError, ValueError):
+            pass
+    # Jitter matters: without it every throttled caller retries in lockstep and
+    # recreates the burst that caused the throttling.
+    window = min(NVIDIA_BACKOFF_BASE * (2 ** attempt), NVIDIA_BACKOFF_CAP)
+    return round(window / 2 + random.uniform(0, window / 2), 2)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CREATOR_PROFILE_PATH = os.environ.get(
@@ -335,32 +367,49 @@ def query_nvidia(prompt: str, system_prompt: Optional[str] = None,
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
-    try:
-        resp = requests.post(
-            f"{url.rstrip('/')}/chat/completions",
-            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-            json={
-                "model": resolved_model,
-                "messages": messages,
-                "max_tokens": max_tokens,
-                "temperature": 0.4,
-            },
-            timeout=60,
-        )
-        if resp.status_code != 200:
-            print(f"NVIDIA NIM error {resp.status_code}: {resp.text[:200]}")
+    payload = {
+        "model": resolved_model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": 0.4,
+    }
+    endpoint = f"{url.rstrip('/')}/chat/completions"
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+
+    for attempt in range(NVIDIA_MAX_RETRIES + 1):
+        try:
+            # Held only around the call itself, so a backing-off caller frees
+            # its slot for someone who can make progress.
+            with _nvidia_slots:
+                resp = requests.post(endpoint, headers=headers, json=payload, timeout=60)
+        except Exception as exc:
+            if attempt < NVIDIA_MAX_RETRIES:
+                time.sleep(_retry_delay(attempt))
+                continue
+            print(f"NVIDIA NIM error: {exc}")
             return None
-        choices = resp.json().get("choices") or []
-        if choices:
-            msg = choices[0].get("message", {}) or {}
-            text = (msg.get("content") or "").strip()
-            # Some NIM reasoning models (step, minimax) place the answer in
-            # reasoning_content and leave content empty when token budget is tight.
-            if not text:
-                text = (msg.get("reasoning_content") or "").strip()
-            return _strip_think(text) or None
-    except Exception as exc:
-        print(f"NVIDIA NIM error: {exc}")
+
+        if resp.status_code == 200:
+            choices = resp.json().get("choices") or []
+            if choices:
+                msg = choices[0].get("message", {}) or {}
+                text = (msg.get("content") or "").strip()
+                # Some NIM reasoning models (step, minimax) place the answer in
+                # reasoning_content and leave content empty when token budget is tight.
+                if not text:
+                    text = (msg.get("reasoning_content") or "").strip()
+                return _strip_think(text) or None
+            return None
+
+        if resp.status_code in NVIDIA_RETRY_STATUS and attempt < NVIDIA_MAX_RETRIES:
+            delay = _retry_delay(attempt, resp.headers.get("Retry-After"))
+            print(f"NVIDIA NIM {resp.status_code}; retrying in {delay}s "
+                  f"({attempt + 1}/{NVIDIA_MAX_RETRIES})")
+            time.sleep(delay)
+            continue
+
+        print(f"NVIDIA NIM error {resp.status_code}: {resp.text[:200]}")
+        return None
     return None
 
 
