@@ -7,6 +7,7 @@ LinkedIn's actual acceptance.
 
 import json
 import os
+import urllib.request
 from pathlib import Path
 from unittest.mock import patch
 
@@ -188,3 +189,106 @@ def test_route_defaults_to_the_least_public_visibility(client, app_env, tmp_path
 
     assert resp.status_code == 200
     assert seen["visibility"] == "CONNECTIONS", "must not default to the public feed"
+
+
+# ── review fixes ──────────────────────────────────────────────────────────
+
+def test_visibility_defaults_to_connections_not_public(pdf):
+    """The module default must match the route's; a caller reaching the public
+    feed should have to ask for it."""
+    with patch.object(li, "_request", side_effect=_happy_path()) as req:
+        li.publish_document_post(pdf, "text")
+
+    body = json.loads(req.call_args_list[3].kwargs["data"].decode())
+    assert body["visibility"] == "CONNECTIONS"
+
+
+def test_the_bearer_token_is_dropped_when_a_redirect_leaves_the_host():
+    """urllib replays headers on redirect; the upload PUT carries the token."""
+    handler = li._StripAuthOnHostChange()
+    req = urllib.request.Request("https://api.linkedin.com/rest/documents",
+                                 headers={"Authorization": "Bearer secret"})
+
+    offsite = handler.redirect_request(req, None, 302, "Found", {},
+                                       "https://evil.example/upload")
+    assert "Authorization" not in dict(offsite.headers)
+    assert "authorization" not in {k.lower() for k in offsite.headers}
+
+    samehost = handler.redirect_request(req, None, 302, "Found", {},
+                                        "https://api.linkedin.com/elsewhere")
+    assert "Bearer secret" in dict(samehost.headers).get("Authorization", "")
+
+
+def test_the_document_title_is_not_a_uuid(tmp_path):
+    """path.stem is "carousel-<hex>" and viewers see it on the document."""
+    deck = tmp_path / "carousel-8e68a848cee3.pdf"
+    deck.write_bytes(b"%PDF-1.4 body")
+
+    with patch.object(li, "_request", side_effect=_happy_path()) as req:
+        li.publish_document_post(str(deck), "An agent got write access it should not have")
+
+    title = json.loads(req.call_args_list[3].kwargs["data"].decode())["content"]["media"]["title"]
+    assert "carousel-" not in title
+    assert title.startswith("An agent got write access")
+
+
+def test_route_refuses_to_post_the_same_deck_twice(client, app_env, monkeypatch):
+    """Publishing is irreversible; a retry or double-click must not post twice."""
+    import linkedin_client
+    from routes import api_integrations
+
+    carousels = Path(os.environ["DATA_DIR"]) / "carousels"
+    carousels.mkdir(parents=True, exist_ok=True)
+    (carousels / "deck.pdf").write_bytes(b"%PDF-1.4 identical body")
+
+    calls = []
+    monkeypatch.setattr(linkedin_client, "publish_document_post",
+                        lambda **kw: calls.append(kw) or
+                        {"ok": True, "post_urn": "urn:li:share:1", "url": "https://x"})
+    api_integrations._linkedin_posted.clear()
+
+    body = {"confirm": True, "pdf_path": "deck.pdf", "commentary": "hi"}
+    first = client.post("/api/integrations/linkedin/post", json=body)
+    second = client.post("/api/integrations/linkedin/post", json=body)
+
+    assert first.status_code == 200
+    assert second.status_code == 409
+    assert second.get_json()["error"] == "duplicate_post"
+    assert len(calls) == 1, "the deck was published twice"
+
+
+def test_a_different_deck_is_not_blocked_by_the_guard(client, app_env, monkeypatch):
+    import linkedin_client
+    from routes import api_integrations
+
+    carousels = Path(os.environ["DATA_DIR"]) / "carousels"
+    carousels.mkdir(parents=True, exist_ok=True)
+    (carousels / "a.pdf").write_bytes(b"%PDF-1.4 deck one")
+    (carousels / "b.pdf").write_bytes(b"%PDF-1.4 deck two")
+
+    monkeypatch.setattr(linkedin_client, "publish_document_post",
+                        lambda **kw: {"ok": True, "post_urn": "u", "url": "https://x"})
+    api_integrations._linkedin_posted.clear()
+
+    for name in ("a.pdf", "b.pdf"):
+        resp = client.post("/api/integrations/linkedin/post",
+                           json={"confirm": True, "pdf_path": name, "commentary": "hi"})
+        assert resp.status_code == 200, name
+
+
+def test_a_failed_publish_is_not_remembered(client, app_env, monkeypatch):
+    """A 502 must stay retryable, or a transient failure blocks the deck."""
+    import linkedin_client
+    from routes import api_integrations
+
+    carousels = Path(os.environ["DATA_DIR"]) / "carousels"
+    carousels.mkdir(parents=True, exist_ok=True)
+    (carousels / "c.pdf").write_bytes(b"%PDF-1.4 deck three")
+
+    monkeypatch.setattr(linkedin_client, "publish_document_post",
+                        lambda **kw: {"ok": False, "error": "boom", "stage": "upload"})
+    api_integrations._linkedin_posted.clear()
+
+    body = {"confirm": True, "pdf_path": "c.pdf", "commentary": "hi"}
+    assert client.post("/api/integrations/linkedin/post", json=body).status_code == 502
+    assert client.post("/api/integrations/linkedin/post", json=body).status_code == 502

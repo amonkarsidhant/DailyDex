@@ -29,8 +29,9 @@ API_BASE = os.environ.get("LINKEDIN_API_BASE", "https://api.linkedin.com")
 API_VERSION = os.environ.get("LINKEDIN_API_VERSION", "202405")
 _USER_AGENT = "DailyDex/1.0"
 
-# LinkedIn's published ceilings for document posts.
-MAX_PDF_BYTES = 100 * 1024 * 1024
+# LinkedIn allows far more, but a rendered deck is a few hundred KB and the
+# whole file is held in memory during upload on a box that also runs Chromium.
+MAX_PDF_BYTES = int(os.environ.get("LINKEDIN_MAX_PDF_BYTES", 25 * 1024 * 1024))
 MAX_COMMENTARY_CHARS = 3000
 
 VALID_VISIBILITY = ("PUBLIC", "CONNECTIONS", "LOGGED_IN")
@@ -59,12 +60,36 @@ def _headers(token: str, extra: Optional[Dict[str, str]] = None) -> Dict[str, st
     return headers
 
 
+class _StripAuthOnHostChange(urllib.request.HTTPRedirectHandler):
+    """Drop the bearer token when a redirect leaves the original host.
+
+    The upload step must send Authorization — LinkedIn requires it even though
+    the upload URL is issued per-request — and urllib otherwise replays every
+    header on a redirect, which would hand the token to whatever host it points
+    at next.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is None:
+            return None
+        if urllib.parse.urlsplit(newurl).netloc.lower() != \
+                urllib.parse.urlsplit(req.full_url).netloc.lower():
+            for header in ("Authorization", "authorization"):
+                new.headers.pop(header, None)
+                new.unredirected_hdrs.pop(header, None)
+        return new
+
+
+_opener = urllib.request.build_opener(_StripAuthOnHostChange)
+
+
 def _request(url: str, *, method: str = "GET", headers: Optional[Dict[str, str]] = None,
              data: Optional[bytes] = None, timeout: int = 60) -> Dict[str, Any]:
     """Return {"ok": True, "data": ..., "headers": ...} or {"ok": False, "error": ...}."""
     req = urllib.request.Request(url, method=method, headers=headers or {}, data=data)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _opener.open(req, timeout=timeout) as resp:
             body = resp.read().decode("utf-8", errors="replace")
             try:
                 parsed = json.loads(body) if body.strip() else {}
@@ -123,7 +148,9 @@ def _initialize_upload(token: str, author_urn: str) -> Dict[str, Any]:
 
 def _upload_pdf(token: str, upload_url: str, pdf_path: str, timeout: int = 300) -> Dict[str, Any]:
     data = Path(pdf_path).read_bytes()
-    # The upload URL is pre-signed; it takes the bytes and returns no JSON.
+    # LinkedIn requires the bearer token on this PUT even though the URL is
+    # issued per-request; _opener strips it if a redirect leaves the host.
+    # The upload returns no JSON body.
     result = _request(
         upload_url,
         method="PUT",
@@ -140,7 +167,9 @@ def publish_document_post(
     pdf_path: str,
     commentary: str,
     title: str = "",
-    visibility: str = "PUBLIC",
+    # Least public default. The route defaults the same way; a caller reaching
+    # the public feed should have to say so.
+    visibility: str = "CONNECTIONS",
     token: Optional[str] = None,
     author_urn: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -198,7 +227,9 @@ def publish_document_post(
         "content": {
             "media": {
                 "id": init["document_urn"],
-                "title": (title or path.stem)[:100],
+                # path.stem is a uuid ("carousel-8e68a848cee3") and viewers see
+                # this on the document, so fall back to the commentary's opening.
+                "title": (title or commentary.split("\n")[0])[:100],
             }
         },
         "lifecycleState": "PUBLISHED",

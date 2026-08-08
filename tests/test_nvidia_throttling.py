@@ -152,3 +152,21 @@ def test_concurrent_calls_are_capped():
 
     assert peak["n"] <= llm_summary.NVIDIA_MAX_CONCURRENCY, \
         f"{peak['n']} concurrent calls exceeded the cap"
+
+
+def test_permanent_transport_errors_are_not_retried():
+    """A TLS or URL failure cannot fix itself; retrying burns the backoff budget."""
+    import requests as _rq
+
+    for exc in (_rq.exceptions.SSLError("bad cert"),
+                _rq.exceptions.MissingSchema("no scheme")):
+        with patch("llm_summary.requests.post", side_effect=exc) as post:
+            assert llm_summary.query_nvidia("hi") is None
+        assert post.call_count == 1, f"{type(exc).__name__} was retried"
+
+
+def test_transient_transport_errors_are_still_retried():
+    with patch("llm_summary.requests.post",
+               side_effect=[ConnectionError("reset"), _ok("recovered")]) as post:
+        assert llm_summary.query_nvidia("hi") == "recovered"
+    assert post.call_count == 2

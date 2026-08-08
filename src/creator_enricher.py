@@ -98,7 +98,12 @@ class EnrichmentService:
         self._stop.clear()
         self._worker = threading.Thread(target=self._run, name="creator-enricher", daemon=True)
         self._worker.start()
-        LOG.info("Enrichment worker started (provider=%s)", llm_summary.llm_provider_label())
+        # Report the model this worker will actually use. llm_provider_label()
+        # reads the configured model, so it logged the 70B for runs that ran on
+        # the 8B set by ENRICHMENT_MODEL.
+        LOG.info("Enrichment worker started (provider=%s, model=%s)",
+                 llm_summary.llm_provider_label(),
+                 llm_summary.enrichment_model() or "(configured)")
 
     def stop(self) -> None:
         self._stop.set()

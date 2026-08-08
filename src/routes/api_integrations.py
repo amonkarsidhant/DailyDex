@@ -6,14 +6,39 @@ module was imported (``dashboard_new`` locally, ``src.dashboard_new`` under
 gunicorn, or a re-import in tests).
 """
 import json
+import hashlib
 import hmac
 import secrets
+import threading
 import time
 
 import os
 from flask import Blueprint, current_app, jsonify, redirect, request, send_from_directory, session, url_for
 
 integrations_bp = Blueprint("integrations", __name__)
+
+# In-process, which is sufficient because the image pins GUNICORN_WORKERS=1 (the
+# enrichment thread is per-process). If that ever goes above 1, this needs to
+# move into the database to stay correct.
+LINKEDIN_POST_DEDUPE_SECONDS = int(os.environ.get("LINKEDIN_POST_DEDUPE_SECONDS", "600"))
+_linkedin_posted: dict = {}
+_linkedin_posted_lock = threading.Lock()
+
+
+def _recent_linkedin_post(deck_key: str):
+    """Seconds since this deck was posted, or None if it wasn't (recently)."""
+    now = time.time()
+    with _linkedin_posted_lock:
+        for key, stamp in list(_linkedin_posted.items()):
+            if now - stamp > LINKEDIN_POST_DEDUPE_SECONDS:
+                _linkedin_posted.pop(key, None)
+        stamp = _linkedin_posted.get(deck_key)
+    return None if stamp is None else now - stamp
+
+
+def _remember_linkedin_post(deck_key: str) -> None:
+    with _linkedin_posted_lock:
+        _linkedin_posted[deck_key] = time.time()
 
 
 def _db():
@@ -365,6 +390,21 @@ def api_linkedin_post():
     if not (resolved == carousels or resolved.startswith(carousels + os.sep)):
         return jsonify({"error": "pdf_path must be inside the carousels directory"}), 400
 
+    # Publishing is irreversible, so a retried or double-clicked request must not
+    # post twice. Keyed on the file's content, so re-rendering the same deck and
+    # posting again is still allowed once the window passes.
+    try:
+        with open(resolved, "rb") as handle:
+            deck_key = hashlib.sha256(handle.read()).hexdigest()
+    except OSError as exc:
+        return jsonify({"error": f"could not read pdf: {exc}"}), 400
+
+    recent = _recent_linkedin_post(deck_key)
+    if recent is not None:
+        return jsonify({"error": "duplicate_post",
+                        "detail": f"this deck was posted {int(recent)}s ago",
+                        "retry_after_seconds": int(LINKEDIN_POST_DEDUPE_SECONDS - recent)}), 409
+
     result = linkedin_client.publish_document_post(
         pdf_path=resolved,
         commentary=str(payload.get("commentary") or ""),
@@ -374,6 +414,7 @@ def api_linkedin_post():
     )
     if not result.get("ok"):
         return jsonify({"error": result.get("error"), "stage": result.get("stage")}), 502
+    _remember_linkedin_post(deck_key)
     return jsonify(result)
 
 

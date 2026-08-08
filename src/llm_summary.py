@@ -73,6 +73,22 @@ _nvidia_slots = threading.Semaphore(NVIDIA_MAX_CONCURRENCY)
 NVIDIA_RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 
 
+def _is_permanent_transport_error(exc: Exception) -> bool:
+    """True for transport failures that cannot succeed on a retry."""
+    if requests is not None:
+        permanent = tuple(
+            cls for cls in (
+                getattr(requests.exceptions, "SSLError", None),
+                getattr(requests.exceptions, "InvalidURL", None),
+                getattr(requests.exceptions, "MissingSchema", None),
+                getattr(requests.exceptions, "InvalidSchema", None),
+            ) if cls is not None
+        )
+        if permanent and isinstance(exc, permanent):
+            return True
+    return isinstance(exc, (ValueError, TypeError))
+
+
 def _retry_delay(attempt: int, retry_after: Optional[str] = None,
                  status: Optional[int] = None) -> float:
     """Seconds to wait before retrying, preferring the server's Retry-After.
@@ -397,6 +413,11 @@ def query_nvidia(prompt: str, system_prompt: Optional[str] = None,
                 resp = requests.post(endpoint, headers=headers, json=payload,
                                      timeout=NVIDIA_TIMEOUT)
         except Exception as exc:
+            # A bad URL or a TLS failure will not fix itself; retrying just
+            # burns the backoff budget a throttled call could have used.
+            if _is_permanent_transport_error(exc):
+                print(f"NVIDIA NIM error (not retrying): {exc}")
+                return None
             if attempt < NVIDIA_MAX_RETRIES:
                 time.sleep(_retry_delay(attempt))
                 continue
