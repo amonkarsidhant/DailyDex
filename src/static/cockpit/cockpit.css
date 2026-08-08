@@ -82,7 +82,12 @@
     --text-vlo:#C5BFA8;
     --signal: #C44A1F;
     --signal-cool: #2C5F8D;
-    --font-sans: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+    /* --font-sans is deliberately NOT overridden here. Instrument Serif is a
+       display face; pointing the sans variable at it put the whole interface —
+       nav, buttons, labels, 10px micro-text — into a headline serif, which is
+       thin and cramped at those sizes. Editorial character comes from the warm
+       palette plus --font-serif, which briefs, headlines and pull quotes
+       already use on purpose. */
   }
 
   * { box-sizing: border-box; }

@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "dailydex",
-      "runtimeExecutable": "python3",
+      "runtimeExecutable": ".venv/bin/python",
       "runtimeArgs": ["src/dashboard_new.py"],
       "port": 8888
     },
